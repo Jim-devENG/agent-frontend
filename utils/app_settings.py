@@ -86,8 +86,8 @@ class AppSettingsManager:
         return result
     
     def get_search_interval_seconds(self) -> int:
-        """Get search interval in seconds (default: 60 = 1 minute for more active discovery)"""
-        return self.get("search_interval_seconds", 60)
+        """Get search interval in seconds (default: 900 = 15 minutes)"""
+        return self.get("search_interval_seconds", 900)
     
     def set_search_interval_seconds(self, seconds: int):
         """Set search interval in seconds"""

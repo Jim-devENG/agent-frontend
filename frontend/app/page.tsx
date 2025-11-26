@@ -26,7 +26,8 @@ import {
   Zap,
   XCircle,
   AtSign,
-  LogOut as LogOutIcon
+  LogOut as LogOutIcon,
+  BookOpen
 } from 'lucide-react'
 
 interface AutomationStatus {
@@ -44,7 +45,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [connectionError, setConnectionError] = useState(false)
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'leads' | 'scraped_emails' | 'emails' | 'jobs' | 'websites' | 'settings'
+    'overview' | 'leads' | 'scraped_emails' | 'emails' | 'jobs' | 'websites' | 'settings' | 'guide'
   >('overview')
 
   useEffect(() => {
@@ -149,6 +150,7 @@ export default function Dashboard() {
     { id: 'emails', label: 'Outreach Emails', icon: Mail },
     { id: 'jobs', label: 'Jobs', icon: Activity },
     { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'guide', label: 'Guide', icon: BookOpen },
   ]
   
   // Debug: Log tabs on mount
@@ -300,6 +302,27 @@ export default function Dashboard() {
             <AutomationControl />
             <DiscoveryControl />
             <EmailTemplateEditor />
+          </div>
+        )}
+
+        {activeTab === 'guide' && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">User Guide</h2>
+              <p className="text-gray-600">Complete documentation on how to use the Art Outreach Scraper</p>
+            </div>
+            <div className="prose prose-sm max-w-none">
+              <p className="text-gray-700 mb-4">
+                For the complete user guide, please visit the dedicated guide page.
+              </p>
+              <a
+                href="/guide"
+                className="inline-flex items-center px-4 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 transition-colors"
+              >
+                <BookOpen className="w-4 h-4 mr-2" />
+                Open Full Guide
+              </a>
+            </div>
           </div>
         )}
       </main>

@@ -342,49 +342,42 @@ export default function DiscoveryControl() {
 
           {/* Automation Info */}
           {isAutomationOn && (
-            <div className="bg-olive-50 border border-olive-200 rounded-lg p-3">
-              <p className="text-sm text-olive-800">
-                <strong>Automatic Mode:</strong> Searching every {automationStatus?.search_interval_seconds || 'N/A'} seconds
+            <div className="bg-olive-50 border border-olive-200 rounded-md p-2 mt-2">
+              <p className="text-xs text-olive-800">
+                <strong>Automatic Mode:</strong> Searching every {automationStatus?.search_interval_seconds ? Math.floor(automationStatus.search_interval_seconds / 60) : '15'} minutes
               </p>
-              <p className="text-xs text-olive-600 mt-1">
-                The system will automatically discover and scrape websites at the configured interval.
-                No manual action needed.
-              </p>
-            </div>
-          )}
-
-          {/* Manual Search Button (Only in Manual Mode) */}
-          {isManualMode && (
-            <div className="border-t pt-4">
-              <button
-                onClick={triggerSearch}
-                disabled={searching || status?.status === 'running'}
-                className="w-full px-4 py-3 bg-olive-600 text-white rounded-lg font-medium hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center space-x-2"
-              >
-                {searching || status?.status === 'running' ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Searching...</span>
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-5 h-5" />
-                    <span>Search Internet Now</span>
-                  </>
-                )}
-              </button>
-              <p className="text-xs text-gray-500 mt-2 text-center">
-                Manual mode: Click to trigger a search immediately
+              <p className="text-xs text-olive-600 mt-0.5">
+                The system will automatically discover and scrape websites every 15 minutes.
+                You can also trigger manual searches anytime using the button above.
               </p>
             </div>
           )}
 
-          {/* Info when automation is on */}
-          {isAutomationOn && !isManualMode && (
-            <div className="text-xs text-gray-500 text-center pt-2">
-              Switch to manual mode in Settings to enable manual search trigger
-            </div>
-          )}
+          {/* Manual Search Button (Always Available) */}
+          <div className="border-t pt-2 mt-2">
+            <button
+              onClick={triggerSearch}
+              disabled={searching || status?.status === 'running'}
+              className="w-full px-3 py-2 bg-olive-600 text-white rounded-md font-medium hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md flex items-center justify-center space-x-1.5 text-sm"
+            >
+              {searching || status?.status === 'running' ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Searching...</span>
+                </>
+              ) : (
+                <>
+                  <Search className="w-3.5 h-3.5" />
+                  <span>Search Now (Manual)</span>
+                </>
+              )}
+            </button>
+            <p className="text-xs text-gray-500 mt-1.5 text-center">
+              {isAutomationOn 
+                ? "Manual search works even when automation is ON. Next automatic search in ~15 minutes."
+                : "Click to trigger a search immediately"}
+            </p>
+          </div>
         </div>
       )}
     </div>
