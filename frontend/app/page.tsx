@@ -207,7 +207,10 @@ export default function Dashboard() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => {
+                    console.log('Tab clicked:', tab.id, tab.label)
+                    setActiveTab(tab.id as any)
+                  }}
                   className={`
                     flex items-center space-x-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all
                     ${
