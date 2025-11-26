@@ -41,7 +41,7 @@ export default function DiscoveryControl() {
   const [showStats, setShowStats] = useState(false)
   const [locations, setLocations] = useState<Location[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [selectedLocation, setSelectedLocation] = useState<string>('')
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
 
   useEffect(() => {
@@ -146,9 +146,9 @@ export default function DiscoveryControl() {
       return
     }
     
-    // Check if location is selected
-    if (!selectedLocation) {
-      alert('Please select a location before running searches')
+    // Check if at least one location is selected
+    if (selectedLocations.length === 0) {
+      alert('Please select at least one location before running searches')
       return
     }
     
@@ -159,8 +159,8 @@ export default function DiscoveryControl() {
       
       // Build query params
       const params = new URLSearchParams()
-      if (selectedLocation) {
-        params.append('location', selectedLocation)
+      if (selectedLocations.length > 0) {
+        params.append('location', selectedLocations.join(','))
       }
       if (selectedCategories.length > 0) {
         params.append('categories', selectedCategories.join(','))
