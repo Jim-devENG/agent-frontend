@@ -20,8 +20,8 @@ function getAuthToken(): string | null {
  */
 async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = getAuthToken()
-  const headers = {
-    ...options.headers,
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string> || {}),
     'Content-Type': 'application/json',
   }
   
@@ -31,7 +31,7 @@ async function authenticatedFetch(url: string, options: RequestInit = {}): Promi
   
   const response = await fetch(url, {
     ...options,
-    headers,
+    headers: headers as HeadersInit,
   })
   
   // If unauthorized, redirect to login
@@ -252,7 +252,7 @@ export async function getPendingEmails(skip = 0, limit = 50): Promise<EmailsResp
  * Get statistics
  */
 export async function getStats(): Promise<Stats> {
-  const res = await fetch(`${API_BASE}/stats`);
+  const res = await authenticatedFetch(`${API_BASE}/stats`);
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to fetch stats' }));
     throw new Error(error.detail || 'Failed to fetch stats');
@@ -277,7 +277,7 @@ export async function getJobStatus(limit = 20, jobType?: string, status?: string
  * Get latest job executions
  */
 export async function getLatestJobs(): Promise<LatestJobs> {
-  const res = await fetch(`${API_BASE}/jobs/latest`);
+  const res = await authenticatedFetch(`${API_BASE}/jobs/latest`);
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to fetch latest jobs' }));
     throw new Error(error.detail || 'Failed to fetch latest jobs');

@@ -30,10 +30,6 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     'holiday_family',
   ]
 
-  useEffect(() => {
-    loadLeads()
-  }, [skip, category, hasEmail])
-
   const loadLeads = async () => {
     setLoading(true)
     try {
@@ -47,27 +43,41 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     }
   }
 
+  useEffect(() => {
+    loadLeads()
+  }, [skip, category, hasEmail])
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      {/* Header for Scraped Emails tab */}
+      {emailsOnly && (
+        <div className="p-4 border-b border-gray-200 bg-olive-50">
+          <h3 className="text-lg font-semibold text-gray-900">Scraped Email Addresses</h3>
+          <p className="text-sm text-gray-600 mt-1">All email addresses extracted from scraped websites</p>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="p-4 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center space-x-4">
           <Filter className="w-5 h-5 text-gray-500" />
-          <select
-            value={category}
-            onChange={(e) => {
-              setCategory(e.target.value)
-              setSkip(0)
-            }}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-          >
-            <option value="">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-              </option>
-            ))}
-          </select>
+          {!emailsOnly && (
+            <select
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value)
+                setSkip(0)
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+            >
+              <option value="">All Categories</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                </option>
+              ))}
+            </select>
+          )}
           {!emailsOnly && (
             <select
               value={hasEmail === undefined ? '' : hasEmail.toString()}
@@ -94,99 +104,166 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Contact
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Website
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Category
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Info
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Date
-              </th>
+              {emailsOnly ? (
+                <>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email Address
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Contact Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Website
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date Scraped
+                  </th>
+                </>
+              ) : (
+                <>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Contact
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Website
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Category
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Info
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={emailsOnly ? 4 : 5} className="px-6 py-4 text-center text-gray-500">
                   Loading...
                 </td>
               </tr>
             ) : leads.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
-                  No leads found
+                <td colSpan={emailsOnly ? 4 : 5} className="px-6 py-4 text-center text-gray-500">
+                  {emailsOnly ? 'No emails found. Scrape some websites to extract emails.' : 'No leads found'}
                 </td>
               </tr>
             ) : (
               leads.map((lead) => (
                 <tr key={lead.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {lead.name || 'Unknown'}
-                    </div>
-                    {lead.email && (
-                      <div className="text-sm text-gray-500 flex items-center mt-1">
-                        <Mail className="w-3 h-3 mr-1" />
-                        {lead.email}
-                      </div>
-                    )}
-                    {lead.phone_number && (
-                      <div className="text-sm text-gray-500 flex items-center mt-1">
-                        <Phone className="w-3 h-3 mr-1" />
-                        {lead.phone_number}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">
-                      {lead.website_title || 'Unknown'}
-                    </div>
-                    {lead.website_url && (
-                      <a
-                        href={lead.website_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-primary-600 hover:text-primary-800 flex items-center mt-1"
-                      >
-                        <Globe className="w-3 h-3 mr-1" />
-                        {lead.website_url}
-                      </a>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-olive-100 text-olive-800">
-                      {lead.website_category?.replace('_', ' ') || 'unknown'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {lead.social_platform && (
-                      <div className="text-sm text-gray-500">
-                        <span className="font-medium">{lead.social_platform}:</span>{' '}
-                        {lead.social_url ? (
+                  {emailsOnly ? (
+                    <>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <Mail className="w-4 h-4 text-olive-600 mr-2" />
+                          <div>
+                            <div className="text-sm font-semibold text-gray-900">
+                              {lead.email || 'No email'}
+                            </div>
+                            {lead.phone_number && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {lead.phone_number}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {lead.name || 'Unknown'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900">
+                          {lead.website_title || lead.website_url || 'Unknown'}
+                        </div>
+                        {lead.website_url && (
                           <a
-                            href={lead.social_url}
+                            href={lead.website_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-primary-600 hover:text-primary-800"
+                            className="text-xs text-olive-600 hover:text-olive-800 flex items-center mt-1"
                           >
-                            View
+                            {lead.website_url}
+                            <Globe className="w-3 h-3 ml-1" />
                           </a>
-                        ) : (
-                          'N/A'
                         )}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(lead.created_at).toLocaleDateString()}
-                  </td>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {lead.created_at
+                          ? new Date(lead.created_at).toLocaleDateString()
+                          : 'N/A'}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {lead.name || 'Unknown'}
+                        </div>
+                        {lead.email && (
+                          <div className="text-sm text-gray-500 flex items-center mt-1">
+                            <Mail className="w-3 h-3 mr-1" />
+                            {lead.email}
+                          </div>
+                        )}
+                        {lead.phone_number && (
+                          <div className="text-sm text-gray-500 flex items-center mt-1">
+                            <Phone className="w-3 h-3 mr-1" />
+                            {lead.phone_number}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">
+                          {lead.website_title || 'Unknown'}
+                        </div>
+                        {lead.website_url && (
+                          <a
+                            href={lead.website_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary-600 hover:text-primary-800 flex items-center mt-1"
+                          >
+                            <Globe className="w-3 h-3 mr-1" />
+                            {lead.website_url}
+                          </a>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-olive-100 text-olive-800">
+                          {lead.website_category?.replace('_', ' ') || 'unknown'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {lead.social_platform && (
+                          <div className="text-sm text-gray-500">
+                            <span className="font-medium">{lead.social_platform}:</span>{' '}
+                            {lead.social_url ? (
+                              <a
+                                href={lead.social_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary-600 hover:text-primary-800"
+                              >
+                                View
+                              </a>
+                            ) : (
+                              'N/A'
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(lead.created_at).toLocaleDateString()}
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))
             )}
@@ -219,4 +296,3 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     </div>
   )
 }
-

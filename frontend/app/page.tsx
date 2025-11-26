@@ -25,7 +25,8 @@ import {
   Search,
   Zap,
   XCircle,
-  AtSign
+  AtSign,
+  LogOut as LogOutIcon
 } from 'lucide-react'
 
 interface AutomationStatus {
@@ -71,9 +72,18 @@ export default function Dashboard() {
           console.warn('Failed to get jobs:', err.message)
           return null
         }),
-        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/automation/status`)
-          .then(r => r.ok ? r.json() : null)
-          .catch(() => null)
+        (async () => {
+          const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+          if (!token) return null
+          try {
+            const r = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/automation/status`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            })
+            return r.ok ? r.json() : null
+          } catch {
+            return null
+          }
+        })()
       ]) as [Stats | null, LatestJobs | null, AutomationStatus | null]
       
       // Only update if we got valid data
@@ -187,7 +197,7 @@ export default function Dashboard() {
                 }}
                 className="flex items-center space-x-2 px-4 py-2 bg-olive-600 hover:bg-olive-700 text-white rounded-lg transition-colors"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOutIcon className="w-4 h-4" />
                 <span>Logout</span>
               </button>
             </div>

@@ -43,8 +43,14 @@ export default function DiscoveryControl() {
 
   const loadStatus = async () => {
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (!token) return
+      
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/discovery/status`
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/discovery/status`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
       )
       if (response.ok) {
         const data = await response.json()
@@ -59,8 +65,14 @@ export default function DiscoveryControl() {
 
   const loadAutomationStatus = async () => {
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (!token) return
+      
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/automation/status`
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/automation/status`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
       )
       if (response.ok) {
         const data = await response.json()

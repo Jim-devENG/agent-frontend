@@ -5,6 +5,8 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from db.models import Contact, ContactForm, ScrapedWebsite
 from extractor.email_extractor import EmailExtractor
+from extractor.enhanced_email_extractor import EnhancedEmailExtractor
+from extractor.hunter_io_client import HunterIOClient
 from extractor.phone_extractor import PhoneExtractor
 from extractor.social_extractor import SocialExtractor
 from extractor.contact_form_extractor import ContactFormExtractor
@@ -26,7 +28,21 @@ class ContactExtractionService:
             db: Database session
         """
         self.db = db
-        self.email_extractor = EmailExtractor()
+        
+        # Initialize Hunter.io client if API key is configured
+        hunter_client = None
+        try:
+            from utils.config import settings
+            if hasattr(settings, 'HUNTER_IO_API_KEY') and settings.HUNTER_IO_API_KEY:
+                hunter_client = HunterIOClient(settings.HUNTER_IO_API_KEY)
+                logger.info("Hunter.io client initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize Hunter.io client: {e}")
+        
+        # Use enhanced email extractor (falls back to basic if Hunter.io not available)
+        self.email_extractor = EmailExtractor()  # Keep for backward compatibility
+        self.enhanced_email_extractor = EnhancedEmailExtractor(hunter_io_client=hunter_client)
+        
         self.phone_extractor = PhoneExtractor()
         self.social_extractor = SocialExtractor()
         self.form_extractor = ContactFormExtractor()
@@ -88,9 +104,39 @@ class ContactExtractionService:
         page_url: str,
         results: Dict
     ):
-        """Extract contacts from a single page"""
-        # Extract emails
-        emails = self.email_extractor.extract_from_html(html_content)
+        """Extract contacts from a single page using enhanced extraction"""
+        # Use enhanced email extractor (includes footer, header, forms, Hunter.io)
+        try:
+            # Try to get Playwright context if available (for JS-rendered emails)
+            playwright_context = None
+            try:
+                from scraper.website_scraper import WebsiteScraper
+                scraper = WebsiteScraper()
+                if hasattr(scraper, 'playwright_context') and scraper.playwright_context:
+                    playwright_context = scraper.playwright_context
+            except:
+                pass
+            
+            # Use enhanced extractor
+            email_results = self.enhanced_email_extractor.extract_all_emails(
+                html_content=html_content,
+                base_url=page_url,
+                use_hunter_io=True,
+                use_playwright=(playwright_context is not None),
+                playwright_context=playwright_context
+            )
+            
+            # Extract emails from enhanced results
+            emails = [email_data["email"] for email_data in email_results.get("emails", [])]
+            
+            # Log sources for debugging
+            if email_results.get("sources"):
+                logger.info(f"Email extraction sources for {page_url}: {email_results['sources']}")
+        except Exception as e:
+            logger.warning(f"Enhanced email extraction failed, falling back to basic: {e}")
+            # Fallback to basic extraction
+            emails = self.email_extractor.extract_from_html(html_content)
+        
         for email in emails:
             existing = self.db.query(Contact).filter(
                 Contact.website_id == website_id,

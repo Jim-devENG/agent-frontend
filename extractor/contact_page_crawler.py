@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class ContactPageCrawler(BaseScraper):
     """Crawl common contact page paths"""
     
-    # Common contact page paths
+    # Common contact page paths (expanded list)
     CONTACT_PATHS = [
         "/contact",
         "/about",
@@ -25,7 +25,46 @@ class ContactPageCrawler(BaseScraper):
         "/connect",
         "/about-us",
         "/contact.html",
-        "/about.html"
+        "/about.html",
+        "/contactus",
+        "/aboutus",
+        "/getintouch",
+        "/reachout",
+        "/say-hello",
+        "/hello",
+        "/help",
+        "/faq",
+        "/questions",
+        "/inquiry",
+        "/inquiries",
+        "/message",
+        "/messages",
+        "/write-us",
+        "/email-us",
+        "/call-us",
+        "/location",
+        "/locations",
+        "/office",
+        "/offices",
+        "/headquarters",
+        "/hq",
+        "/address",
+        "/find-us",
+        "/findus",
+        "/visit-us",
+        "/visit",
+        "/careers",
+        "/career",
+        "/jobs",
+        "/join-us",
+        "/join",
+        "/press",
+        "/press-kit",
+        "/media",
+        "/news",
+        "/blog",
+        "/newsletter",
+        "/subscribe",
     ]
     
     def detect_contact_page(self, base_url: str) -> List[str]:

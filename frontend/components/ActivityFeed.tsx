@@ -25,13 +25,17 @@ export default function ActivityFeed({ limit = 50, autoRefresh = true }: Activit
 
   const loadActivities = async () => {
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (!token) return
+      
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // Increased to 10 seconds
       
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/activity?limit=${limit}`,
         {
-          signal: controller.signal
+          signal: controller.signal,
+          headers: { 'Authorization': `Bearer ${token}` }
         }
       )
       clearTimeout(timeoutId);

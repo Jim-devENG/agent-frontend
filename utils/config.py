@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     GOOGLE_SEARCH_ENGINE_ID: str = ""
     BING_SEARCH_API_KEY: str = ""
     
+    # Hunter.io API (for email finding)
+    HUNTER_IO_API_KEY: str = ""
+    
+    # Authentication
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD: str = "admin"
+    JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
