@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Power, Mail, Settings, Search } from 'lucide-react'
+import { Power, Mail, Settings, Search, MapPin } from 'lucide-react'
 
 interface AutomationStatus {
   automation_enabled: boolean
@@ -10,17 +10,73 @@ interface AutomationStatus {
   settings: Record<string, any>
 }
 
+interface Location {
+  value: string
+  label: string
+}
+
+interface Category {
+  value: string
+  label: string
+}
+
 export default function AutomationControl() {
   const [status, setStatus] = useState<AutomationStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
+  const [locations, setLocations] = useState<Location[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [selectedLocation, setSelectedLocation] = useState<string>('')
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
 
   useEffect(() => {
     loadStatus()
+    loadLocations()
+    loadCategories()
     // Refresh every 5 seconds
     const interval = setInterval(loadStatus, 5000)
     return () => clearInterval(interval)
   }, [])
+
+  const loadLocations = async () => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (!token) return
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/discovery/locations`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      )
+      if (response.ok) {
+        const data = await response.json()
+        setLocations(data.locations || [])
+      }
+    } catch (error) {
+      console.error('Error loading locations:', error)
+    }
+  }
+
+  const loadCategories = async () => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (!token) return
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/discovery/categories`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      )
+      if (response.ok) {
+        const data = await response.json()
+        setCategories(data.categories || [])
+      }
+    } catch (error) {
+      console.error('Error loading categories:', error)
+    }
+  }
 
   const loadStatus = async () => {
     try {
@@ -157,16 +213,70 @@ export default function AutomationControl() {
         </div>
 
         {status.automation_enabled && (
-          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <div className="w-2 h-2 bg-green-500 rounded-full mt-2 animate-pulse"></div>
+          <div className="mt-4 space-y-4">
+            {/* Location Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <MapPin className="w-4 h-4 inline mr-1" />
+                Search Location (Optional)
+              </label>
+              <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm"
+              >
+                <option value="">All Locations</option>
+                {locations.map((loc) => (
+                  <option key={loc.value} value={loc.value}>
+                    {loc.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Select a location to focus search, or leave empty for all locations
+              </p>
+            </div>
+
+            {/* Category Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Categories (Optional)
+              </label>
+              <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-200 rounded-md p-2">
+                {categories.map((cat) => (
+                  <label key={cat.value} className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCategories.includes(cat.value)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedCategories([...selectedCategories, cat.value])
+                        } else {
+                          setSelectedCategories(selectedCategories.filter(c => c !== cat.value))
+                        }
+                      }}
+                      className="rounded border-gray-300 text-olive-600 focus:ring-olive-500"
+                    />
+                    <span className="text-sm text-gray-700">{cat.label}</span>
+                  </label>
+                ))}
               </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-green-800">Automation Active</p>
-                <p className="text-xs text-green-700 mt-1">
-                  The system is actively searching, scraping websites, and extracting contacts.
-                </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Select categories to focus search, or leave empty for all categories
+              </p>
+            </div>
+
+            <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mt-2 animate-pulse"></div>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-green-800">Automation Active</p>
+                  <p className="text-xs text-green-700 mt-1">
+                    The system is actively searching, scraping websites, and extracting contacts.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -237,19 +347,19 @@ export default function AutomationControl() {
           <h3 className="text-lg font-semibold text-gray-900">Search Frequency</h3>
         </div>
         <p className="text-sm text-gray-600 mb-4">
-          How often to search the internet for new websites (minimum 10 seconds)
+          How often to search the internet for new websites (minimum 15 minutes)
         </p>
 
         <div className="space-y-3">
           <div className="flex items-center space-x-4">
             <input
               type="number"
-              min="10"
-              step="10"
-              value={status.search_interval_seconds || 3600}
+              min="900"
+              step="60"
+              value={status.search_interval_seconds || 900}
               onChange={async (e) => {
-                const seconds = parseInt(e.target.value) || 10
-                if (seconds >= 10) {
+                const seconds = parseInt(e.target.value) || 900
+                if (seconds >= 900) {
                   setUpdating(true)
                   try {
                     const response = await fetch(
@@ -289,9 +399,9 @@ export default function AutomationControl() {
             </div>
           </div>
 
-          {/* Quick presets */}
+          {/* Quick presets - starting from 15 minutes */}
           <div className="flex flex-wrap gap-2">
-            {[10, 30, 60, 300, 3600, 86400].map((seconds) => (
+            {[900, 1800, 3600, 7200, 14400, 86400].map((seconds) => (
               <button
                 key={seconds}
                 onClick={async () => {
@@ -331,14 +441,6 @@ export default function AutomationControl() {
             ))}
           </div>
 
-          {status.search_interval_seconds <= 30 && (
-            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-              <p className="text-xs text-yellow-800">
-                <strong>⚠️ Warning:</strong> Very frequent searches (every 10-30 seconds) may hit rate limits 
-                and could be flagged by search engines. Use with caution.
-              </p>
-            </div>
-          )}
         </div>
       </div>
 

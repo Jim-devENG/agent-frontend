@@ -275,6 +275,8 @@ export default function Dashboard() {
                 <p className="text-gray-500">Stats unavailable. Check backend connection.</p>
               </div>
             )}
+            <AutomationControl />
+            <DiscoveryControl />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ScrapeForm onScrape={refreshData} />
               {jobs ? <JobStatusPanel jobs={jobs} /> : (
@@ -299,8 +301,6 @@ export default function Dashboard() {
 
         {activeTab === 'settings' && (
           <div className="space-y-6">
-            <AutomationControl />
-            <DiscoveryControl />
             <EmailTemplateEditor />
           </div>
         )}
