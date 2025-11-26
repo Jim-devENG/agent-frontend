@@ -276,7 +276,21 @@ export default function Dashboard() {
               </div>
             )}
             <AutomationControl />
-            <DiscoveryControl />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <DiscoveryControl />
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200/50 p-4">
+                <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center">
+                  <Search className="w-4 h-4 mr-2" />
+                  Search Frequency
+                </h3>
+                <p className="text-xs text-gray-600 mb-3">
+                  Configure how often automatic searches run
+                </p>
+                <p className="text-xs text-gray-500">
+                  This setting is managed in the Automation Settings above.
+                </p>
+              </div>
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ScrapeForm onScrape={refreshData} />
               {jobs ? <JobStatusPanel jobs={jobs} /> : (

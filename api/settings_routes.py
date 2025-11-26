@@ -156,12 +156,12 @@ async def toggle_automatic_scraper(
             detail="Master switch must be enabled before enabling automatic scraper"
         )
     
-    # Check if location is selected
+    # Check if at least one location is selected
     search_location = settings_manager.get("search_location", None)
     if not search_location and request.enabled:
         raise HTTPException(
             status_code=400,
-            detail="Please select a location before enabling automatic scraper"
+            detail="Please select at least one location before enabling automatic scraper"
         )
     
     settings_manager.set_automatic_scraper_enabled(request.enabled)
@@ -169,6 +169,29 @@ async def toggle_automatic_scraper(
     return {
         "automatic_scraper_enabled": request.enabled,
         "message": f"Automatic scraper {'enabled' if request.enabled else 'disabled'}"
+    }
+
+
+@router.post("/automation/locations")
+async def set_locations(
+    request: dict,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user)
+):
+    """Set search locations (comma-separated or array)"""
+    settings_manager = AppSettingsManager(db)
+    locations = request.get("locations", [])
+    
+    if isinstance(locations, list):
+        locations_str = ",".join(locations)
+    else:
+        locations_str = str(locations)
+    
+    settings_manager.set("search_location", locations_str)
+    
+    return {
+        "locations": locations,
+        "message": f"Locations updated: {len(locations) if isinstance(locations, list) else 1} location(s)"
     }
 
 

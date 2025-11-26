@@ -48,11 +48,11 @@ async def trigger_website_discovery(
                 detail="Automation is disabled. Please enable the Master Switch first."
             )
         
-        # Check if location is provided
+        # Check if at least one location is provided
         if not location:
             raise HTTPException(
                 status_code=400,
-                detail="Location selection is required. Please select a location first."
+                detail="Location selection is required. Please select at least one location first."
             )
         
         # Check if a job is already running
