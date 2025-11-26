@@ -55,3 +55,11 @@ htmlcov/
 # Temporary files
 *.tmp
 *.temp
+
+# SSH Keys
+agent_lc_deploy
+agent_lc_deploy.pub
+*.pem
+*.key
+id_rsa
+id_rsa.pub
