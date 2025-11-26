@@ -140,6 +140,38 @@ async def toggle_automation(
     }
 
 
+@router.post("/automation/automatic-scraper/toggle")
+async def toggle_automatic_scraper(
+    request: AutomaticScraperToggleRequest,
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user)
+):
+    """Turn automatic scraper on or off (requires master switch to be ON)"""
+    settings_manager = AppSettingsManager(db)
+    
+    # Check if master switch is on
+    if not settings_manager.get_automation_enabled():
+        raise HTTPException(
+            status_code=400,
+            detail="Master switch must be enabled before enabling automatic scraper"
+        )
+    
+    # Check if location is selected
+    search_location = settings_manager.get("search_location", None)
+    if not search_location and request.enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="Please select a location before enabling automatic scraper"
+        )
+    
+    settings_manager.set_automatic_scraper_enabled(request.enabled)
+    
+    return {
+        "automatic_scraper_enabled": request.enabled,
+        "message": f"Automatic scraper {'enabled' if request.enabled else 'disabled'}"
+    }
+
+
 @router.post("/automation/email-trigger-mode")
 async def set_email_trigger_mode(
     request: EmailTriggerModeRequest,
