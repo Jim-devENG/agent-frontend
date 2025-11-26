@@ -26,7 +26,7 @@ export default function AutomationControl() {
   const [updating, setUpdating] = useState(false)
   const [locations, setLocations] = useState<Location[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [selectedLocation, setSelectedLocation] = useState<string>('')
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [automaticScraperEnabled, setAutomaticScraperEnabled] = useState<boolean>(false)
 
@@ -42,7 +42,14 @@ export default function AutomationControl() {
   useEffect(() => {
     if (status?.settings) {
       setAutomaticScraperEnabled(status.settings.automatic_scraper_enabled || false)
-      setSelectedLocation(status.settings.search_location || '')
+      if (status.settings.search_location) {
+        const locations = typeof status.settings.search_location === 'string'
+          ? status.settings.search_location.split(',')
+          : status.settings.search_location
+        setSelectedLocations(Array.isArray(locations) ? locations : [locations])
+      } else {
+        setSelectedLocations([])
+      }
       if (status.settings.search_categories) {
         setSelectedCategories(
           typeof status.settings.search_categories === 'string'
@@ -146,8 +153,8 @@ export default function AutomationControl() {
   }
 
   const toggleAutomaticScraper = async (enabled: boolean) => {
-    if (enabled && !selectedLocation) {
-      alert('Please select a location before enabling automatic scraper')
+    if (enabled && selectedLocations.length === 0) {
+      alert('Please select at least one location before enabling automatic scraper')
       return
     }
     
@@ -156,15 +163,9 @@ export default function AutomationControl() {
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
       if (!token) return
       
-      // Save location first if enabling
-      if (enabled && selectedLocation) {
-        await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/discovery/search-now?location=${selectedLocation}`,
-          {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
-          }
-        )
+      // Save locations first if enabling
+      if (enabled && selectedLocations.length > 0) {
+        await saveLocations()
       }
       
       const response = await fetch(
@@ -191,23 +192,30 @@ export default function AutomationControl() {
     }
   }
 
-  const saveLocation = async () => {
-    if (!selectedLocation) return
+  const saveLocations = async () => {
+    if (selectedLocations.length === 0) return
     
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
       if (!token) return
       
-      // Save location via settings
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/discovery/search-now?location=${selectedLocation}`,
+      // Save locations via settings API
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/automation/locations`,
         {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ locations: selectedLocations })
         }
       )
+      if (!response.ok) {
+        console.error('Failed to save locations')
+      }
     } catch (error) {
-      console.error('Error saving location:', error)
+      console.error('Error saving locations:', error)
     }
   }
 
@@ -340,7 +348,7 @@ export default function AutomationControl() {
                 className="sr-only peer"
               />
               <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${
-                !status.automation_enabled || !selectedLocation
+                !status.automation_enabled || selectedLocations.length === 0
                   ? 'bg-gray-300 cursor-not-allowed'
                   : 'bg-gray-200 peer-checked:bg-olive-600'
               }`}></div>
@@ -349,39 +357,45 @@ export default function AutomationControl() {
           <p className="text-xs text-gray-600">
             Runs searches automatically at set intervals
           </p>
-          {!selectedLocation && status.automation_enabled && (
+          {selectedLocations.length === 0 && status.automation_enabled && (
             <p className="text-xs text-yellow-600 mt-1">
-              Select location first
+              Select at least one location first
             </p>
           )}
         </div>
 
-        {/* Location Selection */}
+        {/* Location Selection - Multiple */}
         <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
           <div className="flex items-center space-x-2 mb-2">
             <MapPin className="w-5 h-5 text-gray-600" />
-            <h3 className="text-sm font-semibold text-gray-900">Search Location</h3>
+            <h3 className="text-sm font-semibold text-gray-900">Search Locations</h3>
           </div>
-          <select
-            value={selectedLocation}
-            onChange={(e) => {
-              setSelectedLocation(e.target.value)
-              if (e.target.value) {
-                saveLocation()
-              }
-            }}
-            disabled={!status.automation_enabled || updating}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm disabled:bg-gray-100"
-          >
-            <option value="">Select Location (Required)</option>
+          <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md p-2 bg-white">
             {locations.map((loc) => (
-              <option key={loc.value} value={loc.value}>
-                {loc.label}
-              </option>
+              <label key={loc.value} className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedLocations.includes(loc.value)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      const newLocations = [...selectedLocations, loc.value]
+                      setSelectedLocations(newLocations)
+                      setTimeout(() => saveLocations(), 500)
+                    } else {
+                      const newLocations = selectedLocations.filter(l => l !== loc.value)
+                      setSelectedLocations(newLocations)
+                      setTimeout(() => saveLocations(), 500)
+                    }
+                  }}
+                  disabled={!status.automation_enabled || updating}
+                  className="rounded border-gray-300 text-olive-600 focus:ring-olive-500 disabled:opacity-50"
+                />
+                <span className="text-xs text-gray-700">{loc.label}</span>
+              </label>
             ))}
-          </select>
+          </div>
           <p className="text-xs text-gray-600 mt-1">
-            Required to enable automatic scraper
+            Select one or more locations (required for automatic scraper)
           </p>
         </div>
 
