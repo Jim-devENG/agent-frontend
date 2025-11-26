@@ -26,7 +26,7 @@ import {
   Zap,
   XCircle,
   AtSign,
-  LogOut
+  LogOut as LogOutIcon
 } from 'lucide-react'
 
 interface AutomationStatus {
@@ -188,7 +188,7 @@ export default function Dashboard() {
                 }}
                 className="flex items-center space-x-2 px-4 py-2 bg-olive-600 hover:bg-olive-700 text-white rounded-lg transition-colors"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOutIcon className="w-4 h-4" />
                 <span>Logout</span>
               </button>
             </div>
