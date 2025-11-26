@@ -20,8 +20,8 @@ function getAuthToken(): string | null {
  */
 async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = getAuthToken()
-  const headers = {
-    ...options.headers,
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string> || {}),
     'Content-Type': 'application/json',
   }
   
@@ -31,7 +31,7 @@ async function authenticatedFetch(url: string, options: RequestInit = {}): Promi
   
   const response = await fetch(url, {
     ...options,
-    headers,
+    headers: headers as HeadersInit,
   })
   
   // If unauthorized, redirect to login
