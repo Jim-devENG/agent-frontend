@@ -149,10 +149,11 @@ def fetch_new_art_websites() -> Dict:
         db.close()
         
         result = {
-            "discovered": len(urls),
+            "discovered": len(urls),  # This is now only NEW discoveries (filtered)
             "new_websites": new_websites,
             "skipped": skipped,
-            "failed": failed
+            "failed": failed,
+            "message": f"Found {len(urls)} new URLs, scraped {new_websites} successfully"
         }
         
         log_job_to_db("fetch_new_art_websites", "completed", result)
