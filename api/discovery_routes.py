@@ -48,6 +48,13 @@ async def trigger_website_discovery(
                 detail="Automation is disabled. Please enable the Master Switch first."
             )
         
+        # Check if location is provided
+        if not location:
+            raise HTTPException(
+                status_code=400,
+                detail="Location selection is required. Please select a location first."
+            )
+        
         # Check if a job is already running
         from db.models import ScrapingJob
         running_job = db.query(ScrapingJob).filter(

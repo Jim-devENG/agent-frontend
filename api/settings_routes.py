@@ -29,6 +29,9 @@ class EmailTriggerModeRequest(BaseModel):
 class AutomationToggleRequest(BaseModel):
     enabled: bool
 
+class AutomaticScraperToggleRequest(BaseModel):
+    enabled: bool
+
 
 class SearchIntervalRequest(BaseModel):
     interval_seconds: int  # Minimum 10 seconds

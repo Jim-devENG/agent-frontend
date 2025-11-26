@@ -94,4 +94,12 @@ class AppSettingsManager:
         if seconds < 900:
             raise ValueError("Minimum interval is 900 seconds (15 minutes) to avoid rate limits")
         self.set("search_interval_seconds", seconds, "Interval between website discovery searches (seconds)")
+    
+    def get_automatic_scraper_enabled(self) -> bool:
+        """Check if automatic scraper is enabled"""
+        return self.get("automatic_scraper_enabled", False)
+    
+    def set_automatic_scraper_enabled(self, enabled: bool):
+        """Enable or disable automatic scraper"""
+        self.set("automatic_scraper_enabled", enabled, "Automatic scraper switch - runs searches at set intervals")
 

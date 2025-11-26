@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search, Loader2, CheckCircle2, AlertCircle, BarChart3 } from 'lucide-react'
+import { Search, Loader2, CheckCircle2, AlertCircle, BarChart3, Square } from 'lucide-react'
 
 interface DiscoveryStatus {
   status: string
@@ -141,8 +141,14 @@ export default function DiscoveryControl() {
 
   const triggerSearch = async () => {
     // Check if automation is enabled
-    if (!isAutomationOn) {
+    if (!automationStatus?.automation_enabled) {
       alert('Please enable automation (Master Switch) before running searches')
+      return
+    }
+    
+    // Check if location is selected
+    if (!selectedLocation) {
+      alert('Please select a location before running searches')
       return
     }
     
@@ -252,44 +258,45 @@ export default function DiscoveryControl() {
       ) : (
         <div className="space-y-2">
           {/* Current Status */}
-          <div className="flex items-center space-x-2">
-            {status?.status === 'running' ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 text-olive-600 animate-spin" />
-                <div>
-                  <p className="text-xs font-medium text-gray-900">Searching Internet...</p>
-                  <p className="text-xs text-gray-600">
-                    {status.started_at ? `Started: ${formatTime(status.started_at)}` : 'In progress'}
-                  </p>
-                </div>
-              </>
-            ) : status?.status === 'completed' ? (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                <div>
-                  <p className="text-xs font-medium text-gray-900">Last Search Completed</p>
-                  <p className="text-xs text-gray-600">
-                    {status.completed_at ? formatTime(status.completed_at) : 'Unknown'}
-                  </p>
-                </div>
-              </>
-            ) : status?.status === 'failed' ? (
-              <>
-                <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-                <div>
-                  <p className="text-xs font-medium text-gray-900">Last Search Failed</p>
-                  <p className="text-xs text-red-600">{status.error || 'Unknown error'}</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <AlertCircle className="w-3.5 h-3.5 text-gray-400" />
-                <div>
-                  <p className="text-xs font-medium text-gray-900">Never Run</p>
-                  <p className="text-xs text-gray-600">No searches have been performed yet</p>
-                </div>
-              </>
-            )}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              {status?.status === 'running' ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 text-olive-600 animate-spin" />
+                  <div>
+                    <p className="text-xs font-medium text-gray-900">Searching Internet...</p>
+                    <p className="text-xs text-gray-600">
+                      {status.started_at ? `Started: ${formatTime(status.started_at)}` : 'In progress'}
+                    </p>
+                  </div>
+                </>
+              ) : status?.status === 'completed' ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                  <div>
+                    <p className="text-xs font-medium text-gray-900">Last Search Completed</p>
+                    <p className="text-xs text-gray-600">
+                      {status.completed_at ? formatTime(status.completed_at) : 'Unknown'}
+                    </p>
+                  </div>
+                </>
+              ) : status?.status === 'failed' ? (
+                <>
+                  <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                  <div>
+                    <p className="text-xs font-medium text-gray-900">Last Search Failed</p>
+                    <p className="text-xs text-red-600">{status.error || 'Unknown error'}</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-3.5 h-3.5 text-gray-400" />
+                  <div>
+                    <p className="text-xs font-medium text-gray-900">Never Run</p>
+                    <p className="text-xs text-gray-600">No searches have been performed yet</p>
+                  </div>
+                </>
+              )}
             </div>
             {status?.status === 'running' && (
               <button
