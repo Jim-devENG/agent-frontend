@@ -41,7 +41,7 @@ export default function DiscoveryControl() {
   const [showStats, setShowStats] = useState(false)
   const [locations, setLocations] = useState<Location[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [selectedLocation, setSelectedLocation] = useState<string>('')
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
 
   useEffect(() => {
@@ -146,9 +146,9 @@ export default function DiscoveryControl() {
       return
     }
     
-    // Check if location is selected
-    if (!selectedLocation) {
-      alert('Please select a location before running searches')
+    // Check if at least one location is selected
+    if (selectedLocations.length === 0) {
+      alert('Please select at least one location before running searches')
       return
     }
     
@@ -159,8 +159,8 @@ export default function DiscoveryControl() {
       
       // Build query params
       const params = new URLSearchParams()
-      if (selectedLocation) {
-        params.append('location', selectedLocation)
+      if (selectedLocations.length > 0) {
+        params.append('location', selectedLocations.join(','))
       }
       if (selectedCategories.length > 0) {
         params.append('categories', selectedCategories.join(','))
@@ -347,20 +347,27 @@ export default function DiscoveryControl() {
           <div className="space-y-2 border-t pt-2 mt-2">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                Search Location
+                Search Locations (Select one or more)
               </label>
-              <select
-                value={selectedLocation}
-                onChange={(e) => setSelectedLocation(e.target.value)}
-                className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-xs focus:ring-2 focus:ring-olive-500 focus:border-transparent"
-              >
-                <option value="">All Locations</option>
+              <div className="space-y-1 max-h-32 overflow-y-auto border border-gray-200 rounded-md p-1.5 bg-white">
                 {locations.map((loc) => (
-                  <option key={loc.value} value={loc.value}>
-                    {loc.label}
-                  </option>
+                  <label key={loc.value} className="flex items-center space-x-1.5 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedLocations.includes(loc.value)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedLocations([...selectedLocations, loc.value])
+                        } else {
+                          setSelectedLocations(selectedLocations.filter(l => l !== loc.value))
+                        }
+                      }}
+                      className="rounded border-gray-300 text-olive-600 focus:ring-olive-500"
+                    />
+                    <span>{loc.label}</span>
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
             
             <div>

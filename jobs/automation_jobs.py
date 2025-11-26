@@ -75,20 +75,21 @@ def fetch_new_art_websites() -> Dict:
         search_categories = settings_manager.get("search_categories", None)
         
         # Pass db session to save discovered websites
+        # This will now return ONLY new URLs that don't exist in the database
         discoveries = discovery.discover_art_websites(
             db_session=db,
             location=search_location,
             categories=search_categories.split(",") if search_categories else None
         )
         urls = [d['url'] for d in discoveries]
-        logger.info(f"Discovery completed. Found {len(urls)} URLs")
+        logger.info(f"Discovery completed. Found {len(urls)} NEW URLs (already filtered duplicates)")
         
         if len(urls) == 0:
-            logger.warning("WARNING: No URLs discovered! This could indicate:")
-            logger.warning("  1. DuckDuckGo search is not working (check network/firewall)")
-            logger.warning("  2. Seed file is empty or missing")
-            logger.warning("  3. Search queries are not returning results")
-            logger.warning("Check /api/v1/diagnostic/search-test to diagnose")
+            logger.info("No new URLs discovered. All search results already exist in database.")
+            logger.info("This is normal if you've run searches before. Try:")
+            logger.info("  1. Wait for new websites to appear in search results")
+            logger.info("  2. Try different location/category combinations")
+            logger.info("  3. Check if search queries are returning results")
         
         # Use less strict quality filtering for discovery to get more results
         scraper_service = ScraperService(db, apply_quality_filter=False)  # Disable quality filter for discovery
@@ -97,12 +98,12 @@ def fetch_new_art_websites() -> Dict:
         skipped = 0
         failed = 0
         
-        logger.info(f"Processing {len(urls)} discovered URLs...")
+        logger.info(f"Processing {len(urls)} new discovered URLs...")
         
         for discovery_info in discoveries:
             url = discovery_info['url']
             try:
-                # Check if already exists
+                # Double-check if already exists (shouldn't happen since discovery filters, but safety check)
                 existing = db.query(ScrapedWebsite).filter(
                     ScrapedWebsite.url == url
                 ).first()
@@ -131,7 +132,7 @@ def fetch_new_art_websites() -> Dict:
                         logger.warning(f"Failed to scrape {url}")
                 else:
                     skipped += 1
-                    logger.debug(f"Skipping existing website: {url}")
+                    logger.debug(f"Skipping existing website: {url} (shouldn't happen - discovery should have filtered)")
                     # Mark discovered website as scraped if it exists
                     from db.models import DiscoveredWebsite
                     discovered = db.query(DiscoveredWebsite).filter(
