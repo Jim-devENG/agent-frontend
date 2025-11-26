@@ -68,7 +68,7 @@ export default function GuidePage() {
               <div className="flex items-start space-x-2">
                 <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
                 <div>
-                  <strong>1. Login:</strong> Use your credentials to access the dashboard. If you don't have credentials,
+                  <strong>1. Login:</strong> Use your credentials to access the dashboard. If you don&apos;t have credentials,
                   contact your administrator.
                 </div>
               </div>
@@ -76,7 +76,7 @@ export default function GuidePage() {
                 <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
                 <div>
                   <strong>2. Check Automation Status:</strong> Look at the System Status bar at the top to see if
-                  automation is running. It shows "Automation Active" when enabled.
+                  automation is running. It shows &quot;Automation Active&quot; when enabled.
                 </div>
               </div>
               <div className="flex items-start space-x-2">
@@ -116,10 +116,10 @@ export default function GuidePage() {
                 </p>
                 <ol className="list-decimal list-inside space-y-1 ml-2">
                   <li>Go to the <strong>Overview</strong> tab</li>
-                  <li>Find the <strong>"Website Discovery"</strong> section</li>
+                  <li>Find the <strong>&quot;Website Discovery&quot;</strong> section</li>
                   <li>Select a <strong>Location</strong> (optional - leave empty for all locations)</li>
                   <li>Select <strong>Categories</strong> (optional - leave empty for all categories)</li>
-                  <li>Click <strong>"Search Now (Manual)"</strong> button</li>
+                  <li>Click <strong>&quot;Search Now (Manual)&quot;</strong> button</li>
                 </ol>
                 <div className="mt-2 p-2 bg-olive-50 border border-olive-200 rounded-md">
                   <p className="text-xs text-olive-800">
@@ -173,7 +173,7 @@ export default function GuidePage() {
                   View all discovered and scraped websites. You can:
                 </p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
-                  <li>Toggle between <strong>"Discovered"</strong> and <strong>"Scraped"</strong> views</li>
+                  <li>Toggle between <strong>&quot;Discovered&quot;</strong> and <strong>&quot;Scraped&quot;</strong> views</li>
                   <li>Filter by category, source, and scraped status</li>
                   <li>See website quality metrics (domain authority, traffic, etc.)</li>
                   <li>Extract contacts for specific websites</li>
@@ -266,11 +266,11 @@ export default function GuidePage() {
               <p>
                 You can manually scrape a specific URL:
               </p>
-              <ol className="list-decimal list-inside space-y-1 ml-2">
+                <ol className="list-decimal list-inside space-y-1 ml-2">
                 <li>Go to the <strong>Overview</strong> tab</li>
-                <li>Find the <strong>"Scrape Website"</strong> section</li>
+                <li>Find the <strong>&quot;Scrape Website&quot;</strong> section</li>
                 <li>Enter a URL (e.g., <code className="bg-gray-100 px-1 rounded">https://example.com</code>)</li>
-                <li>Click <strong>"Scrape"</strong></li>
+                <li>Click <strong>&quot;Scrape&quot;</strong></li>
                 <li>The system will scrape the website and extract contacts automatically</li>
               </ol>
             </div>
@@ -418,7 +418,7 @@ export default function GuidePage() {
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">Backend Not Connected</h3>
                 <p className="mb-2">
-                  If you see "Backend not connected":
+                  If you see &quot;Backend not connected&quot;:
                 </p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
                   <li>Check if the backend server is running</li>
@@ -443,7 +443,7 @@ export default function GuidePage() {
               <div className="border-t pt-3 mt-3">
                 <h3 className="font-semibold text-gray-900 mb-2">No Emails Extracted</h3>
                 <p className="mb-2">
-                  If emails aren't being extracted:
+                  If emails aren&apos;t being extracted:
                 </p>
                 <ul className="list-disc list-inside space-y-1 ml-2">
                   <li>Check if websites are being scraped successfully</li>
