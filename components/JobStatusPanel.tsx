@@ -20,13 +20,13 @@ export default function JobStatusPanel({ jobs, expanded = false }: JobStatusPane
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'running':
-        return <Loader2 className="w-5 h-5 text-olive-600 animate-spin" />
+        return <Loader2 className="w-3.5 h-3.5 text-olive-600 animate-spin" />
       case 'completed':
-        return <CheckCircle2 className="w-5 h-5 text-green-500" />
+        return <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
       case 'failed':
-        return <XCircle className="w-5 h-5 text-red-500" />
+        return <XCircle className="w-3.5 h-3.5 text-red-500" />
       default:
-        return <Clock className="w-5 h-5 text-gray-400" />
+        return <Clock className="w-3.5 h-3.5 text-gray-400" />
     }
   }
 
@@ -52,30 +52,30 @@ export default function JobStatusPanel({ jobs, expanded = false }: JobStatusPane
   const jobEntries = Object.entries(jobs)
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/50 p-6">
-      <div className="flex items-center space-x-2 mb-4">
-        <div className="p-2 bg-olive-600 rounded-lg">
-          <Play className="w-5 h-5 text-white" />
+    <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-md border border-gray-200/50 p-3">
+      <div className="flex items-center space-x-1.5 mb-2">
+        <div className="p-1.5 bg-olive-600 rounded-md">
+          <Play className="w-3.5 h-3.5 text-white" />
         </div>
-        <h2 className="text-xl font-bold text-gray-900">Job Status</h2>
+        <h2 className="text-sm font-bold text-gray-900">Job Status</h2>
       </div>
 
       {jobEntries.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <p>No job data available</p>
+        <div className="text-center py-4 text-gray-500">
+          <p className="text-xs">No job data available</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-1.5">
           {jobEntries.map(([jobType, job]) => (
             <div
               key={jobType}
-              className={`p-4 rounded-lg border-2 ${getStatusColor(job.status)} transition-all hover:shadow-md`}
+              className={`p-2 rounded-md border ${getStatusColor(job.status)} transition-all hover:shadow-sm`}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
                   {getStatusIcon(job.status)}
                   <div>
-                    <h3 className="font-semibold">{jobNames[jobType] || jobType}</h3>
+                    <h3 className="text-xs font-semibold">{jobNames[jobType] || jobType}</h3>
                     <p className="text-xs opacity-75 mt-0.5">
                       {job.status === 'running' && job.started_at
                         ? `Started: ${formatTime(job.started_at)}`
@@ -85,14 +85,14 @@ export default function JobStatusPanel({ jobs, expanded = false }: JobStatusPane
                     </p>
                   </div>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(job.status)}`}>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(job.status)}`}>
                   {job.status}
                 </span>
               </div>
 
               {expanded && job.result && (
-                <div className="mt-3 pt-3 border-t border-current/20">
-                  <p className="text-xs font-medium mb-1">Results:</p>
+                <div className="mt-2 pt-2 border-t border-current/20">
+                  <p className="text-xs font-medium mb-0.5">Results:</p>
                   <pre className="text-xs opacity-75 overflow-x-auto">
                     {JSON.stringify(job.result, null, 2)}
                   </pre>
@@ -100,8 +100,8 @@ export default function JobStatusPanel({ jobs, expanded = false }: JobStatusPane
               )}
 
               {expanded && job.error_message && (
-                <div className="mt-3 pt-3 border-t border-current/20">
-                  <p className="text-xs font-medium mb-1">Error:</p>
+                <div className="mt-2 pt-2 border-t border-current/20">
+                  <p className="text-xs font-medium mb-0.5">Error:</p>
                   <p className="text-xs opacity-75">{job.error_message}</p>
                 </div>
               )}

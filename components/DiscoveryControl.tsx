@@ -124,67 +124,67 @@ export default function DiscoveryControl() {
   const isAutomationOn = automationStatus?.automation_enabled
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/50 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <div className="p-2 bg-olive-600 rounded-lg">
-            <Search className="w-5 h-5 text-white" />
+    <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-md border border-gray-200/50 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center space-x-1.5">
+          <div className="p-1.5 bg-olive-600 rounded-md">
+            <Search className="w-3.5 h-3.5 text-white" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900">Website Discovery</h2>
+          <h2 className="text-sm font-bold text-gray-900">Website Discovery</h2>
         </div>
         <button
           onClick={() => setShowStats(!showStats)}
-          className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
           title="Show discovery statistics"
         >
-          <BarChart3 className="w-5 h-5" />
+          <BarChart3 className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {/* Status Display */}
       {loading ? (
-        <div className="flex items-center space-x-2 text-gray-600">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          <span>Loading status...</span>
+        <div className="flex items-center space-x-1.5 text-gray-600">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          <span className="text-xs">Loading status...</span>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {/* Current Status */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
             {status?.status === 'running' ? (
               <>
-                <Loader2 className="w-5 h-5 text-olive-600 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 text-olive-600 animate-spin" />
                 <div>
-                  <p className="font-medium text-gray-900">Searching Internet...</p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-xs font-medium text-gray-900">Searching Internet...</p>
+                  <p className="text-xs text-gray-600">
                     {status.started_at ? `Started: ${formatTime(status.started_at)}` : 'In progress'}
                   </p>
                 </div>
               </>
             ) : status?.status === 'completed' ? (
               <>
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                 <div>
-                  <p className="font-medium text-gray-900">Last Search Completed</p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-xs font-medium text-gray-900">Last Search Completed</p>
+                  <p className="text-xs text-gray-600">
                     {status.completed_at ? formatTime(status.completed_at) : 'Unknown'}
                   </p>
                 </div>
               </>
             ) : status?.status === 'failed' ? (
               <>
-                <AlertCircle className="w-5 h-5 text-red-500" />
+                <AlertCircle className="w-3.5 h-3.5 text-red-500" />
                 <div>
-                  <p className="font-medium text-gray-900">Last Search Failed</p>
-                  <p className="text-sm text-red-600">{status.error || 'Unknown error'}</p>
+                  <p className="text-xs font-medium text-gray-900">Last Search Failed</p>
+                  <p className="text-xs text-red-600">{status.error || 'Unknown error'}</p>
                 </div>
               </>
             ) : (
               <>
-                <AlertCircle className="w-5 h-5 text-gray-400" />
+                <AlertCircle className="w-3.5 h-3.5 text-gray-400" />
                 <div>
-                  <p className="font-medium text-gray-900">Never Run</p>
-                  <p className="text-sm text-gray-600">No searches have been performed yet</p>
+                  <p className="text-xs font-medium text-gray-900">Never Run</p>
+                  <p className="text-xs text-gray-600">No searches have been performed yet</p>
                 </div>
               </>
             )}
@@ -192,12 +192,12 @@ export default function DiscoveryControl() {
 
           {/* Statistics Panel (Toggle) */}
           {showStats && status?.result && (
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Last Search Results</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-gray-50 rounded-md p-2 border border-gray-200">
+              <h3 className="text-xs font-semibold text-gray-700 mb-2">Last Search Results</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <div>
                   <p className="text-xs text-gray-600">Discovered</p>
-                  <p className="text-lg font-bold text-gray-900">
+                  <p className="text-sm font-bold text-gray-900">
                     {status.result.discovered || 0}
                   </p>
                 </div>

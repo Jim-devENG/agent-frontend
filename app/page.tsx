@@ -173,21 +173,21 @@ export default function Dashboard() {
     <div className="min-h-screen bg-white">
       {/* Modern Header */}
       <header className="bg-white/80 backdrop-blur-lg shadow-sm border-b border-gray-200/50 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-black">
+              <h1 className="text-xl font-bold text-black">
                 Art Outreach Scraper
               </h1>
-              <p className="text-gray-600 mt-1 text-sm">
+              <p className="text-gray-600 mt-0.5 text-xs">
                 Autonomous website discovery and outreach automation
               </p>
             </div>
             <div className="flex items-center space-x-3">
               {automationStatus?.automation_enabled && (
-                <div className="flex items-center space-x-2 bg-green-50 border border-green-200 rounded-full px-4 py-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm font-medium text-green-800">Active</span>
+                <div className="flex items-center space-x-1.5 bg-green-50 border border-green-200 rounded-full px-2.5 py-1">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs font-medium text-green-800">Active</span>
                 </div>
               )}
               <button
@@ -195,9 +195,9 @@ export default function Dashboard() {
                   localStorage.removeItem('auth_token')
                   router.push('/login')
                 }}
-                className="flex items-center space-x-2 px-4 py-2 bg-olive-600 hover:bg-olive-700 text-white rounded-lg transition-colors"
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-olive-600 hover:bg-olive-700 text-white rounded-md transition-colors text-sm"
               >
-                <LogOutIcon className="w-4 h-4" />
+                <LogOutIcon className="w-3.5 h-3.5" />
                 <span>Logout</span>
               </button>
             </div>
@@ -225,7 +225,7 @@ export default function Dashboard() {
       )}
 
       {/* System Status Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3">
         <SystemStatus 
           automationStatus={automationStatus}
           jobs={jobs}
@@ -234,9 +234,9 @@ export default function Dashboard() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-        <div className="bg-white/60 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200/50 p-2">
-          <nav className="flex space-x-2">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3">
+        <div className="bg-white/60 backdrop-blur-sm rounded-lg shadow-sm border border-gray-200/50 p-1.5">
+          <nav className="flex space-x-1">
             {tabs.map((tab) => {
               const Icon = tab.icon
               return (
@@ -247,15 +247,15 @@ export default function Dashboard() {
                     setActiveTab(tab.id as any)
                   }}
                   className={`
-                    flex items-center space-x-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all
+                    flex items-center space-x-1.5 px-3 py-1.5 rounded-md font-medium text-xs transition-all
                     ${
                       activeTab === tab.id
-                        ? 'bg-olive-600 text-white shadow-md'
+                        ? 'bg-olive-600 text-white shadow-sm'
                         : 'text-gray-700 hover:bg-gray-100/80'
                     }
                   `}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-3.5 h-3.5" />
                   <span>{tab.label}</span>
                 </button>
               )
@@ -265,7 +265,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {stats ? <StatsCards stats={stats} /> : (

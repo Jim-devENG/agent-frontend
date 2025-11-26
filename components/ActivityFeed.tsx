@@ -108,40 +108,40 @@ export default function ActivityFeed({ limit = 50, autoRefresh = true }: Activit
   }
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/50 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <div className="p-2 bg-olive-600 rounded-lg">
-            <Activity className="w-5 h-5 text-white" />
+    <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-md border border-gray-200/50 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center space-x-1.5">
+          <div className="p-1.5 bg-olive-600 rounded-md">
+            <Activity className="w-3.5 h-3.5 text-white" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900">Activity Feed</h2>
+          <h2 className="text-sm font-bold text-gray-900">Activity Feed</h2>
         </div>
         {autoRefresh && (
-          <div className="flex items-center space-x-2 text-xs text-gray-500">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <div className="flex items-center space-x-1.5 text-xs text-gray-500">
+            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
             <span>Live</span>
           </div>
         )}
       </div>
 
       {loading && activities.length === 0 ? (
-        <div className="text-center py-8">
-          <Loader2 className="w-8 h-8 animate-spin text-olive-600 mx-auto mb-2" />
-          <p className="text-gray-500">Loading activities...</p>
+        <div className="text-center py-4">
+          <Loader2 className="w-5 h-5 animate-spin text-olive-600 mx-auto mb-1.5" />
+          <p className="text-xs text-gray-500">Loading activities...</p>
         </div>
       ) : activities.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <Activity className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-          <p>No activities yet. Start scraping to see activity here.</p>
+        <div className="text-center py-4 text-gray-500">
+          <Activity className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+          <p className="text-xs">No activities yet. Start scraping to see activity here.</p>
         </div>
       ) : (
-        <div className="space-y-2 max-h-96 overflow-y-auto">
+        <div className="space-y-1.5 max-h-80 overflow-y-auto">
           {activities.map((activity) => (
             <div
               key={activity.id}
-              className={`p-4 rounded-lg border ${getStatusColor(activity.status)} transition-all hover:shadow-md`}
+              className={`p-2 rounded-md border ${getStatusColor(activity.status)} transition-all hover:shadow-sm`}
             >
-              <div className="flex items-start space-x-3">
+              <div className="flex items-start space-x-2">
                 <div className="flex-shrink-0 mt-0.5">
                   {getStatusIcon(activity.status)}
                 </div>
@@ -151,13 +151,13 @@ export default function ActivityFeed({ limit = 50, autoRefresh = true }: Activit
                       {activity.activity_type}
                     </span>
                     <div className="flex items-center space-x-1 text-xs text-gray-500">
-                      <Clock className="w-3 h-3" />
+                      <Clock className="w-2.5 h-2.5" />
                       <span>{formatTime(activity.created_at)}</span>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-900 mt-1">{activity.message}</p>
+                  <p className="text-xs text-gray-900 mt-0.5">{activity.message}</p>
                   {activity.metadata && Object.keys(activity.metadata).length > 0 && (
-                    <div className="mt-2 text-xs text-gray-600">
+                    <div className="mt-1 text-xs text-gray-600">
                       {JSON.stringify(activity.metadata, null, 2)}
                     </div>
                   )}

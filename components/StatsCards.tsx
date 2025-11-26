@@ -49,39 +49,39 @@ export default function StatsCards({ stats }: StatsCardsProps) {
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
       {cards.map((card) => {
         const Icon = card.icon
         return (
           <div
             key={card.title}
-            className={`bg-gradient-to-br ${card.bgGradient} rounded-xl shadow-lg border border-white/50 p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1`}
+            className={`bg-gradient-to-br ${card.bgGradient} rounded-lg shadow-md border border-white/50 p-3 hover:shadow-lg transition-all duration-300`}
           >
-            <div className="flex items-start justify-between mb-4">
-              <div className={`p-3 rounded-xl bg-gradient-to-br ${card.gradient} shadow-md`}>
-                <Icon className="w-6 h-6 text-white" />
+            <div className="flex items-start justify-between mb-2">
+              <div className={`p-2 rounded-lg bg-gradient-to-br ${card.gradient} shadow-sm`}>
+                <Icon className="w-4 h-4 text-white" />
               </div>
               {card.change !== undefined && card.change > 0 && (
-                <div className="flex items-center space-x-1 text-green-600 bg-green-50 rounded-full px-2 py-1">
-                  <ArrowUpRight className="w-3 h-3" />
+                <div className="flex items-center space-x-1 text-green-600 bg-green-50 rounded-full px-1.5 py-0.5">
+                  <ArrowUpRight className="w-2.5 h-2.5" />
                   <span className="text-xs font-semibold">+{card.change}</span>
                 </div>
               )}
             </div>
             
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">{card.title}</p>
-              <p className={`text-4xl font-bold bg-gradient-to-r ${card.gradient} bg-clip-text text-transparent`}>
+              <p className="text-xs font-medium text-gray-600 mb-0.5">{card.title}</p>
+              <p className={`text-2xl font-bold bg-gradient-to-r ${card.gradient} bg-clip-text text-transparent`}>
                 {card.value}
               </p>
               
               {card.subtitle && (
-                <p className="text-xs text-gray-500 mt-2">{card.subtitle}</p>
+                <p className="text-xs text-gray-500 mt-1">{card.subtitle}</p>
               )}
               
               {card.change !== undefined && card.changeLabel && (
-                <div className="flex items-center mt-3 text-xs text-gray-600">
-                  <TrendingUp className="w-3 h-3 mr-1" />
+                <div className="flex items-center mt-2 text-xs text-gray-600">
+                  <TrendingUp className="w-2.5 h-2.5 mr-1" />
                   <span>{card.changeLabel}</span>
                 </div>
               )}
