@@ -203,19 +203,19 @@ export default function DiscoveryControl() {
                 </div>
                 <div>
                   <p className="text-xs text-gray-600">New Websites</p>
-                  <p className="text-lg font-bold text-green-600">
+                  <p className="text-sm font-bold text-green-600">
                     {status.result.new_websites || 0}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-600">Skipped</p>
-                  <p className="text-lg font-bold text-yellow-600">
+                  <p className="text-sm font-bold text-yellow-600">
                     {status.result.skipped || 0}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-600">Failed</p>
-                  <p className="text-lg font-bold text-red-600">
+                  <p className="text-sm font-bold text-red-600">
                     {status.result.failed || 0}
                   </p>
                 </div>

@@ -37,42 +37,42 @@ export default function ScrapeForm({ onScrape }: ScrapeFormProps) {
   }
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200/50 p-6">
-      <div className="flex items-center space-x-2 mb-4">
-        <div className="p-2 bg-olive-600 rounded-lg">
-          <Search className="w-5 h-5 text-white" />
+    <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-md border border-gray-200/50 p-3">
+      <div className="flex items-center space-x-1.5 mb-2">
+        <div className="p-1.5 bg-olive-600 rounded-md">
+          <Search className="w-3.5 h-3.5 text-white" />
         </div>
-        <h2 className="text-xl font-bold text-gray-900">Scrape Website</h2>
+        <h2 className="text-sm font-bold text-gray-900">Scrape Website</h2>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-2">
         <div>
-          <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="url" className="block text-xs font-medium text-gray-700 mb-1">
             Website URL
           </label>
-          <div className="flex space-x-2">
+          <div className="flex space-x-1.5">
             <input
               type="url"
               id="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com"
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-olive-500 focus:border-transparent transition-all"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-olive-500 focus:border-transparent transition-all text-sm"
               disabled={loading}
             />
             <button
               type="submit"
               disabled={loading || !url.trim()}
-              className="px-6 py-3 bg-olive-600 text-white rounded-lg font-medium hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center space-x-2"
+              className="px-3 py-2 bg-olive-600 text-white rounded-md font-medium hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md flex items-center space-x-1.5 text-sm"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   <span>Scraping...</span>
                 </>
               ) : (
                 <>
-                  <Search className="w-4 h-4" />
+                  <Search className="w-3.5 h-3.5" />
                   <span>Scrape</span>
                 </>
               )}
@@ -82,22 +82,22 @@ export default function ScrapeForm({ onScrape }: ScrapeFormProps) {
       </form>
 
       {error && (
-        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-md flex items-start space-x-2">
+          <AlertCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-red-800">Error</p>
-            <p className="text-sm text-red-600 mt-1">{error}</p>
+            <p className="text-xs font-medium text-red-800">Error</p>
+            <p className="text-xs text-red-600 mt-0.5">{error}</p>
           </div>
         </div>
       )}
 
       {result && (
-        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <div className="flex items-start space-x-3">
-            <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+          <div className="flex items-start space-x-2">
+            <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-green-800">Successfully scraped!</p>
-              <div className="mt-2 space-y-1 text-sm text-green-700">
+              <p className="text-xs font-medium text-green-800">Successfully scraped!</p>
+              <div className="mt-1.5 space-y-1 text-xs text-green-700">
                 <p>
                   <strong>Title:</strong> {result.title || 'N/A'}
                 </p>
