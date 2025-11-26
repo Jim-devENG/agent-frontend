@@ -51,16 +51,16 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Header for Scraped Emails tab */}
       {emailsOnly && (
-        <div className="p-4 border-b border-gray-200 bg-olive-50">
-          <h3 className="text-lg font-semibold text-gray-900">Scraped Email Addresses</h3>
-          <p className="text-sm text-gray-600 mt-1">All email addresses extracted from scraped websites</p>
+        <div className="p-2 border-b border-gray-200 bg-olive-50">
+          <h3 className="text-sm font-semibold text-gray-900">Scraped Email Addresses</h3>
+          <p className="text-xs text-gray-600 mt-0.5">All email addresses extracted from scraped websites</p>
         </div>
       )}
 
       {/* Filters */}
-      <div className="p-4 border-b border-gray-200 bg-gray-50">
+      <div className="p-2 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center space-x-4">
-          <Filter className="w-5 h-5 text-gray-500" />
+          <Filter className="w-3.5 h-3.5 text-gray-500" />
           {!emailsOnly && (
             <select
               value={category}
@@ -68,7 +68,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                 setCategory(e.target.value)
                 setSkip(0)
               }}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="px-2 py-1 border border-gray-300 rounded-md text-xs"
             >
               <option value="">All Categories</option>
               {categories.map((cat) => (
@@ -86,14 +86,14 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                 setHasEmail(value === '' ? undefined : value === 'true')
                 setSkip(0)
               }}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="px-2 py-1 border border-gray-300 rounded-md text-xs"
             >
               <option value="">All Leads</option>
               <option value="true">Has Email</option>
               <option value="false">No Email</option>
             </select>
           )}
-          <div className="ml-auto text-sm text-gray-600">
+          <div className="ml-auto text-xs text-gray-600">
             Total: {total.toLocaleString()}
           </div>
         </div>
@@ -106,34 +106,34 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
             <tr>
               {emailsOnly ? (
                 <>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Email Address
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Contact Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Website
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date Scraped
                   </th>
                 </>
               ) : (
                 <>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Contact
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Website
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Category
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Info
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date
                   </th>
                 </>
@@ -143,13 +143,13 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan={emailsOnly ? 4 : 5} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={emailsOnly ? 4 : 5} className="px-3 py-2 text-center text-gray-500">
                   Loading...
                 </td>
               </tr>
             ) : leads.length === 0 ? (
               <tr>
-                <td colSpan={emailsOnly ? 4 : 5} className="px-6 py-4 text-center text-gray-500">
+                <td colSpan={emailsOnly ? 4 : 5} className="px-3 py-2 text-center text-gray-500">
                   {emailsOnly ? 'No emails found. Scrape some websites to extract emails.' : 'No leads found'}
                 </td>
               </tr>
@@ -158,7 +158,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                 <tr key={lead.id} className="hover:bg-gray-50">
                   {emailsOnly ? (
                     <>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 py-2 whitespace-nowrap">
                         <div className="flex items-center">
                           <Mail className="w-4 h-4 text-olive-600 mr-2" />
                           <div>
@@ -173,12 +173,12 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 py-2 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
                           {lead.name || 'Unknown'}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 py-2">
                         <div className="text-sm text-gray-900">
                           {lead.website_title || lead.website_url || 'Unknown'}
                         </div>
@@ -194,7 +194,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                           </a>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
                         {lead.created_at
                           ? new Date(lead.created_at).toLocaleDateString()
                           : 'N/A'}
@@ -202,7 +202,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                     </>
                   ) : (
                     <>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 py-2 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {lead.name || 'Unknown'}
                         </div>
@@ -219,7 +219,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                           </div>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 py-2">
                         <div className="text-sm font-medium text-gray-900">
                           {lead.website_title || 'Unknown'}
                         </div>
@@ -235,12 +235,12 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                           </a>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 py-2 whitespace-nowrap">
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-olive-100 text-olive-800">
                           {lead.website_category?.replace('_', ' ') || 'unknown'}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 py-2">
                         {lead.social_platform && (
                           <div className="text-sm text-gray-500">
                             <span className="font-medium">{lead.social_platform}:</span>{' '}
@@ -259,7 +259,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                           </div>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
                         {new Date(lead.created_at).toLocaleDateString()}
                       </td>
                     </>
@@ -272,22 +272,22 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
       </div>
 
       {/* Pagination */}
-      <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-        <div className="text-sm text-gray-700">
+      <div className="px-3 py-2 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+        <div className="text-xs text-gray-700">
           Showing {skip + 1} to {Math.min(skip + limit, total)} of {total} leads
         </div>
-        <div className="flex space-x-2">
+        <div className="flex space-x-1.5">
           <button
             onClick={() => setSkip(Math.max(0, skip - limit))}
             disabled={skip === 0}
-            className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-2.5 py-1 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Previous
           </button>
           <button
             onClick={() => setSkip(skip + limit)}
             disabled={skip + limit >= total}
-            className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-2.5 py-1 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Next
           </button>
