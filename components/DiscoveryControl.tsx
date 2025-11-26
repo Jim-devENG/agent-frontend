@@ -146,6 +146,12 @@ export default function DiscoveryControl() {
       return
     }
     
+    // Check if location is selected
+    if (!selectedLocation) {
+      alert('Please select a location before running searches')
+      return
+    }
+    
     setSearching(true)
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null

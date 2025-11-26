@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Power, Mail, Settings, Search, MapPin } from 'lucide-react'
+import { Power, Mail, Settings, Search, MapPin, Zap } from 'lucide-react'
 
 interface AutomationStatus {
   automation_enabled: boolean
@@ -28,6 +28,7 @@ export default function AutomationControl() {
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedLocation, setSelectedLocation] = useState<string>('')
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [automaticScraperEnabled, setAutomaticScraperEnabled] = useState<boolean>(false)
 
   useEffect(() => {
     loadStatus()
@@ -37,6 +38,20 @@ export default function AutomationControl() {
     const interval = setInterval(loadStatus, 5000)
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    if (status?.settings) {
+      setAutomaticScraperEnabled(status.settings.automatic_scraper_enabled || false)
+      setSelectedLocation(status.settings.search_location || '')
+      if (status.settings.search_categories) {
+        setSelectedCategories(
+          typeof status.settings.search_categories === 'string'
+            ? status.settings.search_categories.split(',')
+            : status.settings.search_categories
+        )
+      }
+    }
+  }, [status])
 
   const loadLocations = async () => {
     try {
@@ -130,6 +145,72 @@ export default function AutomationControl() {
     }
   }
 
+  const toggleAutomaticScraper = async (enabled: boolean) => {
+    if (enabled && !selectedLocation) {
+      alert('Please select a location before enabling automatic scraper')
+      return
+    }
+    
+    setUpdating(true)
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (!token) return
+      
+      // Save location first if enabling
+      if (enabled && selectedLocation) {
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/discovery/search-now?location=${selectedLocation}`,
+          {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          }
+        )
+      }
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/automation/automatic-scraper/toggle`,
+        {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ enabled })
+        }
+      )
+      if (response.ok) {
+        await loadStatus()
+      } else {
+        const error = await response.json()
+        alert(`Failed to toggle automatic scraper: ${error.detail || 'Unknown error'}`)
+      }
+    } catch (error: any) {
+      alert(`Error: ${error.message}`)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  const saveLocation = async () => {
+    if (!selectedLocation) return
+    
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (!token) return
+      
+      // Save location via settings
+      await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/discovery/search-now?location=${selectedLocation}`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      )
+    } catch (error) {
+      console.error('Error saving location:', error)
+    }
+  }
+
   const setEmailMode = async (mode: 'automatic' | 'manual') => {
     setUpdating(true)
     try {
@@ -160,6 +241,38 @@ export default function AutomationControl() {
     }
   }
 
+  const setSearchInterval = async (seconds: number) => {
+    if (seconds < 900) return
+    
+    setUpdating(true)
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (!token) return
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/automation/search-interval`,
+        {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ interval_seconds: seconds })
+        }
+      )
+      if (response.ok) {
+        await loadStatus()
+      } else {
+        const error = await response.json()
+        alert(`Failed to set interval: ${error.detail || 'Unknown error'}`)
+      }
+    } catch (error: any) {
+      alert(`Error: ${error.message}`)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -180,285 +293,184 @@ export default function AutomationControl() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-900 flex items-center">
-          <Power className="w-5 h-5 mr-2" />
-          Automation Control
-        </h2>
-      </div>
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+        <Settings className="w-5 h-5 mr-2" />
+        Automation Settings
+      </h2>
 
-      {/* Master Switch */}
-      <div className="border-t pt-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Master Switch</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Turn on to start automatic website discovery, scraping, and contact extraction
+      {/* Grid Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Master Switch */}
+        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-2">
+              <Power className="w-5 h-5 text-gray-600" />
+              <h3 className="text-sm font-semibold text-gray-900">Master Switch</h3>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={status.automation_enabled}
+                onChange={(e) => toggleAutomation(e.target.checked)}
+                disabled={updating}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-olive-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-olive-600"></div>
+            </label>
+          </div>
+          <p className="text-xs text-gray-600">
+            Enable to activate all automation features
+          </p>
+        </div>
+
+        {/* Automatic Scraper Switch */}
+        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-2">
+              <Zap className="w-5 h-5 text-gray-600" />
+              <h3 className="text-sm font-semibold text-gray-900">Automatic Scraper</h3>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={automaticScraperEnabled}
+                onChange={(e) => toggleAutomaticScraper(e.target.checked)}
+                disabled={updating || !status.automation_enabled || !selectedLocation}
+                className="sr-only peer"
+              />
+              <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${
+                !status.automation_enabled || !selectedLocation
+                  ? 'bg-gray-300 cursor-not-allowed'
+                  : 'bg-gray-200 peer-checked:bg-olive-600'
+              }`}></div>
+            </label>
+          </div>
+          <p className="text-xs text-gray-600">
+            Runs searches automatically at set intervals
+          </p>
+          {!selectedLocation && status.automation_enabled && (
+            <p className="text-xs text-yellow-600 mt-1">
+              Select location first
             </p>
+          )}
+        </div>
+
+        {/* Location Selection */}
+        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+          <div className="flex items-center space-x-2 mb-2">
+            <MapPin className="w-5 h-5 text-gray-600" />
+            <h3 className="text-sm font-semibold text-gray-900">Search Location</h3>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={status.automation_enabled}
-              onChange={(e) => toggleAutomation(e.target.checked)}
-              disabled={updating}
-              className="sr-only peer"
-            />
-            <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary-600"></div>
-            <span className="ml-3 text-sm font-medium text-gray-700">
-              {status.automation_enabled ? 'ON' : 'OFF'}
-            </span>
-          </label>
+          <select
+            value={selectedLocation}
+            onChange={(e) => {
+              setSelectedLocation(e.target.value)
+              if (e.target.value) {
+                saveLocation()
+              }
+            }}
+            disabled={!status.automation_enabled || updating}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm disabled:bg-gray-100"
+          >
+            <option value="">Select Location (Required)</option>
+            {locations.map((loc) => (
+              <option key={loc.value} value={loc.value}>
+                {loc.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-600 mt-1">
+            Required to enable automatic scraper
+          </p>
         </div>
 
-        {status.automation_enabled && (
-          <div className="mt-4 space-y-4">
-            {/* Location Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <MapPin className="w-4 h-4 inline mr-1" />
-                Search Location (Optional)
-              </label>
-              <select
-                value={selectedLocation}
-                onChange={(e) => setSelectedLocation(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm"
-              >
-                <option value="">All Locations</option>
-                {locations.map((loc) => (
-                  <option key={loc.value} value={loc.value}>
-                    {loc.label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Select a location to focus search, or leave empty for all locations
-              </p>
-            </div>
-
-            {/* Category Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Categories (Optional)
-              </label>
-              <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-200 rounded-md p-2">
-                {categories.map((cat) => (
-                  <label key={cat.value} className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedCategories.includes(cat.value)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedCategories([...selectedCategories, cat.value])
-                        } else {
-                          setSelectedCategories(selectedCategories.filter(c => c !== cat.value))
-                        }
-                      }}
-                      className="rounded border-gray-300 text-olive-600 focus:ring-olive-500"
-                    />
-                    <span className="text-sm text-gray-700">{cat.label}</span>
-                  </label>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Select categories to focus search, or leave empty for all categories
-              </p>
-            </div>
-
-            <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mt-2 animate-pulse"></div>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-green-800">Automation Active</p>
-                  <p className="text-xs text-green-700 mt-1">
-                    The system is actively searching, scraping websites, and extracting contacts.
-                  </p>
-                </div>
-              </div>
-            </div>
+        {/* Email Sending Mode */}
+        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+          <div className="flex items-center space-x-2 mb-2">
+            <Mail className="w-5 h-5 text-gray-600" />
+            <h3 className="text-sm font-semibold text-gray-900">Email Sending</h3>
           </div>
-        )}
-      </div>
-
-      {/* Email Trigger Mode */}
-      <div className="border-t pt-6">
-        <div className="flex items-center mb-4">
-          <Mail className="w-5 h-5 mr-2 text-gray-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Email Sending Mode</h3>
+          <div className="space-y-2">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="radio"
+                name="emailMode"
+                value="automatic"
+                checked={status.email_trigger_mode === 'automatic'}
+                onChange={() => setEmailMode('automatic')}
+                disabled={updating}
+                className="text-olive-600 focus:ring-olive-500"
+              />
+              <span className="text-xs text-gray-700">Automatic</span>
+            </label>
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="radio"
+                name="emailMode"
+                value="manual"
+                checked={status.email_trigger_mode === 'manual'}
+                onChange={() => setEmailMode('manual')}
+                disabled={updating}
+                className="text-olive-600 focus:ring-olive-500"
+              />
+              <span className="text-xs text-gray-700">Manual</span>
+            </label>
+          </div>
         </div>
-        <p className="text-sm text-gray-600 mb-4">
-          Choose how emails are sent to contacts
-        </p>
 
-        <div className="space-y-3">
-          <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-            status.email_trigger_mode === 'automatic'
-              ? 'border-primary-500 bg-primary-50'
-              : 'border-gray-200 hover:border-gray-300'
-          }`}>
-            <input
-              type="radio"
-              name="emailMode"
-              value="automatic"
-              checked={status.email_trigger_mode === 'automatic'}
-              onChange={() => setEmailMode('automatic')}
-              disabled={updating}
-              className="mr-3"
-            />
-            <div className="flex-1">
-              <div className="font-medium text-gray-900">Automatic</div>
-              <div className="text-sm text-gray-600">
-                Emails are sent automatically when contacts are found and emails are generated
-              </div>
-            </div>
-          </label>
-
-          <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
-            status.email_trigger_mode === 'manual'
-              ? 'border-primary-500 bg-primary-50'
-              : 'border-gray-200 hover:border-gray-300'
-          }`}>
-            <input
-              type="radio"
-              name="emailMode"
-              value="manual"
-              checked={status.email_trigger_mode === 'manual'}
-              onChange={() => setEmailMode('manual')}
-              disabled={updating}
-              className="mr-3"
-            />
-            <div className="flex-1">
-              <div className="font-medium text-gray-900">Manual</div>
-              <div className="text-sm text-gray-600">
-                Emails are generated but you must manually approve and send them
-              </div>
-            </div>
-          </label>
-        </div>
-      </div>
-
-      {/* Search Interval Control */}
-      <div className="border-t pt-6">
-        <div className="flex items-center mb-4">
-          <Search className="w-5 h-5 mr-2 text-gray-600" />
-          <h3 className="text-lg font-semibold text-gray-900">Search Frequency</h3>
-        </div>
-        <p className="text-sm text-gray-600 mb-4">
-          How often to search the internet for new websites (minimum 15 minutes)
-        </p>
-
-        <div className="space-y-3">
+        {/* Search Frequency */}
+        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 md:col-span-2">
+          <div className="flex items-center space-x-2 mb-2">
+            <Search className="w-5 h-5 text-gray-600" />
+            <h3 className="text-sm font-semibold text-gray-900">Search Frequency</h3>
+          </div>
           <div className="flex items-center space-x-4">
             <input
               type="number"
               min="900"
               step="60"
               value={status.search_interval_seconds || 900}
-              onChange={async (e) => {
+              onChange={(e) => {
                 const seconds = parseInt(e.target.value) || 900
                 if (seconds >= 900) {
-                  setUpdating(true)
-                  try {
-                    const response = await fetch(
-                      `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/automation/search-interval`,
-                      {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ interval_seconds: seconds })
-                      }
-                    )
-                    if (response.ok) {
-                      await loadStatus()
-                    } else {
-                      const error = await response.json()
-                      alert(`Failed to set interval: ${error.detail || 'Unknown error'}`)
-                    }
-                  } catch (error: any) {
-                    alert(`Error: ${error.message}`)
-                  } finally {
-                    setUpdating(false)
-                  }
+                  setSearchInterval(seconds)
                 }
               }}
               disabled={updating || !status.automation_enabled}
-              className="w-32 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+              className="w-32 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm disabled:bg-gray-100"
             />
             <span className="text-sm text-gray-700">seconds</span>
             <div className="flex-1">
               <div className="text-xs text-gray-500">
-                {status.search_interval_seconds < 60 
-                  ? `Searches every ${status.search_interval_seconds} seconds (${Math.round(3600/status.search_interval_seconds)} times per hour)`
-                  : status.search_interval_seconds < 3600
-                  ? `Searches every ${Math.round(status.search_interval_seconds/60)} minutes`
-                  : `Searches every ${Math.round(status.search_interval_seconds/3600)} hours`
+                {status.search_interval_seconds < 3600
+                  ? `Every ${Math.round(status.search_interval_seconds/60)} minutes`
+                  : `Every ${Math.round(status.search_interval_seconds/3600)} hours`
                 }
               </div>
             </div>
           </div>
-
-          {/* Quick presets - starting from 15 minutes */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 mt-2">
             {[900, 1800, 3600, 7200, 14400, 86400].map((seconds) => (
               <button
                 key={seconds}
-                onClick={async () => {
-                  setUpdating(true)
-                  try {
-                    const response = await fetch(
-                      `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/automation/search-interval`,
-                      {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ interval_seconds: seconds })
-                      }
-                    )
-                    if (response.ok) {
-                      await loadStatus()
-                    }
-                  } catch (error: any) {
-                    alert(`Error: ${error.message}`)
-                  } finally {
-                    setUpdating(false)
-                  }
-                }}
+                onClick={() => setSearchInterval(seconds)}
                 disabled={updating || !status.automation_enabled}
-                className={`px-3 py-1 text-xs rounded-md border ${
+                className={`px-2 py-1 text-xs rounded-md border transition-colors ${
                   status.search_interval_seconds === seconds
-                    ? 'bg-primary-100 border-primary-500 text-primary-800'
-                    : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
-                }`}
+                    ? 'bg-olive-100 border-olive-500 text-olive-800'
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                {seconds < 60 
-                  ? `${seconds}s`
-                  : seconds < 3600
+                {seconds < 3600
                   ? `${seconds/60}m`
                   : `${seconds/3600}h`
                 }
               </button>
             ))}
           </div>
-
-        </div>
-      </div>
-
-      {/* Status Info */}
-      <div className="border-t pt-4">
-        <div className="text-xs text-gray-500 space-y-1">
-          <p>
-            <strong>Current Status:</strong> Automation is {status.automation_enabled ? 'enabled' : 'disabled'}
-          </p>
-          <p>
-            <strong>Email Mode:</strong> {status.email_trigger_mode === 'automatic' ? 'Automatic sending' : 'Manual approval required'}
-          </p>
-          <p>
-            <strong>Search Interval:</strong> Every {status.search_interval_seconds} seconds
-          </p>
         </div>
       </div>
     </div>
   )
 }
-
