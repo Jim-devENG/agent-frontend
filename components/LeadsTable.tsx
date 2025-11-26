@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getLeads, type Lead, type LeadsResponse } from '@/lib/api'
 import { Mail, Phone, Globe, Filter } from 'lucide-react'
 
@@ -30,11 +30,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     'holiday_family',
   ]
 
-  useEffect(() => {
-    loadLeads()
-  }, [skip, category, hasEmail])
-
-  const loadLeads = async () => {
+  const loadLeads = useCallback(async () => {
     setLoading(true)
     try {
       const data: LeadsResponse = await getLeads(skip, limit, category || undefined, hasEmail)
@@ -45,7 +41,11 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [skip, limit, category, hasEmail])
+
+  useEffect(() => {
+    loadLeads()
+  }, [loadLeads])
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -212,13 +212,13 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                             {lead.email}
                           </div>
                         )}
-                    {lead.phone_number && (
-                      <div className="text-sm text-gray-500 flex items-center mt-1">
-                        <Phone className="w-3 h-3 mr-1" />
-                        {lead.phone_number}
-                      </div>
-                    )}
-                  </td>
+                        {lead.phone_number && (
+                          <div className="text-sm text-gray-500 flex items-center mt-1">
+                            <Phone className="w-3 h-3 mr-1" />
+                            {lead.phone_number}
+                          </div>
+                        )}
+                      </td>
                   <td className="px-6 py-4">
                     <div className="text-sm font-medium text-gray-900">
                       {lead.website_title || 'Unknown'}
