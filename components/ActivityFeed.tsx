@@ -65,7 +65,10 @@ export default function ActivityFeed({ limit = 50, autoRefresh = true }: Activit
   useEffect(() => {
     loadActivities()
     if (autoRefresh) {
-      const interval = setInterval(loadActivities, 3000)
+      // Refresh every 5 seconds for real-time updates
+      const interval = setInterval(() => {
+        loadActivities()
+      }, 5000)
       return () => clearInterval(interval)
     }
   }, [limit, autoRefresh])

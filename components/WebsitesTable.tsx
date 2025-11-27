@@ -48,6 +48,16 @@ export default function WebsitesTable() {
       loadDiscovered()
     }
   }, [skip, category, status, source, isScraped, viewMode])
+  
+  // Auto-refresh every 10 seconds to show new discoveries
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (viewMode === 'discovered') {
+        loadDiscovered()
+      }
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [viewMode, skip, category, status, source, isScraped])
 
   const loadWebsites = async () => {
     setLoading(true)

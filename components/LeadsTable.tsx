@@ -46,6 +46,14 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
   useEffect(() => {
     loadLeads()
   }, [skip, category, hasEmail])
+  
+  // Auto-refresh every 15 seconds to show new leads
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadLeads()
+    }, 15000)
+    return () => clearInterval(interval)
+  }, [skip, category, hasEmail])
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
