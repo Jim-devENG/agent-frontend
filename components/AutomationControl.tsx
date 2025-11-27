@@ -310,7 +310,7 @@ export default function AutomationControl() {
       {/* Grid Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Master Switch */}
-        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+        <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-5 border-2 border-gray-200 shadow-md hover:shadow-lg transition-all">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
               <Power className="w-5 h-5 text-gray-600" />
@@ -333,7 +333,7 @@ export default function AutomationControl() {
         </div>
 
         {/* Automatic Scraper Switch */}
-        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+        <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-5 border-2 border-gray-200 shadow-md hover:shadow-lg transition-all">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
               <Zap className="w-5 h-5 text-gray-600" />
@@ -365,7 +365,7 @@ export default function AutomationControl() {
         </div>
 
         {/* Location Selection - Multiple */}
-        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+        <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-5 border-2 border-gray-200 shadow-md hover:shadow-lg transition-all">
           <div className="flex items-center space-x-2 mb-2">
             <MapPin className="w-5 h-5 text-gray-600" />
             <h3 className="text-sm font-semibold text-gray-900">Search Locations</h3>
@@ -400,7 +400,7 @@ export default function AutomationControl() {
         </div>
 
         {/* Email Sending Mode */}
-        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+        <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-5 border-2 border-gray-200 shadow-md hover:shadow-lg transition-all">
           <div className="flex items-center space-x-2 mb-2">
             <Mail className="w-5 h-5 text-gray-600" />
             <h3 className="text-sm font-semibold text-gray-900">Email Sending</h3>
@@ -433,57 +433,6 @@ export default function AutomationControl() {
           </div>
         </div>
 
-        {/* Search Frequency */}
-        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 md:col-span-2">
-          <div className="flex items-center space-x-2 mb-2">
-            <Search className="w-5 h-5 text-gray-600" />
-            <h3 className="text-sm font-semibold text-gray-900">Search Frequency</h3>
-          </div>
-          <div className="flex items-center space-x-4">
-            <input
-              type="number"
-              min="900"
-              step="60"
-              value={status.search_interval_seconds || 900}
-              onChange={(e) => {
-                const seconds = parseInt(e.target.value) || 900
-                if (seconds >= 900) {
-                  setSearchInterval(seconds)
-                }
-              }}
-              disabled={updating || !status.automation_enabled}
-              className="w-32 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 text-sm disabled:bg-gray-100"
-            />
-            <span className="text-sm text-gray-700">seconds</span>
-            <div className="flex-1">
-              <div className="text-xs text-gray-500">
-                {status.search_interval_seconds < 3600
-                  ? `Every ${Math.round(status.search_interval_seconds/60)} minutes`
-                  : `Every ${Math.round(status.search_interval_seconds/3600)} hours`
-                }
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-2">
-            {[900, 1800, 3600, 7200, 14400, 86400].map((seconds) => (
-              <button
-                key={seconds}
-                onClick={() => setSearchInterval(seconds)}
-                disabled={updating || !status.automation_enabled}
-                className={`px-2 py-1 text-xs rounded-md border transition-colors ${
-                  status.search_interval_seconds === seconds
-                    ? 'bg-olive-100 border-olive-500 text-olive-800'
-                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                {seconds < 3600
-                  ? `${seconds/60}m`
-                  : `${seconds/3600}h`
-                }
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   )
