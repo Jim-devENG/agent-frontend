@@ -508,7 +508,26 @@ async def get_activity(
             if status:
                 query = query.filter(ActivityLog.status == status)
             
-            activities = query.order_by(ActivityLog.created_at.desc()).limit(limit).all()
+            # Order by created_at DESC and id DESC to ensure consistent ordering and prevent duplicates
+            activities = query.order_by(
+                ActivityLog.created_at.desc(),
+                ActivityLog.id.desc()
+            ).limit(limit * 2).all()  # Get more to filter duplicates
+            
+            # Additional deduplication: remove exact duplicate messages within the same time window
+            # This prevents showing the same activity multiple times
+            seen_activities = {}
+            unique_activities = []
+            for activity in activities:
+                # Create a key based on message and timestamp (within 1 second)
+                activity_key = f"{activity.message}_{activity.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
+                if activity_key not in seen_activities:
+                    seen_activities[activity_key] = True
+                    unique_activities.append(activity)
+                    if len(unique_activities) >= limit:
+                        break  # Stop once we have enough unique activities
+            
+            activities = unique_activities
             
             activity_list = []
             for activity in activities:
