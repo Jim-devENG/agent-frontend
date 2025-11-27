@@ -24,13 +24,14 @@ class BaseScraper:
         self.max_retries = settings.SCRAPER_MAX_RETRIES
         self.rate_limiter = RateLimiter(max_requests=10, time_window=60)
     
-    def fetch_page(self, url: str, use_rate_limit: bool = True) -> Tuple[Optional[BeautifulSoup], Optional[str]]:
+    def fetch_page(self, url: str, use_rate_limit: bool = True, silent_404: bool = False) -> Tuple[Optional[BeautifulSoup], Optional[str]]:
         """
         Fetch and parse a web page with error handling and rate limiting
         
         Args:
             url: URL to fetch
             use_rate_limit: Whether to apply rate limiting
+            silent_404: If True, log 404 errors at DEBUG level instead of ERROR (for expected 404s)
             
         Returns:
             Tuple of (BeautifulSoup object or None, raw HTML string or None)
@@ -44,6 +45,7 @@ class BaseScraper:
         
         # Retry logic
         last_error = None
+        is_404 = False
         for attempt in range(self.max_retries):
             try:
                 response = self.session.get(
@@ -55,6 +57,14 @@ class BaseScraper:
                 raw_html = response.text
                 soup = BeautifulSoup(raw_html, "lxml")
                 return soup, raw_html
+            except requests.exceptions.HTTPError as e:
+                if e.response and e.response.status_code == 404:
+                    is_404 = True
+                    last_error = f"404 Client Error: Not Found for url: {url}"
+                    break  # Don't retry 404s
+                last_error = f"HTTP error: {str(e)}"
+                if attempt < self.max_retries - 1:
+                    time.sleep(1)
             except requests.exceptions.Timeout as e:
                 last_error = f"Timeout: {str(e)}"
                 if attempt < self.max_retries - 1:
@@ -67,7 +77,11 @@ class BaseScraper:
                 last_error = f"Unexpected error: {str(e)}"
                 break
         
-        logger.error(f"Error fetching {url} after {self.max_retries} attempts: {last_error}")
+        # Log at appropriate level
+        if is_404 and silent_404:
+            logger.debug(f"Page not found (expected): {url}")
+        else:
+            logger.error(f"Error fetching {url} after {self.max_retries} attempts: {last_error}")
         return None, None
     
     def extract_metadata(self, soup: BeautifulSoup, url: str) -> Dict[str, Any]:

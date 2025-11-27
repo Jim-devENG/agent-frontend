@@ -78,12 +78,20 @@ class ContactPageCrawler(BaseScraper):
             List of found contact page URLs
         """
         found_pages = []
+        total_checked = len(self.CONTACT_PATHS)
+        
+        logger.debug(f"Checking {total_checked} common contact page paths for {base_url}")
         
         for path in self.CONTACT_PATHS:
             contact_url = urljoin(base_url.rstrip("/"), path)
             if self._check_page_exists(contact_url):
                 found_pages.append(contact_url)
                 logger.info(f"Found contact page: {contact_url}")
+        
+        if found_pages:
+            logger.info(f"✅ Found {len(found_pages)} contact page(s) out of {total_checked} paths checked for {base_url}")
+        else:
+            logger.debug(f"No contact pages found from common paths for {base_url} (this is normal)")
         
         return found_pages
     
@@ -98,7 +106,8 @@ class ContactPageCrawler(BaseScraper):
             True if page exists and is accessible
         """
         try:
-            soup, _ = self.fetch_page(url, use_rate_limit=True)
+            # Use silent_404=True to avoid logging expected 404s as errors
+            soup, _ = self.fetch_page(url, use_rate_limit=True, silent_404=True)
             if soup:
                 # Check if page has contact-related content
                 text = soup.get_text().lower()
