@@ -65,17 +65,21 @@ class BaseScraper:
                 
                 # Also check the error message string for 404 indicators
                 error_str = str(e).lower()
+                error_msg_lower = error_str
+                
+                # Check for 404 in multiple ways
                 is_404_error = (
                     status_code == 404 or 
-                    '404' in error_str or 
-                    'not found' in error_str or
-                    '404 client error' in error_str
+                    '404' in error_msg_lower or 
+                    'not found' in error_msg_lower or
+                    '404 client error' in error_msg_lower or
+                    '404 not found' in error_msg_lower
                 )
                 
                 if is_404_error:
                     is_404 = True
                     last_error = f"404 Client Error: Not Found for url: {url}"
-                    break  # Don't retry 404s
+                    break  # Don't retry 404s - exit immediately
                 else:
                     last_error = f"HTTP error: {str(e)}"
                     if attempt < self.max_retries - 1:
