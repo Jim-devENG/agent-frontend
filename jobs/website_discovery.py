@@ -174,13 +174,20 @@ class WebsiteDiscovery:
         from utils.location_search import Location, generate_location_queries
         
         if location:
-            # Handle comma-separated locations
-            location_list = [loc.strip() for loc in location.split(',')] if isinstance(location, str) else location
+            # Handle comma-separated locations - split first, then process each
+            if isinstance(location, str):
+                location_list = [loc.strip() for loc in location.split(',') if loc.strip()]
+            elif isinstance(location, list):
+                location_list = location
+            else:
+                location_list = [str(location)]
+            
             search_queries = []
             
             for loc_str in location_list:
                 try:
-                    location_enum = Location(loc_str)
+                    # Try to match the location string to Location enum
+                    location_enum = Location(loc_str.lower())  # Convert to lowercase for matching
                     queries = generate_location_queries(
                         location_enum, 
                         categories=categories,
@@ -188,15 +195,15 @@ class WebsiteDiscovery:
                     )
                     search_queries.extend(queries)
                     logger.info(f"Generated {len(queries)} queries for location: {loc_str}")
-                except ValueError:
-                    logger.warning(f"Invalid location: {loc_str}, skipping")
+                except (ValueError, KeyError) as e:
+                    logger.warning(f"Invalid location: {loc_str} (error: {e}), skipping")
                     continue
             
             if not search_queries:
-                logger.warning(f"No valid locations found, using default queries")
+                logger.warning(f"No valid locations found from '{location}', using default queries")
                 search_queries = self._get_default_queries()
             else:
-                logger.info(f"Total {len(search_queries)} queries generated for locations: {', '.join(location_list)}")
+                logger.info(f"Total {len(search_queries)} queries generated for {len(location_list)} location(s): {', '.join(location_list)}")
         else:
             # Default queries (all locations, all categories)
             search_queries = []

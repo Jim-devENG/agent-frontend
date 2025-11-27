@@ -26,20 +26,28 @@ class DataForSEOClient:
         self.login = login or getattr(settings, 'DATAFORSEO_LOGIN', None)
         self.password = password or getattr(settings, 'DATAFORSEO_PASSWORD', None)
         
-        if not self.login or not self.password:
-            logger.warning("DataForSEO credentials not configured. Set DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD in .env")
-        else:
+        # Always initialize headers (even if empty)
+        self.headers = {
+            "Content-Type": "application/json"
+        }
+        
+        if self.login and self.password and self.login.strip() and self.password.strip():
             # Create basic auth header
             credentials = f"{self.login}:{self.password}"
             encoded_credentials = base64.b64encode(credentials.encode()).decode()
-            self.headers = {
-                "Authorization": f"Basic {encoded_credentials}",
-                "Content-Type": "application/json"
-            }
+            self.headers["Authorization"] = f"Basic {encoded_credentials}"
+        else:
+            logger.warning("DataForSEO credentials not configured. Set DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD in .env")
     
     def is_configured(self) -> bool:
         """Check if credentials are configured"""
-        return self.login is not None and self.password is not None
+        return (
+            self.login is not None 
+            and self.password is not None 
+            and self.login.strip() != "" 
+            and self.password.strip() != ""
+            and "Authorization" in self.headers
+        )
     
     def serp_google_organic(self, keyword: str, location_code: int = 2840, language_code: str = "en", 
                            depth: int = 10) -> Dict:
