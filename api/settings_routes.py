@@ -172,26 +172,33 @@ async def toggle_automatic_scraper(
     }
 
 
+class LocationsRequest(BaseModel):
+    locations: List[str]
+
+
 @router.post("/automation/locations")
 async def set_locations(
-    request: dict,
+    request: LocationsRequest,
     db: Session = Depends(get_db),
     current_user: str = Depends(get_current_user)
 ):
     """Set search locations (comma-separated or array)"""
     settings_manager = AppSettingsManager(db)
-    locations = request.get("locations", [])
     
-    if isinstance(locations, list):
-        locations_str = ",".join(locations)
+    locations = request.locations
+    if isinstance(locations, list) and len(locations) > 0:
+        # Filter out empty strings and join
+        locations_str = ",".join([loc.strip() for loc in locations if loc.strip()])
     else:
-        locations_str = str(locations)
+        locations_str = ""
     
     settings_manager.set("search_location", locations_str)
+    db.commit()  # Ensure it's committed immediately
     
     return {
         "locations": locations,
-        "message": f"Locations updated: {len(locations) if isinstance(locations, list) else 1} location(s)"
+        "saved": True,
+        "message": f"Locations updated: {len(locations)} location(s)"
     }
 
 
