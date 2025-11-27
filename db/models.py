@@ -51,6 +51,7 @@ class Contact(Base):
     contact_page_url = Column(String)
     name = Column(String)
     role = Column(String)  # artist, gallery_owner, curator, etc.
+    source = Column(String)  # hunter_io, html, footer, header, contact_form, javascript, etc.
     extra_metadata = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

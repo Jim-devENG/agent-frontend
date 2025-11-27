@@ -143,8 +143,23 @@ class ContactExtractionService:
                 if hunter_emails:
                     logger.info(f"✅ Hunter.io found {len(hunter_emails)} email(s) for {page_url}: {[e['email'] for e in hunter_emails]}")
             
-            # Extract emails from enhanced results
-            emails = [email_data["email"] for email_data in email_results.get("emails", [])]
+            # Extract emails from enhanced results with sources
+            email_data_list = email_results.get("emails", [])
+            emails = [email_data["email"] for email_data in email_data_list]
+            
+            # Create email-to-source mapping
+            email_sources = {}
+            for email_data in email_data_list:
+                email_addr = email_data.get("email", "").lower()
+                sources = email_data.get("sources", [])
+                # Use the most reliable source (hunter_io > javascript > footer > header > main_page)
+                source_priority = ["hunter_io", "javascript", "footer", "header", "contact_form", "main_page"]
+                for priority_source in source_priority:
+                    if priority_source in sources:
+                        email_sources[email_addr] = priority_source
+                        break
+                if email_addr not in email_sources and sources:
+                    email_sources[email_addr] = sources[0]  # Use first source as fallback
             
             # Log sources for debugging
             if email_results.get("sources"):
@@ -153,6 +168,7 @@ class ContactExtractionService:
             logger.warning(f"Enhanced email extraction failed, falling back to basic: {e}")
             # Fallback to basic extraction
             emails = self.email_extractor.extract_from_html(html_content)
+            email_sources = {}  # No source info for basic extraction
         
         for email in emails:
             existing = self.db.query(Contact).filter(
@@ -160,13 +176,22 @@ class ContactExtractionService:
                 Contact.email == email
             ).first()
             if not existing:
+                # Determine source for this email
+                email_lower = email.lower()
+                source = email_sources.get(email_lower, "html")  # Default to "html" if source unknown
+                
                 contact = Contact(
                     website_id=website_id,
                     email=email,
-                    contact_page_url=page_url
+                    contact_page_url=page_url,
+                    source=source
                 )
                 self.db.add(contact)
                 results["emails_extracted"] += 1
+                
+                # Log if from Hunter.io
+                if source == "hunter_io":
+                    logger.info(f"✅ Saved email from Hunter.io: {email} for website {website_id}")
         
         # Extract phone numbers
         phones = self.phone_extractor.extract_from_html(html_content)

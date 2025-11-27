@@ -162,8 +162,20 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                         <div className="flex items-center">
                           <Mail className="w-4 h-4 text-olive-600 mr-2" />
                           <div>
-                            <div className="text-xs font-semibold text-gray-900">
-                              {lead.email || 'No email'}
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs font-semibold text-gray-900">
+                                {lead.email || 'No email'}
+                              </span>
+                              {lead.source === 'hunter_io' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800" title="Found via Hunter.io API">
+                                  🔍 Hunter
+                                </span>
+                              )}
+                              {lead.source && lead.source !== 'hunter_io' && lead.source !== 'html' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600" title={`Found via ${lead.source}`}>
+                                  {lead.source}
+                                </span>
+                              )}
                             </div>
                             {lead.phone_number && (
                               <div className="text-xs text-gray-500 mt-0.5">
