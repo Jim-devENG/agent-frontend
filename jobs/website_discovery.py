@@ -227,8 +227,10 @@ class WebsiteDiscovery:
                 logger.info("✅ Using DataForSEO API for website discovery (high-quality SERP results)")
             else:
                 logger.info("ℹ️ DataForSEO not configured, using DuckDuckGo (free alternative)")
+                dataforseo_client = None  # Don't use it if not configured
         except Exception as e:
             logger.warning(f"Could not initialize DataForSEO client: {e}. Falling back to DuckDuckGo.")
+            dataforseo_client = None
         
         # Search DuckDuckGo (no API key required) or DataForSEO
         import random
@@ -238,14 +240,20 @@ class WebsiteDiscovery:
         # Limit to 15 queries per run to avoid overwhelming (increased for location-based)
         queries_to_search = shuffled_queries[:15]
         
-        # Get location code for DataForSEO
+        # Get location code for DataForSEO (use first location if multiple)
         location_code = 2840  # Default to USA
-        if use_dataforseo and location:
-            location_code = dataforseo_client.get_location_code(location)
+        if use_dataforseo and dataforseo_client and location:
+            # Handle comma-separated locations - use first one for DataForSEO
+            if isinstance(location, str):
+                first_location = location.split(',')[0].strip()
+            else:
+                first_location = location[0] if isinstance(location, list) and len(location) > 0 else str(location)
+            location_code = dataforseo_client.get_location_code(first_location)
+            logger.info(f"Using DataForSEO location code {location_code} for location: {first_location}")
         
         for query, category in queries_to_search:
             try:
-                if use_dataforseo:
+                if use_dataforseo and dataforseo_client:
                     # Use DataForSEO SERP API
                     serp_results = dataforseo_client.serp_google_organic(
                         keyword=query,
