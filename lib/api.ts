@@ -57,6 +57,7 @@ export interface Lead {
   website_title?: string;
   website_url?: string;
   website_category?: string;
+  source?: string;  // Email source: hunter_io, html, footer, header, contact_form, javascript
   created_at: string;
 }
 
