@@ -350,3 +350,52 @@ export async function login(username: string, password: string): Promise<{ acces
   }
   return res.json()
 }
+
+// Settings API
+export interface ServiceStatus {
+  name: string
+  enabled: boolean
+  configured: boolean
+  status: 'connected' | 'disconnected' | 'error' | 'not_configured' | 'unknown'
+  message?: string
+  last_tested?: string
+}
+
+export interface SettingsResponse {
+  services: Record<string, ServiceStatus>
+  api_keys: Record<string, boolean>
+}
+
+export async function getSettings(): Promise<SettingsResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/settings/services/status`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to get settings' }))
+    throw new Error(error.detail || 'Failed to get settings')
+  }
+  return res.json()
+}
+
+export async function testService(serviceName: string): Promise<{
+  success: boolean
+  status: string
+  message: string
+  test_result?: any
+}> {
+  const res = await authenticatedFetch(`${API_BASE}/settings/services/${encodeURIComponent(serviceName)}/test`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Test failed' }))
+    throw new Error(error.detail || 'Test failed')
+  }
+  return res.json()
+}
+
+export async function getAPIKeysStatus(): Promise<Record<string, boolean>> {
+  const res = await authenticatedFetch(`${API_BASE}/settings/api-keys`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to get API keys status' }))
+    throw new Error(error.detail || 'Failed to get API keys status')
+  }
+  return res.json()
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import StatsCards from '@/components/StatsCards'
 import LeadsTable from '@/components/LeadsTable'
 import EmailsTable from '@/components/EmailsTable'
@@ -224,8 +225,18 @@ export default function Dashboard() {
 
         {activeTab === 'settings' && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Settings</h2>
-            <p className="text-gray-600">Settings panel coming soon...</p>
+            <div className="text-center py-8">
+              <Settings className="w-12 h-12 text-olive-600 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-gray-900 mb-2">System Settings</h2>
+              <p className="text-gray-600 mb-6">Configure and test all API integrations</p>
+              <Link
+                href="/settings"
+                className="inline-flex items-center px-6 py-3 bg-olive-600 text-white rounded-md hover:bg-olive-700 transition-colors font-semibold"
+              >
+                <Settings className="w-5 h-5 mr-2" />
+                Open Settings Page
+              </Link>
+            </div>
           </div>
         )}
 
