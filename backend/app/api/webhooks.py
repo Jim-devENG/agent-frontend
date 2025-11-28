@@ -5,9 +5,14 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import PlainTextResponse
 import logging
 import json
-
-from worker.tasks.reply_handler import process_reply_async
 import asyncio
+
+# Worker imports are optional - webhook processing can be queued separately
+try:
+    from worker.tasks.reply_handler import process_reply_async
+except ImportError:
+    # Worker not available in backend service - will queue job instead
+    process_reply_async = None
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

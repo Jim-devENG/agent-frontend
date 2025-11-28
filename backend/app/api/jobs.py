@@ -10,8 +10,11 @@ import redis
 from rq import Queue
 import os
 from dotenv import load_dotenv
+import logging
 
 from app.db.database import get_db
+
+logger = logging.getLogger(__name__)
 from app.models.job import Job
 from app.schemas.job import JobCreateRequest, JobResponse, JobStatusResponse
 
@@ -58,8 +61,14 @@ async def create_discovery_job(
     await db.refresh(job)
     
     # Queue RQ task
-    from worker.tasks.discovery import discover_websites_task
-    discovery_queue.enqueue(discover_websites_task, str(job.id))
+    try:
+        from worker.tasks.discovery import discover_websites_task
+        discovery_queue.enqueue(discover_websites_task, str(job.id))
+    except ImportError:
+        logger.warning("Worker tasks not available - discovery job not queued. Ensure worker service is running.")
+        job.status = "failed"
+        job.error_message = "Worker service not available"
+        await db.commit()
     
     return JobResponse.model_validate(job)
 
@@ -113,8 +122,14 @@ async def create_scoring_job(
     await db.refresh(job)
     
     # Queue RQ task
-    from worker.tasks.scoring import score_prospects_task
-    scoring_queue.enqueue(score_prospects_task, str(job.id))
+    try:
+        from worker.tasks.scoring import score_prospects_task
+        scoring_queue.enqueue(score_prospects_task, str(job.id))
+    except ImportError:
+        logger.warning("Worker tasks not available - scoring job not queued.")
+        job.status = "failed"
+        job.error_message = "Worker service not available"
+        await db.commit()
     
     return JobResponse.model_validate(job)
 
@@ -150,8 +165,14 @@ async def create_send_job(
     await db.refresh(job)
     
     # Queue RQ task
-    from worker.tasks.send import send_emails_task
-    send_queue.enqueue(send_emails_task, str(job.id))
+    try:
+        from worker.tasks.send import send_emails_task
+        send_queue.enqueue(send_emails_task, str(job.id))
+    except ImportError:
+        logger.warning("Worker tasks not available - send job not queued.")
+        job.status = "failed"
+        job.error_message = "Worker service not available"
+        await db.commit()
     
     return JobResponse.model_validate(job)
 
@@ -187,8 +208,14 @@ async def create_followup_job(
     await db.refresh(job)
     
     # Queue RQ task
-    from worker.tasks.followup import send_followups_task
-    followup_queue.enqueue(send_followups_task, str(job.id))
+    try:
+        from worker.tasks.followup import send_followups_task
+        followup_queue.enqueue(send_followups_task, str(job.id))
+    except ImportError:
+        logger.warning("Worker tasks not available - followup job not queued.")
+        job.status = "failed"
+        job.error_message = "Worker service not available"
+        await db.commit()
     
     return JobResponse.model_validate(job)
 
@@ -214,15 +241,24 @@ async def check_replies(
     await db.refresh(job)
     
     # Queue RQ task
-    from worker.tasks.reply_handler import check_replies_task
-    # Use a different queue or same queue
-    followup_queue.enqueue(check_replies_task)
-    
-    return {
-        "job_id": job.id,
-        "status": "queued",
-        "message": "Reply check job queued"
-    }
+    try:
+        from worker.tasks.reply_handler import check_replies_task
+        followup_queue.enqueue(check_replies_task)
+        return {
+            "job_id": job.id,
+            "status": "queued",
+            "message": "Reply check job queued"
+        }
+    except ImportError:
+        logger.warning("Worker tasks not available - reply check job not queued.")
+        job.status = "failed"
+        job.error_message = "Worker service not available"
+        await db.commit()
+        return {
+            "job_id": job.id,
+            "status": "failed",
+            "message": "Worker service not available"
+        }
 
 
 @router.get("", response_model=List[JobResponse])

@@ -10,8 +10,11 @@ import redis
 from rq import Queue
 import os
 from dotenv import load_dotenv
+import logging
 
 from app.db.database import get_db
+
+logger = logging.getLogger(__name__)
 from app.models.prospect import Prospect
 from app.models.job import Job
 from app.schemas.prospect import (
@@ -61,14 +64,24 @@ async def create_enrichment_job(
     await db.refresh(job)
     
     # Queue RQ task
-    from worker.tasks.enrichment import enrich_prospects_task
-    enrichment_queue.enqueue(enrich_prospects_task, str(job.id))
-    
-    return {
-        "job_id": job.id,
-        "status": "queued",
-        "message": "Enrichment job queued"
-    }
+    try:
+        from worker.tasks.enrichment import enrich_prospects_task
+        enrichment_queue.enqueue(enrich_prospects_task, str(job.id))
+        return {
+            "job_id": job.id,
+            "status": "queued",
+            "message": "Enrichment job queued"
+        }
+    except ImportError:
+        logger.warning("Worker tasks not available - enrichment job not queued.")
+        job.status = "failed"
+        job.error_message = "Worker service not available"
+        await db.commit()
+        return {
+            "job_id": job.id,
+            "status": "failed",
+            "message": "Worker service not available"
+        }
 
 
 @router.get("", response_model=ProspectListResponse)
@@ -171,6 +184,8 @@ async def compose_email(
     try:
         from worker.clients.gemini import GeminiClient
         client = GeminiClient()
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Worker clients not available. Ensure worker service is running.")
     except ValueError as e:
         raise HTTPException(status_code=500, detail=f"Gemini API not configured: {str(e)}")
     
@@ -257,11 +272,13 @@ async def send_email(
     # Send email via Gmail API
     from datetime import datetime
     from app.models.email_log import EmailLog
-    from worker.clients.gmail import GmailClient
     import asyncio
     
     try:
+        from worker.clients.gmail import GmailClient
         gmail_client = GmailClient()
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Worker clients not available. Ensure worker service is running.")
     except ValueError as e:
         raise HTTPException(status_code=500, detail=f"Gmail not configured: {str(e)}")
     

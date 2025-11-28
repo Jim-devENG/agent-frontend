@@ -25,24 +25,30 @@ scheduler = AsyncIOScheduler()
 
 def schedule_followups():
     """Schedule follow-up email job"""
-    from worker.tasks.followup import send_followups_task
-    
-    # Create a job ID (in production, create Job record first)
-    # For now, use a simple identifier
-    job_id = f"followup_{int(__import__('time').time())}"
-    
-    # Queue the task
-    followup_queue.enqueue(send_followups_task, job_id)
-    logger.info("Scheduled follow-up job")
+    try:
+        from worker.tasks.followup import send_followups_task
+        
+        # Create a job ID (in production, create Job record first)
+        # For now, use a simple identifier
+        job_id = f"followup_{int(__import__('time').time())}"
+        
+        # Queue the task
+        followup_queue.enqueue(send_followups_task, job_id)
+        logger.info("Scheduled follow-up job")
+    except ImportError:
+        logger.warning("Worker tasks not available - follow-up job not queued. Ensure worker service is running.")
 
 
 def schedule_reply_check():
     """Schedule reply check job"""
-    from worker.tasks.reply_handler import check_replies_task
-    
-    # Queue the task
-    followup_queue.enqueue(check_replies_task)
-    logger.info("Scheduled reply check job")
+    try:
+        from worker.tasks.reply_handler import check_replies_task
+        
+        # Queue the task
+        followup_queue.enqueue(check_replies_task)
+        logger.info("Scheduled reply check job")
+    except ImportError:
+        logger.warning("Worker tasks not available - reply check job not queued. Ensure worker service is running.")
 
 
 def start_scheduler():
