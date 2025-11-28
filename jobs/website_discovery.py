@@ -343,31 +343,54 @@ class WebsiteDiscovery:
             
             logger.info(f"Found {len(all_existing_urls)} existing URLs in database (will filter from {len(all_discoveries)} discovered)")
             
+            # Only check exact domain matches, not full URL paths
+            # This allows new pages from the same domain to be discovered
+            existing_domains = set()
+            for existing_url in all_existing_urls:
+                try:
+                    parsed = urlparse(existing_url)
+                    domain = parsed.netloc.lower().replace('www.', '')
+                    existing_domains.add(domain)
+                except:
+                    pass
+            
             filtered_count = 0
+            domain_filtered = 0
+            exact_match_filtered = 0
+            
             for url, info in all_discoveries.items():
                 try:
-                    # Normalize URL for comparison (remove trailing slashes, www, etc.)
-                    normalized_url = url.rstrip('/').lower().replace('www.', '')
-                    normalized_existing = {u.rstrip('/').lower().replace('www.', '') for u in all_existing_urls}
-                    
-                    # Skip if normalized URL already exists in either table
-                    if normalized_url in normalized_existing:
+                    # First check: Exact URL match (including variations)
+                    if url in all_existing_urls or url.rstrip('/') in all_existing_urls:
+                        exact_match_filtered += 1
                         filtered_count += 1
-                        logger.debug(f"Skipping duplicate URL (normalized): {url}")
+                        logger.debug(f"Skipping exact duplicate URL: {url}")
                         continue
                     
-                    # Double-check with database query to be absolutely sure
+                    # Second check: Same domain (but allow if it's a different path)
+                    parsed = urlparse(url)
+                    domain = parsed.netloc.lower().replace('www.', '')
+                    
+                    # Only filter by domain if we have MANY websites from that domain already
+                    # This prevents spam but allows legitimate new pages
+                    domain_count = sum(1 for u in all_existing_urls if domain in urlparse(u).netloc.lower().replace('www.', ''))
+                    if domain_count > 10:  # Only filter if we have more than 10 URLs from this domain
+                        domain_filtered += 1
+                        filtered_count += 1
+                        logger.debug(f"Skipping URL from over-represented domain ({domain_count} existing): {url}")
+                        continue
+                    
+                    # Third check: Database query for exact matches only
                     from sqlalchemy import or_
                     existing_check = db_session.query(DiscoveredWebsite).filter(
                         or_(
                             DiscoveredWebsite.url == url,
-                            DiscoveredWebsite.url == url.rstrip('/'),
-                            DiscoveredWebsite.url == url.replace('www.', ''),
-                            DiscoveredWebsite.url == url.replace('www.', '').rstrip('/')
+                            DiscoveredWebsite.url == url.rstrip('/')
                         )
                     ).first()
                     
                     if existing_check:
+                        exact_match_filtered += 1
                         filtered_count += 1
                         logger.debug(f"Skipping duplicate URL (database check): {url}")
                         continue
@@ -393,10 +416,15 @@ class WebsiteDiscovery:
             
             try:
                 db_session.commit()
-                logger.info(f"✅ Saved {saved_count} NEW discovered websites to database (filtered out {filtered_count} duplicate/existing URLs)")
+                logger.info(f"✅ Saved {saved_count} NEW discovered websites to database")
+                logger.info(f"   - Filtered {exact_match_filtered} exact duplicates")
+                logger.info(f"   - Filtered {domain_filtered} from over-represented domains")
+                logger.info(f"   - Total filtered: {filtered_count} out of {len(all_discoveries)} discovered")
                 if saved_count == 0:
-                    logger.warning(f"⚠️ No new websites found! All {len(all_discoveries)} discovered URLs already exist in database.")
-                    logger.info(f"💡 Tip: Try different locations/categories or wait for new websites to appear in search results.")
+                    logger.warning(f"⚠️ No new websites found! All {len(all_discoveries)} discovered URLs were filtered.")
+                    logger.info(f"   - Exact matches filtered: {exact_match_filtered}")
+                    logger.info(f"   - Domain over-representation filtered: {domain_filtered}")
+                    logger.info(f"💡 Tip: Try different locations/categories, or the search may need more time to find new results.")
             except Exception as e:
                 logger.error(f"Error committing discovered websites: {str(e)}")
                 db_session.rollback()
@@ -504,31 +532,54 @@ class WebsiteDiscovery:
             
             logger.info(f"Found {len(all_existing_urls)} existing URLs in database (will filter from {len(all_discoveries)} discovered)")
             
+            # Only check exact domain matches, not full URL paths
+            # This allows new pages from the same domain to be discovered
+            existing_domains = set()
+            for existing_url in all_existing_urls:
+                try:
+                    parsed = urlparse(existing_url)
+                    domain = parsed.netloc.lower().replace('www.', '')
+                    existing_domains.add(domain)
+                except:
+                    pass
+            
             filtered_count = 0
+            domain_filtered = 0
+            exact_match_filtered = 0
+            
             for url, info in all_discoveries.items():
                 try:
-                    # Normalize URL for comparison (remove trailing slashes, www, etc.)
-                    normalized_url = url.rstrip('/').lower().replace('www.', '')
-                    normalized_existing = {u.rstrip('/').lower().replace('www.', '') for u in all_existing_urls}
-                    
-                    # Skip if normalized URL already exists in either table
-                    if normalized_url in normalized_existing:
+                    # First check: Exact URL match (including variations)
+                    if url in all_existing_urls or url.rstrip('/') in all_existing_urls:
+                        exact_match_filtered += 1
                         filtered_count += 1
-                        logger.debug(f"Skipping duplicate URL (normalized): {url}")
+                        logger.debug(f"Skipping exact duplicate URL: {url}")
                         continue
                     
-                    # Double-check with database query to be absolutely sure
+                    # Second check: Same domain (but allow if it's a different path)
+                    parsed = urlparse(url)
+                    domain = parsed.netloc.lower().replace('www.', '')
+                    
+                    # Only filter by domain if we have MANY websites from that domain already
+                    # This prevents spam but allows legitimate new pages
+                    domain_count = sum(1 for u in all_existing_urls if domain in urlparse(u).netloc.lower().replace('www.', ''))
+                    if domain_count > 10:  # Only filter if we have more than 10 URLs from this domain
+                        domain_filtered += 1
+                        filtered_count += 1
+                        logger.debug(f"Skipping URL from over-represented domain ({domain_count} existing): {url}")
+                        continue
+                    
+                    # Third check: Database query for exact matches only
                     from sqlalchemy import or_
                     existing_check = db_session.query(DiscoveredWebsite).filter(
                         or_(
                             DiscoveredWebsite.url == url,
-                            DiscoveredWebsite.url == url.rstrip('/'),
-                            DiscoveredWebsite.url == url.replace('www.', ''),
-                            DiscoveredWebsite.url == url.replace('www.', '').rstrip('/')
+                            DiscoveredWebsite.url == url.rstrip('/')
                         )
                     ).first()
                     
                     if existing_check:
+                        exact_match_filtered += 1
                         filtered_count += 1
                         logger.debug(f"Skipping duplicate URL (database check): {url}")
                         continue
@@ -554,10 +605,15 @@ class WebsiteDiscovery:
             
             try:
                 db_session.commit()
-                logger.info(f"✅ Saved {saved_count} NEW discovered websites to database (filtered out {filtered_count} duplicate/existing URLs)")
+                logger.info(f"✅ Saved {saved_count} NEW discovered websites to database")
+                logger.info(f"   - Filtered {exact_match_filtered} exact duplicates")
+                logger.info(f"   - Filtered {domain_filtered} from over-represented domains")
+                logger.info(f"   - Total filtered: {filtered_count} out of {len(all_discoveries)} discovered")
                 if saved_count == 0:
-                    logger.warning(f"⚠️ No new websites found! All {len(all_discoveries)} discovered URLs already exist in database.")
-                    logger.info(f"💡 Tip: Try different locations/categories or wait for new websites to appear in search results.")
+                    logger.warning(f"⚠️ No new websites found! All {len(all_discoveries)} discovered URLs were filtered.")
+                    logger.info(f"   - Exact matches filtered: {exact_match_filtered}")
+                    logger.info(f"   - Domain over-representation filtered: {domain_filtered}")
+                    logger.info(f"💡 Tip: Try different locations/categories, or the search may need more time to find new results.")
             except Exception as e:
                 logger.error(f"Error committing discovered websites: {str(e)}")
                 db_session.rollback()
