@@ -53,11 +53,13 @@ export default function WebsitesTable() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (viewMode === 'discovered') {
-        loadDiscovered()
+        loadDiscovered(true) // Pass true to indicate auto-refresh
+      } else if (viewMode === 'scraped') {
+        loadWebsites()
       }
     }, 10000)
     return () => clearInterval(interval)
-  }, [viewMode, skip, category, status, source, isScraped])
+  }, []) // Empty deps - functions will use current state values
 
   const loadWebsites = async () => {
     setLoading(true)
@@ -83,10 +85,10 @@ export default function WebsitesTable() {
     }
   }
 
-  const loadDiscovered = async () => {
+  const loadDiscovered = async (isAutoRefresh = false) => {
     setLoading(true)
     try {
-      const data = await getDiscoveredWebsites(skip, limit, isScraped, source || undefined, category || undefined)
+      const data = await getDiscoveredWebsites(skip, limit, isScraped, source || undefined, category || undefined, isAutoRefresh)
       setDiscovered(data.discovered)
       setTotal(data.total)
     } catch (error) {

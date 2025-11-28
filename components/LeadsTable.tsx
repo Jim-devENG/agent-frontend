@@ -30,10 +30,10 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     'holiday_family',
   ]
 
-  const loadLeads = async () => {
+  const loadLeads = async (isAutoRefresh = false) => {
     setLoading(true)
     try {
-      const data: LeadsResponse = await getLeads(skip, limit, category || undefined, hasEmail)
+      const data: LeadsResponse = await getLeads(skip, limit, category || undefined, hasEmail, isAutoRefresh)
       setLeads(data.leads)
       setTotal(data.total)
     } catch (error) {
@@ -50,10 +50,10 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
   // Auto-refresh every 15 seconds to show new leads
   useEffect(() => {
     const interval = setInterval(() => {
-      loadLeads()
+      loadLeads(true) // Pass true to indicate auto-refresh
     }, 15000)
     return () => clearInterval(interval)
-  }, [skip, category, hasEmail])
+  }, []) // Empty deps - loadLeads will use current state values
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">

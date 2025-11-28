@@ -328,7 +328,8 @@ export async function getDiscoveredWebsites(
   limit = 50,
   isScraped?: boolean,
   source?: string,
-  category?: string
+  category?: string,
+  autoRefresh = false
 ): Promise<DiscoveredWebsitesResponse> {
   const params = new URLSearchParams({
     skip: skip.toString(),
@@ -337,6 +338,10 @@ export async function getDiscoveredWebsites(
   if (isScraped !== undefined) params.append('is_scraped', isScraped.toString());
   if (source) params.append('source', source);
   if (category) params.append('category', category);
+  // Add cache-busting timestamp for auto-refresh
+  if (autoRefresh) {
+    params.append('_t', Date.now().toString());
+  }
 
   const res = await authenticatedFetch(`${API_BASE}/discovered?${params}`);
   if (!res.ok) throw new Error('Failed to fetch discovered websites');
