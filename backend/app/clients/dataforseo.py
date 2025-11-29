@@ -127,53 +127,85 @@ class DataForSEOClient:
         Returns:
             Dictionary with parsed results
         """
-        url = f"{self.BASE_URL}/serp/google/organic/task_get/advanced/{task_id}"
+        # DataForSEO requires POST request with task ID in body
+        url = f"{self.BASE_URL}/serp/google/organic/task_get/advanced"
+        payload = {"id": task_id}
+        
+        # Wait a bit before first poll (task needs time to be created)
+        await asyncio.sleep(3)
         
         for attempt in range(max_attempts):
             try:
                 async with httpx.AsyncClient(timeout=60.0) as client:
-                    response = await client.get(url, headers=self.headers)
+                    logger.debug(f"Polling DataForSEO task {task_id} (attempt {attempt + 1}/{max_attempts})")
+                    response = await client.post(url, headers=self.headers, json=payload)
                     response.raise_for_status()
                     result = response.json()
                     
+                    logger.debug(f"DataForSEO poll response status_code: {result.get('status_code')}")
+                    
                     if result.get("status_code") == 20000:
                         tasks = result.get("tasks", [])
-                        if tasks and tasks[0].get("status_code") == 20000:
+                        if not tasks:
+                            logger.warning(f"No tasks in response for task_id {task_id}")
+                            await asyncio.sleep(2)
+                            continue
+                        
+                        task = tasks[0]
+                        task_status = task.get("status_code")
+                        
+                        if task_status == 20000:
                             # Results are ready
-                            items = tasks[0].get("result", [{}])[0].get("items", [])
+                            task_result = task.get("result", [])
+                            if not task_result:
+                                logger.warning(f"No result data in task {task_id}")
+                                return {"success": False, "error": "No result data in task"}
+                            
+                            items = task_result[0].get("items", [])
                             
                             parsed_results = []
                             for item in items:
-                                parsed_results.append({
-                                    "title": item.get("title", ""),
-                                    "url": item.get("url", ""),
-                                    "description": item.get("description", ""),
-                                    "position": item.get("rank_group", 0),
-                                    "domain": item.get("domain", ""),
-                                })
+                                # Only include organic results
+                                if item.get("type") == "organic":
+                                    parsed_results.append({
+                                        "title": item.get("title", ""),
+                                        "url": item.get("url", ""),
+                                        "description": item.get("description", ""),
+                                        "position": item.get("rank_group", 0),
+                                        "domain": item.get("domain", ""),
+                                    })
                             
-                            logger.info(f"DataForSEO returned {len(parsed_results)} results")
+                            logger.info(f"DataForSEO returned {len(parsed_results)} organic results")
                             return {
                                 "success": True,
                                 "results": parsed_results,
                                 "total": len(parsed_results)
                             }
-                        elif tasks and tasks[0].get("status_code") == 20200:
+                        elif task_status == 20200:
                             # Still processing, wait and retry
-                            await asyncio.sleep(2)
+                            logger.debug(f"Task {task_id} still processing (20200), waiting...")
+                            await asyncio.sleep(3)
                             continue
                         else:
-                            error_msg = tasks[0].get("status_message", "Unknown error") if tasks else "No tasks"
+                            error_msg = task.get("status_message", f"Unknown status code: {task_status}")
+                            logger.error(f"Task {task_id} failed with status {task_status}: {error_msg}")
                             return {"success": False, "error": error_msg}
                     else:
-                        error_msg = result.get("status_message", "Unknown error")
+                        error_msg = result.get("status_message", f"API error: {result.get('status_code')}")
+                        logger.error(f"DataForSEO API error: {error_msg}")
                         return {"success": False, "error": error_msg}
             
+            except httpx.HTTPStatusError as e:
+                error_text = e.response.text if e.response else "No response text"
+                logger.error(f"HTTP error polling DataForSEO task {task_id}: {e.response.status_code} - {error_text}")
+                if attempt == max_attempts - 1:
+                    return {"success": False, "error": f"HTTP {e.response.status_code}: {error_text}"}
+                await asyncio.sleep(3)
             except Exception as e:
-                logger.error(f"Error polling DataForSEO results: {str(e)}")
+                logger.error(f"Error polling DataForSEO results for task {task_id}: {str(e)}", exc_info=True)
                 if attempt == max_attempts - 1:
                     return {"success": False, "error": str(e)}
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)
         
         return {"success": False, "error": "Timeout waiting for results"}
     
