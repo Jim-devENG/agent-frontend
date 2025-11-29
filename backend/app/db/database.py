@@ -10,7 +10,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database URL from environment
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://art_outreach:art_outreach@localhost:5432/art_outreach")
+# Render provides postgresql:// but we need postgresql+asyncpg:// for async SQLAlchemy
+raw_database_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://art_outreach:art_outreach@localhost:5432/art_outreach")
+# Convert postgresql:// to postgresql+asyncpg:// if needed
+if raw_database_url.startswith("postgresql://"):
+    DATABASE_URL = raw_database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif raw_database_url.startswith("postgres://"):
+    DATABASE_URL = raw_database_url.replace("postgres://", "postgresql+asyncpg://", 1)
+else:
+    DATABASE_URL = raw_database_url
 
 # Create async engine
 engine = create_async_engine(
