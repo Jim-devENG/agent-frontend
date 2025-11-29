@@ -149,14 +149,12 @@ class DataForSEOClient:
         Returns:
             Dictionary with parsed results
         """
-        # DataForSEO task_get endpoint - must match task_post format with "data" wrapper
-        # Format: {"data": [{"id": "task_id"}]} - matches task_post structure
-        url = f"{self.BASE_URL}/serp/google/organic/task_get/advanced"
-        payload = {"data": [{"id": task_id}]}
+        # DataForSEO task_get endpoint - use GET with task ID in URL path
+        # Based on worker implementation and API docs, this is the correct format
+        url = f"{self.BASE_URL}/serp/google/organic/task_get/advanced/{task_id}"
         
         logger.info(f"Polling DataForSEO task: {task_id}")
         logger.debug(f"Polling URL: {url}")
-        logger.debug(f"Polling payload: {payload}")
         
         # Wait a bit before first poll (task needs time to be created)
         await asyncio.sleep(5)  # Increased wait time
@@ -165,8 +163,8 @@ class DataForSEOClient:
             try:
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     logger.debug(f"Polling DataForSEO task {task_id} (attempt {attempt + 1}/{max_attempts})")
-                    # DataForSEO task_get expects an array: [{"id": "task_id"}]
-                    response = await client.post(url, headers=self.headers, json=payload)
+                    # DataForSEO task_get uses GET request with task ID in URL path
+                    response = await client.get(url, headers=self.headers)
                     response.raise_for_status()
                     result = response.json()
                     
