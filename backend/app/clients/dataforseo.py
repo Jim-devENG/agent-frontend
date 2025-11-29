@@ -116,19 +116,22 @@ class DataForSEOClient:
                 logger.debug(f"DataForSEO task_post URL: {url}")
                 logger.debug(f"DataForSEO task_post payload: {payload}")
                 
-                # Ensure Content-Type is set correctly and payload is properly formatted
                 # DataForSEO is very strict about JSON format
+                # Send as JSON string to ensure proper serialization (avoid httpx auto-serialization issues)
+                json_payload_str = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+                logger.debug(f"DataForSEO JSON payload string: {json_payload_str}")
+                
+                # Ensure Content-Type is explicitly set
                 headers_with_content_type = {
                     **self.headers,
                     "Content-Type": "application/json"
                 }
                 
-                # Send as JSON - httpx will automatically serialize, but we want to ensure it's correct
+                # Send as raw JSON string content
                 response = await client.post(
                     url, 
                     headers=headers_with_content_type, 
-                    json=payload,
-                    follow_redirects=True
+                    content=json_payload_str.encode('utf-8')
                 )
                 
                 # Always parse JSON first, even on HTTP errors
