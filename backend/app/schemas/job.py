@@ -9,8 +9,8 @@ from uuid import UUID
 
 class JobCreateRequest(BaseModel):
     """Request schema for creating a discovery job"""
-    keywords: str = Field(..., description="Search keywords")
-    location: Optional[str] = Field(None, description="Location filter (e.g., 'usa', 'canada')")
+    keywords: Optional[str] = Field(None, description="Search keywords (optional if categories provided)")
+    locations: Optional[list[str]] = Field(None, description="Location filters (e.g., ['usa', 'canada'])")
     max_results: int = Field(100, ge=1, le=1000, description="Maximum number of results")
     categories: Optional[list[str]] = Field(None, description="Category filters")
 

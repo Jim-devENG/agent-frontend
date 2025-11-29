@@ -63,14 +63,28 @@ async def create_discovery_job(
     2. Queue a background task to discover websites
     3. Return the job ID for status tracking
     """
+    # Validate: require either keywords or categories
+    if not request.keywords and not request.categories:
+        raise HTTPException(
+            status_code=400,
+            detail="Please enter keywords or select at least one category"
+        )
+    
+    # Validate: require at least one location
+    if not request.locations or len(request.locations) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Please select at least one location"
+        )
+    
     # Create job record
     job = Job(
         job_type="discover",
         params={
-            "keywords": request.keywords,
-            "location": request.location,
+            "keywords": request.keywords or "",
+            "locations": request.locations,
             "max_results": request.max_results,
-            "categories": request.categories
+            "categories": request.categories or []
         },
         status="pending"
     )

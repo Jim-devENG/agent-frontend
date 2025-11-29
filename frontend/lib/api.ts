@@ -91,7 +91,7 @@ export interface ProspectListResponse {
 // Jobs API
 export async function createDiscoveryJob(
   keywords: string,
-  location?: string,
+  locations?: string[],
   maxResults?: number,
   categories?: string[]
 ): Promise<Job> {
@@ -99,7 +99,7 @@ export async function createDiscoveryJob(
     method: 'POST',
     body: JSON.stringify({
       keywords,
-      location,
+      locations,
       max_results: maxResults || 100,
       categories,
     }),
