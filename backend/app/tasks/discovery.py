@@ -119,18 +119,50 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
             # Import DataForSEO client
             try:
                 from worker.clients.dataforseo import DataForSEOClient
-            except ImportError:
-                logger.error("DataForSEO client not available. Make sure worker/clients/dataforseo.py exists.")
-                job.status = "failed"
-                job.error_message = "DataForSEO client not available"
-                await db.commit()
-                return {"error": "DataForSEO client not available"}
+                logger.info("✅ Successfully imported DataForSEO client")
+            except ImportError as import_err:
+                logger.error(f"❌ Failed to import DataForSEO client: {import_err}")
+                logger.error(f"Python path: {sys.path}")
+                logger.error(f"Looking for: worker.clients.dataforseo")
+                logger.error(f"Repo root: {repo_root}")
+                logger.error(f"Worker dir exists: {(repo_root / 'worker').exists()}")
+                logger.error(f"Client file exists: {(repo_root / 'worker' / 'clients' / 'dataforseo.py').exists()}")
+                # Try alternative import path
+                try:
+                    # Try importing directly from the file
+                    import importlib.util
+                    worker_clients_path = repo_root / "worker" / "clients" / "dataforseo.py"
+                    if worker_clients_path.exists():
+                        spec = importlib.util.spec_from_file_location("dataforseo", worker_clients_path)
+                        dataforseo_module = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(dataforseo_module)
+                        DataForSEOClient = dataforseo_module.DataForSEOClient
+                        logger.info("✅ Successfully imported DataForSEO client via direct file import")
+                    else:
+                        raise ImportError(f"DataForSEO client file not found at {worker_clients_path}")
+                except Exception as alt_err:
+                    logger.error(f"❌ Alternative import also failed: {alt_err}")
+                    job.status = "failed"
+                    job.error_message = f"DataForSEO client not available: {import_err}"
+                    await db.commit()
+                    return {"error": f"DataForSEO client not available: {import_err}"}
             
-            client = DataForSEOClient()
-        except ValueError as e:
-            logger.error(f"DataForSEO configuration error: {e}")
+            # Initialize client (will check credentials)
+            try:
+                client = DataForSEOClient()
+                logger.info("✅ DataForSEO client initialized successfully")
+            except ValueError as cred_err:
+                logger.error(f"❌ DataForSEO credentials error: {cred_err}")
+                logger.error(f"DATAFORSEO_LOGIN is set: {bool(os.getenv('DATAFORSEO_LOGIN'))}")
+                logger.error(f"DATAFORSEO_PASSWORD is set: {bool(os.getenv('DATAFORSEO_PASSWORD'))}")
+                job.status = "failed"
+                job.error_message = f"DataForSEO credentials not configured: {cred_err}"
+                await db.commit()
+                return {"error": f"DataForSEO credentials not configured: {cred_err}"}
+        except Exception as e:
+            logger.error(f"Unexpected error initializing DataForSEO client: {e}", exc_info=True)
             job.status = "failed"
-            job.error_message = f"DataForSEO configuration error: {e}"
+            job.error_message = f"Failed to initialize DataForSEO client: {e}"
             await db.commit()
             return {"error": str(e)}
         
