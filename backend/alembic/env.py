@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 # Import Base and models
 from app.db.database import Base
-from app.models import Prospect, Job, EmailLog  # Import all models
+from app.models import Prospect, Job, EmailLog, Settings  # Import all models
 
 # this is the Alembic Config object
 config = context.config
