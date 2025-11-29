@@ -4,6 +4,7 @@ Job management API endpoints
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy import inspect as sqlalchemy_inspect
 from typing import List, Optional
 from uuid import UUID
 import redis
@@ -52,15 +53,27 @@ def get_queue(name: str):
 
 def job_to_response(job: Job) -> JobResponse:
     """Convert Job model to JobResponse, handling async SQLAlchemy attributes"""
+    # Access attributes via __dict__ to avoid triggering async operations
+    # This works because the object has been refreshed and attributes are loaded
+    job_dict = job.__dict__.copy()
+    # Remove SQLAlchemy internal attributes
+    job_dict.pop('_sa_instance_state', None)
+    
+    # Get values, using created_at as fallback for updated_at if needed
+    updated_at = job_dict.get('updated_at') or job_dict.get('created_at')
+    if updated_at is None:
+        from datetime import datetime, timezone
+        updated_at = datetime.now(timezone.utc)
+    
     return JobResponse(
-        id=job.id,
-        job_type=job.job_type,
-        status=job.status,
-        params=job.params,
-        result=job.result,
-        error_message=job.error_message,
-        created_at=job.created_at,
-        updated_at=job.updated_at
+        id=job_dict.get('id'),
+        job_type=job_dict.get('job_type'),
+        status=job_dict.get('status'),
+        params=job_dict.get('params'),
+        result=job_dict.get('result'),
+        error_message=job_dict.get('error_message'),
+        created_at=job_dict.get('created_at'),
+        updated_at=updated_at
     )
 
 
@@ -92,6 +105,8 @@ async def create_discovery_job(
         )
     
     # Create job record
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
     job = Job(
         job_type="discover",
         params={
@@ -106,6 +121,12 @@ async def create_discovery_job(
     db.add(job)
     await db.commit()
     await db.refresh(job)
+    
+    # Ensure updated_at is set (onupdate doesn't work well with async)
+    if not job.updated_at:
+        job.updated_at = now
+        await db.commit()
+        await db.refresh(job)
     
     # Queue RQ task
     try:
