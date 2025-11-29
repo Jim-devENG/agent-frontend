@@ -17,12 +17,24 @@ app = FastAPI(
     version="2.0.0"
 )
 
+# CORS configuration
+# NOTE: Starlette/FastAPI does NOT allow allow_origins=["*"] together with allow_credentials=True.
+# We use token auth via Authorization header (not cookies), so we can safely set allow_credentials=False
+# and explicitly list our known frontend origins.
+cors_origins = [
+    "https://agent.liquidcanvas.art",
+    "http://localhost:3000",
+    "http://localhost:8000",
+]
+
+extra_origins = os.getenv("CORS_ORIGINS")
+if extra_origins:
+    cors_origins.extend(o.strip() for o in extra_origins.split(",") if o.strip())
+
 app.add_middleware(
     CORSMiddleware,
-    # Allow all origins so the Vercel frontend (agent.liquidcanvas.art) can call the API
-    # If you want to restrict later, set CORS_ORIGINS env or edit this list.
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
