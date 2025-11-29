@@ -9,7 +9,6 @@ import EmailsTable from '@/components/EmailsTable'
 import JobStatusPanel from '@/components/JobStatusPanel'
 import ActivityFeed from '@/components/ActivityFeed'
 import AutomationControl from '@/components/AutomationControl'
-import DiscoveryControl from '@/components/DiscoveryControl'
 import WebsitesTable from '@/components/WebsitesTable'
 import SystemStatus from '@/components/SystemStatus'
 import { getStats, listJobs } from '@/lib/api'
@@ -121,7 +120,7 @@ export default function Dashboard() {
                 Art Outreach Automation
               </h1>
               <p className="text-gray-600 mt-0.5 text-xs">
-                Automated website discovery and outreach system
+                Automated outreach system
               </p>
             </div>
             <div className="flex items-center space-x-3">
@@ -201,7 +200,6 @@ export default function Dashboard() {
               </div>
             )}
             <AutomationControl />
-            <DiscoveryControl />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {jobs.length > 0 ? <JobStatusPanel jobs={jobs} /> : (
                 <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
