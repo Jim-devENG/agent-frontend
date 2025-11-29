@@ -47,20 +47,21 @@ export default function DiscoveryControl() {
   }
 
   const handleDiscover = async () => {
-    if (!keywords.trim()) {
-      alert('Please enter keywords')
+    // Require at least one signal to search: keywords or categories
+    if (!keywords.trim() && selectedCategories.length === 0) {
+      alert('Please enter keywords or select at least one category')
       return
     }
 
-    if (!selectedLocations.length) {
+    if (selectedLocations.length === 0) {
       alert('Please select at least one location')
       return
     }
 
     setLoading(true)
     try {
-      const locationParam = selectedLocations.join(',')
-      await createDiscoveryJob(keywords, locationParam, 100, selectedCategories)
+      // Pass locations and categories arrays to the API
+      await createDiscoveryJob(keywords, selectedLocations, 100, selectedCategories)
       setIsRunning(true)
     } catch (error: any) {
       alert(`Failed to start discovery: ${error.message}`)
