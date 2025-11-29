@@ -101,15 +101,37 @@ class DataForSEOClient:
                 response.raise_for_status()
                 result = response.json()
                 
+                logger.debug(f"DataForSEO task_post response: status_code={result.get('status_code')}, tasks_count={result.get('tasks_count', 0)}")
+                
                 if result.get("status_code") == 20000:
-                    task_id = result.get("tasks", [{}])[0].get("id")
-                    logger.info(f"DataForSEO task created: {task_id}")
+                    tasks = result.get("tasks", [])
+                    if not tasks or len(tasks) == 0:
+                        logger.error("No tasks in DataForSEO task_post response")
+                        return {"success": False, "error": "No tasks returned from DataForSEO"}
+                    
+                    task = tasks[0]
+                    task_status = task.get("status_code")
+                    
+                    # Check if task was created successfully
+                    if task_status != 20000:
+                        error_msg = task.get("status_message", f"Task creation failed with status {task_status}")
+                        logger.error(f"DataForSEO task_post failed: {error_msg}")
+                        return {"success": False, "error": error_msg}
+                    
+                    task_id = task.get("id")
+                    if not task_id:
+                        logger.error("No task ID in DataForSEO task response")
+                        logger.error(f"Task response: {task}")
+                        return {"success": False, "error": "No task ID returned from DataForSEO"}
+                    
+                    logger.info(f"✅ DataForSEO task created successfully: {task_id}")
                     
                     # Poll for results
                     return await self._get_serp_results(task_id)
                 else:
-                    error_msg = result.get("status_message", "Unknown error")
+                    error_msg = result.get("status_message", f"API error: {result.get('status_code')}")
                     logger.error(f"DataForSEO API error: {error_msg}")
+                    logger.error(f"Full response: {result}")
                     return {"success": False, "error": error_msg}
         
         except Exception as e:
@@ -132,8 +154,12 @@ class DataForSEOClient:
         url = f"{self.BASE_URL}/serp/google/organic/task_get/advanced"
         payload = [{"id": task_id}]
         
+        logger.info(f"Polling DataForSEO task: {task_id}")
+        logger.debug(f"Polling URL: {url}")
+        logger.debug(f"Polling payload: {payload}")
+        
         # Wait a bit before first poll (task needs time to be created)
-        await asyncio.sleep(3)
+        await asyncio.sleep(5)  # Increased wait time
         
         for attempt in range(max_attempts):
             try:
@@ -199,10 +225,29 @@ class DataForSEOClient:
             
             except httpx.HTTPStatusError as e:
                 error_text = e.response.text if e.response else "No response text"
-                logger.error(f"HTTP error polling DataForSEO task {task_id}: {e.response.status_code} - {error_text}")
-                if attempt == max_attempts - 1:
-                    return {"success": False, "error": f"HTTP {e.response.status_code}: {error_text}"}
-                await asyncio.sleep(3)
+                try:
+                    error_json = e.response.json() if e.response else {}
+                    error_status = error_json.get("status_code")
+                    error_msg = error_json.get("status_message", error_text)
+                    
+                    # 40400 means task not found - might need to wait longer or task was never created
+                    if error_status == 40400:
+                        logger.warning(f"Task {task_id} not found (40400) - attempt {attempt + 1}/{max_attempts}. Waiting longer...")
+                        if attempt < max_attempts - 1:
+                            await asyncio.sleep(5)  # Wait longer for 404 errors
+                            continue
+                        else:
+                            return {"success": False, "error": f"Task not found after {max_attempts} attempts. Task may not have been created or expired."}
+                    else:
+                        logger.error(f"HTTP error polling DataForSEO task {task_id}: {e.response.status_code} - {error_msg}")
+                        if attempt == max_attempts - 1:
+                            return {"success": False, "error": f"HTTP {e.response.status_code}: {error_msg}"}
+                        await asyncio.sleep(3)
+                except:
+                    logger.error(f"HTTP error polling DataForSEO task {task_id}: {e.response.status_code} - {error_text}")
+                    if attempt == max_attempts - 1:
+                        return {"success": False, "error": f"HTTP {e.response.status_code}: {error_text}"}
+                    await asyncio.sleep(3)
             except Exception as e:
                 logger.error(f"Error polling DataForSEO results for task {task_id}: {str(e)}", exc_info=True)
                 if attempt == max_attempts - 1:
