@@ -102,11 +102,15 @@ async def startup():
         except Exception as create_error:
             logger.error(f"Failed to create tables: {create_error}")
     
-    # Start scheduler for periodic tasks
+    # Start scheduler for periodic tasks (only if explicitly enabled)
     try:
-        from app.scheduler import start_scheduler
-        start_scheduler()
-        logger.info("Scheduler started successfully")
+        enable_automation = os.getenv("ENABLE_AUTOMATION", "false").lower() == "true"
+        if enable_automation:
+            from app.scheduler import start_scheduler
+            start_scheduler()
+            logger.info("Scheduler started successfully (automation enabled)")
+        else:
+            logger.info("Scheduler not started (ENABLE_AUTOMATION is false)")
     except Exception as e:
         logger.warning(f"Failed to start scheduler: {e}")
 

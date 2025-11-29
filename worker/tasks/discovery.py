@@ -58,11 +58,21 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
             
             params = job.params or {}
             keywords = params.get("keywords", "")
-            location = params.get("location", "usa")
+            raw_location = params.get("location", "usa") or "usa"
             max_results = params.get("max_results", 100)
             categories = params.get("categories", [])
             
-            logger.info(f"Starting discovery job {job_id}: keywords='{keywords}', location={location}")
+            # Support multiple locations as comma-separated list, e.g. "usa,canada,germany"
+            location_values = [
+                loc.strip() for loc in str(raw_location).split(",") if loc and str(loc).strip()
+            ]
+            if not location_values:
+                location_values = ["usa"]
+            
+            logger.info(
+                f"Starting discovery job {job_id}: keywords='{keywords}', "
+                f"locations={location_values}, categories={categories}"
+            )
             
             # Initialize DataForSEO client
             try:
@@ -74,82 +84,91 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                 await db.commit()
                 return {"success": False, "error": str(e)}
             
-            # Get location code
-            location_code = client.get_location_code(location)
-            
-            # Generate search queries
+            # Generate search queries (shared across locations)
             search_queries = _generate_search_queries(keywords, categories)
             
             # Limit queries to avoid API rate limits
             search_queries = search_queries[:min(10, len(search_queries))]
             
-            logger.info(f"Executing {len(search_queries)} search queries")
+            logger.info(f"Executing {len(search_queries)} search queries across {len(location_values)} locations")
             
             all_prospects = []
             discovered_domains = set()
             
-            # Search for each query
-            for query in search_queries:
-                try:
-                    logger.info(f"Searching: '{query}'")
-                    serp_result = await client.serp_google_organic(
-                        keyword=query,
-                        location_code=location_code,
-                        depth=10
-                    )
-                    
-                    if serp_result.get("success"):
-                        results = serp_result.get("results", [])
-                        logger.info(f"Found {len(results)} results for '{query}'")
+            # For each selected location
+            for loc in location_values:
+                location_code = client.get_location_code(loc)
+                logger.info(f"Using location '{loc}' with DataForSEO code {location_code}")
+                
+                # Search for each query in this location
+                for query in search_queries:
+                    try:
+                        logger.info(f"Searching: '{query}' in location '{loc}'")
+                        serp_result = await client.serp_google_organic(
+                            keyword=query,
+                            location_code=location_code,
+                            depth=10
+                        )
                         
-                        for item in results:
-                            url = item.get("url", "")
-                            if not url or not url.startswith("http"):
-                                continue
+                        if serp_result.get("success"):
+                            results = serp_result.get("results", [])
+                            logger.info(f"Found {len(results)} results for '{query}' in '{loc}'")
                             
-                            # Parse domain
-                            parsed = urlparse(url)
-                            domain = parsed.netloc.lower().replace("www.", "")
+                            for item in results:
+                                url = item.get("url", "")
+                                if not url or not url.startswith("http"):
+                                    continue
+                                
+                                # Parse domain
+                                parsed = urlparse(url)
+                                domain = parsed.netloc.lower().replace("www.", "")
+                                
+                                # Skip if domain already discovered (across all locations)
+                                if domain in discovered_domains:
+                                    continue
+                                
+                                discovered_domains.add(domain)
+                                
+                                # Create prospect
+                                prospect = Prospect(
+                                    domain=domain,
+                                    page_url=url,
+                                    page_title=item.get("title", ""),
+                                    da_est=None,  # Will be enriched later
+                                    score=0,  # Will be calculated later
+                                    outreach_status="pending",
+                                    dataforseo_payload=item
+                                )
+                                
+                                db.add(prospect)
+                                all_prospects.append({
+                                    "domain": domain,
+                                    "url": url,
+                                    "title": item.get("title", ""),
+                                    "location": loc,
+                                })
+                                
+                                # Limit total prospects
+                                if len(all_prospects) >= max_results:
+                                    break
                             
-                            # Skip if domain already discovered
-                            if domain in discovered_domains:
-                                continue
-                            
-                            discovered_domains.add(domain)
-                            
-                            # Create prospect
-                            prospect = Prospect(
-                                domain=domain,
-                                page_url=url,
-                                page_title=item.get("title", ""),
-                                da_est=None,  # Will be enriched later
-                                score=0,  # Will be calculated later
-                                outreach_status="pending",
-                                dataforseo_payload=item
+                            # Rate limiting between queries
+                            await asyncio.sleep(2)
+                        
+                        else:
+                            logger.warning(
+                                f"Search failed for '{query}' in '{loc}': {serp_result.get('error')}"
                             )
-                            
-                            db.add(prospect)
-                            all_prospects.append({
-                                "domain": domain,
-                                "url": url,
-                                "title": item.get("title", "")
-                            })
-                            
-                            # Limit total prospects
-                            if len(all_prospects) >= max_results:
-                                break
-                        
-                        # Rate limiting
-                        await asyncio.sleep(2)
                     
-                    else:
-                        logger.warning(f"Search failed for '{query}': {serp_result.get('error')}")
+                    except Exception as e:
+                        logger.error(f"Error processing query '{query}' in '{loc}': {str(e)}")
+                        continue
+                    
+                    # Stop if we've reached max results
+                    if len(all_prospects) >= max_results:
+                        break
                 
-                except Exception as e:
-                    logger.error(f"Error processing query '{query}': {str(e)}")
-                    continue
-                
-                # Stop if we've reached max results
+                # Stop across locations if we've reached max results
                 if len(all_prospects) >= max_results:
                     break
             
