@@ -135,27 +135,8 @@ async def list_prospects(
                 has_email_bool = has_email
             logger.info(f"🔍 Parsed has_email: '{has_email}' -> {has_email_bool} (type: {type(has_email_bool)})")
         
-        # Build query - explicitly select only columns that exist
-        # Use select() with explicit columns to avoid loading discovery_query_id if it doesn't exist yet
-        query = select(
-            Prospect.id,
-            Prospect.domain,
-            Prospect.page_url,
-            Prospect.page_title,
-            Prospect.contact_email,
-            Prospect.contact_method,
-            Prospect.da_est,
-            Prospect.score,
-            Prospect.outreach_status,
-            Prospect.last_sent,
-            Prospect.followups_sent,
-            Prospect.draft_subject,
-            Prospect.draft_body,
-            Prospect.dataforseo_payload,
-            Prospect.hunter_payload,
-            Prospect.created_at,
-            Prospect.updated_at
-        )
+        # Build query
+        query = select(Prospect)
         logger.info(f"🔍 Initial query object: {query}")
         
         # Apply filters
@@ -197,9 +178,21 @@ async def list_prospects(
         query = query.offset(skip).limit(min(limit, 200))
         logger.info(f"🔍 Final paginated query: {query}")
         
-        result = await db.execute(query)
-        prospects = result.scalars().all()
-        logger.info(f"🔍 Found {len(prospects)} prospects")
+        try:
+            result = await db.execute(query)
+            prospects = result.scalars().all()
+            logger.info(f"🔍 Found {len(prospects)} prospects")
+        except Exception as db_err:
+            # Check if error is about missing discovery_query_id column
+            error_str = str(db_err).lower()
+            if "discovery_query_id" in error_str and "column" in error_str:
+                logger.error(f"🔴 Database schema error: discovery_query_id column missing. Migration may not have run.")
+                logger.error(f"🔴 Full error: {db_err}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Database schema mismatch: 'discovery_query_id' column does not exist. The migration 'add_discovery_query' needs to be applied. Error: {str(db_err)}"
+                )
+            raise
         
         # Convert to response models
         prospect_responses = []
