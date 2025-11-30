@@ -59,7 +59,7 @@ if "@" in DATABASE_URL:
 # Create async engine
 engine = create_async_engine(
     DATABASE_URL,
-    echo=True,  # Set to False in production
+    echo=False,  # Set to False in production (was True for debugging)
     future=True,
     pool_pre_ping=True,
     pool_size=10,

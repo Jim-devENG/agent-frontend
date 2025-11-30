@@ -89,7 +89,12 @@ class HunterIOClient:
                         "raw_response": result
                     }
                 else:
-                    error = result.get("errors", [{}])[0] if result.get("errors") else {}
+                    # Safely extract error message
+                    errors = result.get("errors", [])
+                    if errors and isinstance(errors, list) and len(errors) > 0:
+                        error = errors[0] if isinstance(errors[0], dict) else {}
+                    else:
+                        error = {}
                     error_msg = error.get("details", "No emails found")
                     logger.info(f"Hunter.io returned no emails for {domain}: {error_msg}")
                     return {

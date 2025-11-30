@@ -135,8 +135,16 @@ async def create_discovery_job(
         
         # Start background task to process job
         # This runs asynchronously without blocking the API response
-        asyncio.create_task(process_discovery_job(str(job.id)))
-        logger.info(f"Discovery job {job.id} started in background")
+        try:
+            task = asyncio.create_task(process_discovery_job(str(job.id)))
+            logger.info(f"Discovery job {job.id} started in background (task_id: {id(task)})")
+        except Exception as task_error:
+            # Task creation failed - update job status immediately
+            logger.error(f"Failed to create background task for job {job.id}: {task_error}", exc_info=True)
+            job.status = "failed"
+            job.error_message = f"Failed to create background task: {task_error}"
+            await db.commit()
+            await db.refresh(job)
     except Exception as e:
         logger.error(f"Failed to start discovery job {job.id}: {e}", exc_info=True)
         job.status = "failed"
@@ -196,19 +204,12 @@ async def create_scoring_job(
     await db.commit()
     await db.refresh(job)
     
-    # Queue RQ task
-    try:
-        from worker.tasks.scoring import score_prospects_task
-        queue = get_queue("scoring")
-        if queue:
-            queue.enqueue(score_prospects_task, str(job.id))
-        else:
-            logger.warning("Redis not available - scoring job not queued")
-    except ImportError:
-        logger.warning("Worker tasks not available - scoring job not queued.")
-        job.status = "failed"
-        job.error_message = "Worker service not available"
-        await db.commit()
+    # TODO: Implement scoring task in backend/app/tasks/scoring.py
+    # For now, mark as not implemented
+    logger.warning("Scoring task not yet implemented in backend")
+    job.status = "failed"
+    job.error_message = "Scoring task not yet implemented. This feature will be available soon."
+    await db.commit()
     
     return job_to_response(job)
 
@@ -243,19 +244,12 @@ async def create_send_job(
     await db.commit()
     await db.refresh(job)
     
-    # Queue RQ task
-    try:
-        from worker.tasks.send import send_emails_task
-        queue = get_queue("send")
-        if queue:
-            queue.enqueue(send_emails_task, str(job.id))
-        else:
-            logger.warning("Redis not available - send job not queued")
-    except ImportError:
-        logger.warning("Worker tasks not available - send job not queued.")
-        job.status = "failed"
-        job.error_message = "Worker service not available"
-        await db.commit()
+    # TODO: Implement send task in backend/app/tasks/send.py
+    # For now, mark as not implemented
+    logger.warning("Send task not yet implemented in backend")
+    job.status = "failed"
+    job.error_message = "Send task not yet implemented. This feature will be available soon."
+    await db.commit()
     
     return job_to_response(job)
 
@@ -290,19 +284,12 @@ async def create_followup_job(
     await db.commit()
     await db.refresh(job)
     
-    # Queue RQ task
-    try:
-        from worker.tasks.followup import send_followups_task
-        queue = get_queue("followup")
-        if queue:
-            queue.enqueue(send_followups_task, str(job.id))
-        else:
-            logger.warning("Redis not available - followup job not queued")
-    except ImportError:
-        logger.warning("Worker tasks not available - followup job not queued.")
-        job.status = "failed"
-        job.error_message = "Worker service not available"
-        await db.commit()
+    # TODO: Implement followup task in backend/app/tasks/followup.py
+    # For now, mark as not implemented
+    logger.warning("Followup task not yet implemented in backend")
+    job.status = "failed"
+    job.error_message = "Followup task not yet implemented. This feature will be available soon."
+    await db.commit()
     
     return job_to_response(job)
 
@@ -327,29 +314,17 @@ async def check_replies(
     await db.commit()
     await db.refresh(job)
     
-    # Queue RQ task
-    try:
-        from worker.tasks.reply_handler import check_replies_task
-        queue = get_queue("followup")
-        if queue:
-            queue.enqueue(check_replies_task)
-        else:
-            logger.warning("Redis not available - reply check job not queued")
-        return {
-            "job_id": job.id,
-            "status": "queued",
-            "message": "Reply check job queued"
-        }
-    except ImportError:
-        logger.warning("Worker tasks not available - reply check job not queued.")
-        job.status = "failed"
-        job.error_message = "Worker service not available"
-        await db.commit()
-        return {
-            "job_id": job.id,
-            "status": "failed",
-            "message": "Worker service not available"
-        }
+    # TODO: Implement reply handler in backend/app/tasks/reply_handler.py
+    # For now, mark as not implemented
+    logger.warning("Reply handler not yet implemented in backend")
+    job.status = "failed"
+    job.error_message = "Reply handler not yet implemented. This feature will be available soon."
+    await db.commit()
+    return {
+        "job_id": job.id,
+        "status": "failed",
+        "message": "Reply handler not yet implemented. This feature will be available soon."
+    }
 
 
 @router.get("", response_model=List[JobResponse])

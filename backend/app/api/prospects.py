@@ -85,29 +85,17 @@ async def create_enrichment_job(
     await db.commit()
     await db.refresh(job)
     
-    # Queue RQ task
-    try:
-        from worker.tasks.enrichment import enrich_prospects_task
-        queue = get_queue("enrichment")
-        if queue:
-            queue.enqueue(enrich_prospects_task, str(job.id))
-        else:
-            logger.warning("Redis not available - enrichment job not queued")
-        return {
-            "job_id": job.id,
-            "status": "queued",
-            "message": "Enrichment job queued"
-        }
-    except ImportError:
-        logger.warning("Worker tasks not available - enrichment job not queued.")
-        job.status = "failed"
-        job.error_message = "Worker service not available"
-        await db.commit()
-        return {
-            "job_id": job.id,
-            "status": "failed",
-            "message": "Worker service not available"
-        }
+    # TODO: Implement enrichment task in backend/app/tasks/enrichment.py
+    # For now, mark as not implemented
+    logger.warning("Enrichment task not yet implemented in backend")
+    job.status = "failed"
+    job.error_message = "Enrichment task not yet implemented. This feature will be available soon."
+    await db.commit()
+    return {
+        "job_id": job.id,
+        "status": "failed",
+        "message": "Enrichment task not yet implemented. This feature will be available soon."
+    }
 
 
 @router.get("", response_model=ProspectListResponse)
@@ -215,31 +203,31 @@ async def compose_email(
     except ValueError as e:
         raise HTTPException(status_code=500, detail=f"Gemini API not configured: {str(e)}")
     
-    # Extract snippet from DataForSEO payload
+    # Extract snippet from DataForSEO payload (safe None check)
     page_snippet = None
-    if prospect.dataforseo_payload:
+    if prospect.dataforseo_payload and isinstance(prospect.dataforseo_payload, dict):
         page_snippet = prospect.dataforseo_payload.get("description") or prospect.dataforseo_payload.get("snippet")
     
-    # Extract contact name from Hunter.io payload
+    # Extract contact name from Hunter.io payload (safe list access)
     contact_name = None
-    if prospect.hunter_payload and prospect.hunter_payload.get("emails"):
-        emails = prospect.hunter_payload["emails"]
-        if emails:
+    if prospect.hunter_payload and isinstance(prospect.hunter_payload, dict):
+        emails = prospect.hunter_payload.get("emails", [])
+        if emails and isinstance(emails, list) and len(emails) > 0:
             first_email = emails[0]
-            first_name = first_email.get("first_name")
-            last_name = first_email.get("last_name")
-            if first_name or last_name:
-                contact_name = f"{first_name or ''} {last_name or ''}".strip()
+            if isinstance(first_email, dict):
+                first_name = first_email.get("first_name")
+                last_name = first_email.get("last_name")
+                if first_name or last_name:
+                    contact_name = f"{first_name or ''} {last_name or ''}".strip()
     
-    # Call Gemini to compose email
-    import asyncio
-    gemini_result = asyncio.run(client.compose_email(
+    # Call Gemini to compose email (use await, not asyncio.run in async function)
+    gemini_result = await client.compose_email(
         domain=prospect.domain,
         page_title=prospect.page_title,
         page_url=prospect.page_url,
         page_snippet=page_snippet,
         contact_name=contact_name
-    ))
+    )
     
     if not gemini_result.get("success"):
         error = gemini_result.get("error", "Unknown error")

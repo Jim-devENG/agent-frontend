@@ -7,12 +7,9 @@ import logging
 import json
 import asyncio
 
-# Worker imports are optional - webhook processing can be queued separately
-try:
-    from worker.tasks.reply_handler import process_reply_async
-except ImportError:
-    # Worker not available in backend service - will queue job instead
-    process_reply_async = None
+# TODO: Implement reply handler in backend/app/tasks/reply_handler.py
+# When implemented, uncomment:
+# from app.tasks.reply_handler import process_reply_async
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

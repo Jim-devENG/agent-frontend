@@ -120,7 +120,12 @@ Do not include any text before or after the JSON. Return ONLY the JSON object.""
                 if result.get("candidates") and len(result["candidates"]) > 0:
                     candidate = result["candidates"][0]
                     if candidate.get("content") and candidate["content"].get("parts"):
-                        text_content = candidate["content"]["parts"][0].get("text", "")
+                        parts = candidate["content"]["parts"]
+                        # Safely get first part
+                        if parts and isinstance(parts, list) and len(parts) > 0:
+                            text_content = parts[0].get("text", "") if isinstance(parts[0], dict) else ""
+                        else:
+                            text_content = ""
                         
                         # Parse JSON response
                         try:

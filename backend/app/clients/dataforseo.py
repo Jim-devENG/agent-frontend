@@ -193,8 +193,6 @@ class DataForSEOClient:
             # Actual error
             task_msg = task.get("status_message", "Unknown task error")
             return False, f"Task error {task_status}: {task_msg}", task_id
-        
-        return True, None, task_id
     
     async def serp_google_organic(
         self,
@@ -372,7 +370,12 @@ class DataForSEOClient:
                                 logger.warning(f"⚠️  No result data in task {task_id}")
                                 return {"success": False, "error": "No result data in task"}
                             
-                            items = task_result[0].get("items", [])
+                            # Safely get items from first result
+                            if not isinstance(task_result, list) or len(task_result) == 0:
+                                logger.warning(f"⚠️  Invalid task_result structure for task {task_id}")
+                                return {"success": False, "error": "Invalid task result structure"}
+                            
+                            items = task_result[0].get("items", []) if task_result[0] else []
                             
                             parsed_results = []
                             for item in items:
@@ -395,12 +398,20 @@ class DataForSEOClient:
                         elif task_status == 20100:
                             # Task created but not ready yet - continue polling
                             logger.info(f"🔄 Task {task_id} created (20100) - waiting for processing...")
-                            await asyncio.sleep(3)
+                            # Exponential backoff: 3s * (attempt + 1)
+                            await asyncio.sleep(min(3 * (attempt + 1), 30))
                             continue
                         elif task_status == 20200:
                             # Still processing
                             logger.info(f"🔄 Task {task_id} still processing (20200) - waiting...")
-                            await asyncio.sleep(3)
+                            # Exponential backoff: 3s * (attempt + 1)
+                            await asyncio.sleep(min(3 * (attempt + 1), 30))
+                            continue
+                        elif task_status == 40602:
+                            # Task in queue - continue polling (this is not an error)
+                            logger.info(f"🔄 Task {task_id} in queue (40602) - waiting...")
+                            # Exponential backoff: 3s * (attempt + 1)
+                            await asyncio.sleep(min(3 * (attempt + 1), 30))
                             continue
                         else:
                             # Error status
