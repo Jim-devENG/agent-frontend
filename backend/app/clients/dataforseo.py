@@ -163,13 +163,19 @@ class DataForSEOClient:
             status_msg = result.get("status_message", "Unknown error")
             return False, f"API error {status_code}: {status_msg}", None
         
-        # Check tasks array
-        tasks = result.get("tasks", [])
+        # Check tasks array (defensive check)
+        tasks = result.get("tasks")
         if not tasks:
             return False, "No tasks in response", None
         
+        if not isinstance(tasks, list) or len(tasks) == 0:
+            return False, f"Invalid tasks structure: expected list, got {type(tasks).__name__}", None
+        
         # Check first task status
         task = tasks[0]
+        if not isinstance(task, dict):
+            return False, f"Invalid task structure: expected dict, got {type(task).__name__}", None
+        
         task_status = task.get("status_code")
         task_id = task.get("id")
         
@@ -351,13 +357,23 @@ class DataForSEOClient:
                     logger.debug(f"🔄 Poll response status_code: {result.get('status_code')}")
                     
                     if result.get("status_code") == 20000:
-                        tasks = result.get("tasks", [])
+                        tasks = result.get("tasks")
                         if not tasks:
                             logger.warning(f"⚠️  No tasks in poll response for task_id {task_id}")
                             await asyncio.sleep(2)
                             continue
                         
+                        if not isinstance(tasks, list) or len(tasks) == 0:
+                            logger.warning(f"⚠️  Invalid tasks structure for task_id {task_id}: {type(tasks)}")
+                            await asyncio.sleep(2)
+                            continue
+                        
                         task = tasks[0]
+                        if not isinstance(task, dict):
+                            logger.warning(f"⚠️  Invalid task structure (not a dict) for task_id {task_id}: {type(task)}")
+                            await asyncio.sleep(2)
+                            continue
+                        
                         task_status = task.get("status_code")
                         task_msg = task.get("status_message", "")
                         
@@ -517,7 +533,11 @@ class DataForSEOClient:
                 logger.info(f"🔵 On-page task response: {json.dumps(result, indent=2)}")
                 
                 if result.get("status_code") == 20000:
-                    task_id = result.get("tasks", [{}])[0].get("id")
+                    tasks = result.get("tasks", [])
+                    if tasks and isinstance(tasks, list) and len(tasks) > 0:
+                        task_id = tasks[0].get("id") if isinstance(tasks[0], dict) else None
+                    else:
+                        task_id = None
                     return {"success": True, "task_id": task_id}
                 else:
                     error_msg = result.get("status_message", "Unknown error")
