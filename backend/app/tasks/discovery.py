@@ -241,13 +241,19 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                                 continue
                             
                             # Create prospect
+                            # NOTE: Prospect model doesn't have page_snippet or country fields
+                            # Store description in dataforseo_payload if needed
                             prospect = Prospect(
                                 domain=domain,
                                 page_url=normalized_url,
                                 page_title=result_item.get("title", "")[:500],
-                                page_snippet=result_item.get("description", "")[:1000],
-                                country=loc,
-                                outreach_status="pending"
+                                outreach_status="pending",
+                                dataforseo_payload={
+                                    "description": result_item.get("description", "")[:1000],
+                                    "location": loc,
+                                    "url": normalized_url,
+                                    "title": result_item.get("title", "")
+                                }
                             )
                             
                             db.add(prospect)
