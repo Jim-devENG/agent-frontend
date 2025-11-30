@@ -202,13 +202,25 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                         search_stats["queries_successful"] += 1
                         query_stats["status"] = "success"
                         
-                        # Process results
-                        results = serp_results.get("results", [])
+                        # Process results (defensive check)
+                        results = serp_results.get("results")
+                        if results is None:
+                            logger.warning(f"⚠️  No 'results' key in serp_results for query '{query}'")
+                            results = []
+                        elif not isinstance(results, list):
+                            logger.warning(f"⚠️  'results' is not a list for query '{query}': {type(results)}")
+                            results = []
+                        
                         query_stats["results_found"] = len(results)
                         search_stats["total_results_found"] += len(results)
                         logger.info(f"✅ Found {len(results)} results for '{query}' in {loc}")
                         
                         for result_item in results:
+                            # Defensive check: ensure result_item is a dict
+                            if not isinstance(result_item, dict):
+                                logger.warning(f"⚠️  Skipping invalid result_item (not a dict): {type(result_item)}")
+                                search_stats["results_skipped_duplicate"] += 1
+                                continue
                             if len(all_prospects) >= max_results:
                                 break
                             

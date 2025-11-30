@@ -365,17 +365,31 @@ class DataForSEOClient:
                         
                         if task_status == 20000:
                             # Results ready
-                            task_result = task.get("result", [])
+                            task_result = task.get("result")
+                            
+                            # Defensive check: ensure task_result is a non-empty list
                             if not task_result:
                                 logger.warning(f"⚠️  No result data in task {task_id}")
                                 return {"success": False, "error": "No result data in task"}
                             
-                            # Safely get items from first result
-                            if not isinstance(task_result, list) or len(task_result) == 0:
-                                logger.warning(f"⚠️  Invalid task_result structure for task {task_id}")
-                                return {"success": False, "error": "Invalid task result structure"}
+                            if not isinstance(task_result, list):
+                                logger.warning(f"⚠️  task_result is not a list for task {task_id}: {type(task_result)}")
+                                return {"success": False, "error": f"Invalid task result structure: expected list, got {type(task_result).__name__}"}
                             
-                            items = task_result[0].get("items", []) if task_result[0] else []
+                            if len(task_result) == 0:
+                                logger.warning(f"⚠️  task_result is empty list for task {task_id}")
+                                return {"success": False, "error": "Task result is empty"}
+                            
+                            # Safely get items from first result
+                            first_result = task_result[0]
+                            if not first_result or not isinstance(first_result, dict):
+                                logger.warning(f"⚠️  Invalid first_result structure for task {task_id}: {type(first_result)}")
+                                return {"success": False, "error": f"Invalid first result structure: expected dict, got {type(first_result).__name__}"}
+                            
+                            items = first_result.get("items", [])
+                            if not isinstance(items, list):
+                                logger.warning(f"⚠️  items is not a list for task {task_id}: {type(items)}")
+                                items = []
                             
                             parsed_results = []
                             for item in items:
