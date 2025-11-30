@@ -1,9 +1,10 @@
 """
 Prospect model - stores discovered websites and their contact information
 """
-from sqlalchemy import Column, String, Text, Numeric, Integer, DateTime, JSON
+from sqlalchemy import Column, String, Text, Numeric, Integer, DateTime, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 import uuid
 from app.db.database import Base
 
@@ -27,8 +28,12 @@ class Prospect(Base):
     draft_body = Column(Text)  # Draft email body
     dataforseo_payload = Column(JSON)  # Raw DataForSEO response
     hunter_payload = Column(JSON)  # Raw Hunter.io response
+    discovery_query_id = Column(UUID(as_uuid=True), ForeignKey("discovery_queries.id"), nullable=True, index=True)  # Link to discovery query
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    discovery_query = relationship("DiscoveryQuery", back_populates="prospects")
     
     def __repr__(self):
         return f"<Prospect(id={self.id}, domain={self.domain}, status={self.outreach_status})>"

@@ -79,6 +79,7 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
     """
     from app.models.job import Job
     from app.models.prospect import Prospect
+    from app.models.discovery_query import DiscoveryQuery
     from uuid import UUID
     
     async with AsyncSessionLocal() as db:
@@ -169,6 +170,34 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                         logger.info(f"⏹️  Reached max_results limit ({max_results}), stopping search")
                         break
                     
+                    # Determine category for this query
+                    query_category = None
+                    for cat in categories:
+                        category_keywords = {
+                            "home_decor": ["home decor", "interior design", "furniture"],
+                            "holiday": ["holiday", "seasonal", "christmas"],
+                            "parenting": ["parenting", "mom", "family"],
+                            "audio_visuals": ["audio visual", "sound engineering", "video editing"],
+                            "gift_guides": ["gift", "present"],
+                            "tech_innovation": ["tech", "startup", "innovation", "gadget"]
+                        }
+                        if cat in category_keywords:
+                            if any(kw in query.lower() for kw in category_keywords[cat]):
+                                query_category = cat
+                                break
+                    
+                    # Create DiscoveryQuery record
+                    discovery_query = DiscoveryQuery(
+                        job_id=job.id,
+                        keyword=query,
+                        location=loc,
+                        location_code=location_code,
+                        category=query_category,
+                        status="pending"
+                    )
+                    db.add(discovery_query)
+                    await db.flush()  # Flush to get the ID
+                    
                     query_stats = {
                         "query": query,
                         "location": loc,
@@ -197,10 +226,16 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                             query_stats["error"] = error_msg
                             search_stats["queries_failed"] += 1
                             search_stats["queries_detail"].append(query_stats)
+                            
+                            # Update DiscoveryQuery record
+                            discovery_query.status = "failed"
+                            discovery_query.error_message = error_msg
+                            await db.commit()
                             continue
                         
                         search_stats["queries_successful"] += 1
                         query_stats["status"] = "success"
+                        discovery_query.status = "success"
                         
                         # Process results (defensive check)
                         results = serp_results.get("results")
@@ -213,6 +248,7 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                         
                         query_stats["results_found"] = len(results)
                         search_stats["total_results_found"] += len(results)
+                        discovery_query.results_found = len(results)
                         logger.info(f"✅ Found {len(results)} results for '{query}' in {loc}")
                         
                         for result_item in results:
@@ -243,6 +279,7 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                             # Check if domain already discovered in this job
                             if domain in discovered_domains:
                                 search_stats["results_skipped_duplicate"] += 1
+                                discovery_query.results_skipped_duplicate += 1
                                 logger.debug(f"⏭️  Skipping duplicate domain in this job: {domain}")
                                 continue
                             
@@ -253,6 +290,7 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                             if existing.scalar_one_or_none():
                                 discovered_domains.add(domain)
                                 search_stats["results_skipped_existing"] += 1
+                                discovery_query.results_skipped_existing += 1
                                 logger.debug(f"⏭️  Skipping existing domain in database: {domain}")
                                 continue
                             
@@ -272,6 +310,7 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                                 page_url=normalized_url,
                                 page_title=title,
                                 outreach_status="pending",
+                                discovery_query_id=discovery_query.id,  # Link to discovery query
                                 dataforseo_payload={
                                     "description": description,
                                     "location": loc,
@@ -285,6 +324,9 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                             all_prospects.append(prospect)
                             query_stats["results_saved"] += 1
                             search_stats["results_saved"] += 1
+                            
+                            # Update query counters
+                            discovery_query.results_saved += 1
                             
                             # Safely get title for logging
                             log_title = result_item.get("title") or ""
@@ -302,6 +344,11 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                         query_stats["error"] = str(e)
                         search_stats["queries_failed"] += 1
                         search_stats["queries_detail"].append(query_stats)
+                        
+                        # Update DiscoveryQuery record
+                        discovery_query.status = "failed"
+                        discovery_query.error_message = str(e)
+                        await db.commit()
                         continue
                 
                 if len(all_prospects) >= max_results:
