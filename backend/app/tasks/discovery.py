@@ -169,6 +169,21 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
         
         try:
             for loc in locations:
+                # Check for timeout or cancellation
+                elapsed_time = datetime.now(timezone.utc) - start_time
+                if elapsed_time > MAX_EXECUTION_TIME:
+                    logger.warning(f"⏱️  Job {job_id} exceeded maximum execution time ({MAX_EXECUTION_TIME}), stopping")
+                    job.status = "failed"
+                    job.error_message = f"Job exceeded maximum execution time of {MAX_EXECUTION_TIME}"
+                    await db.commit()
+                    return {"error": "Job exceeded maximum execution time"}
+                
+                # Re-check job status in case it was cancelled
+                await db.refresh(job)
+                if job.status == "cancelled":
+                    logger.info(f"Job {job_id} was cancelled during execution")
+                    return {"error": "Job was cancelled"}
+                
                 location_code = client.get_location_code(loc)
                 search_queries = _generate_search_queries(keywords, categories)
                 search_stats["total_queries"] += len(search_queries)
@@ -176,6 +191,20 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                 logger.info(f"📍 Processing location '{loc}' (code: {location_code}) with {len(search_queries)} queries")
                 
                 for query in search_queries:
+                    # Check for timeout or cancellation before each query
+                    elapsed_time = datetime.now(timezone.utc) - start_time
+                    if elapsed_time > MAX_EXECUTION_TIME:
+                        logger.warning(f"⏱️  Job {job_id} exceeded maximum execution time, stopping")
+                        job.status = "failed"
+                        job.error_message = f"Job exceeded maximum execution time of {MAX_EXECUTION_TIME}"
+                        await db.commit()
+                        return {"error": "Job exceeded maximum execution time"}
+                    
+                    # Re-check job status
+                    await db.refresh(job)
+                    if job.status == "cancelled":
+                        logger.info(f"Job {job_id} was cancelled during execution")
+                        return {"error": "Job was cancelled"}
                     if len(all_prospects) >= max_results:
                         logger.info(f"⏹️  Reached max_results limit ({max_results}), stopping search")
                         break

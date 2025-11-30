@@ -351,6 +351,43 @@ async def check_replies(
     }
 
 
+@router.post("/{job_id}/cancel")
+async def cancel_job(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Cancel a running job
+    
+    This will:
+    1. Mark the job as cancelled
+    2. The discovery task will check this status and stop processing
+    """
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job.status not in ["pending", "running"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job is already {job.status} and cannot be cancelled"
+        )
+    
+    job.status = "cancelled"
+    job.error_message = "Cancelled by user"
+    await db.commit()
+    
+    logger.info(f"Job {job_id} cancelled by user")
+    
+    return {
+        "message": "Job cancelled successfully",
+        "job_id": str(job_id),
+        "status": "cancelled"
+    }
+
+
 @router.get("", response_model=List[JobResponse])
 async def list_jobs(
     skip: int = 0,
