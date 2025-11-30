@@ -81,6 +81,7 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
     from app.models.prospect import Prospect
     from app.models.discovery_query import DiscoveryQuery
     from uuid import UUID
+    from datetime import datetime, timezone, timedelta
     
     async with AsyncSessionLocal() as db:
         # Fetch job
@@ -97,9 +98,18 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
             logger.error(f"Job {job_id} not found")
             return {"error": "Job not found"}
         
-        # Update job status
+        # Check if job was cancelled
+        if job.status == "cancelled":
+            logger.info(f"Job {job_id} was cancelled, stopping execution")
+            return {"error": "Job was cancelled"}
+        
+        # Update job status and record start time
         job.status = "running"
+        start_time = datetime.now(timezone.utc)
         await db.commit()
+        
+        # Maximum execution time: 2 hours
+        MAX_EXECUTION_TIME = timedelta(hours=2)
         
         params = job.params or {}
         keywords = params.get("keywords", "")

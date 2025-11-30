@@ -104,6 +104,30 @@ async def create_discovery_job(
             detail="Please select at least one location"
         )
     
+    # Check if there's already a running discovery job
+    running_job = await db.execute(
+        select(Job).where(
+            Job.job_type == "discover",
+            Job.status == "running"
+        ).order_by(Job.created_at.desc())
+    )
+    existing_job = running_job.scalar_one_or_none()
+    if existing_job:
+        # Check if job has been running for more than 2 hours (likely stuck)
+        from datetime import datetime, timezone, timedelta
+        if existing_job.updated_at:
+            elapsed = datetime.now(timezone.utc) - existing_job.updated_at.replace(tzinfo=timezone.utc)
+            if elapsed > timedelta(hours=2):
+                logger.warning(f"Found stuck discovery job {existing_job.id}, marking as failed")
+                existing_job.status = "failed"
+                existing_job.error_message = "Job timed out after 2 hours"
+                await db.commit()
+            else:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"A discovery job is already running (ID: {existing_job.id}). Please wait for it to complete or cancel it first."
+                )
+    
     # Create job record
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
