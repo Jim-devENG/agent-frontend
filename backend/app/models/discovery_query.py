@@ -25,7 +25,7 @@ class DiscoveryQuery(Base):
     results_skipped_duplicate = Column(Integer, default=0)  # Skipped due to duplicates
     results_skipped_existing = Column(Integer, default=0)  # Skipped due to existing in DB
     error_message = Column(Text)  # Error message if failed
-    metadata = Column(JSON)  # Additional metadata (query details, etc.)
+    query_metadata = Column(JSON)  # Additional metadata (query details, etc.) - renamed from 'metadata' (reserved in SQLAlchemy)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     

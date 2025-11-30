@@ -32,7 +32,7 @@ def upgrade() -> None:
         sa.Column('results_skipped_duplicate', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('results_skipped_existing', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('error_message', sa.Text(), nullable=True),
-        sa.Column('metadata', postgresql.JSON(), nullable=True),
+        sa.Column('query_metadata', postgresql.JSON(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()')),
         sa.ForeignKeyConstraint(['job_id'], ['jobs.id'], ),
