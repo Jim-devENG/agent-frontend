@@ -45,31 +45,12 @@ def upgrade() -> None:
     op.create_index('ix_discovery_queries_status', 'discovery_queries', ['status'])
     op.create_index('ix_discovery_queries_created_at', 'discovery_queries', ['created_at'])
     
-    # Add discovery_query_id column to prospects table (idempotent)
-    # Check if column already exists before adding
-    bind = op.get_bind()
-    inspector = sa.inspect(bind)
-    existing_columns = [col['name'] for col in inspector.get_columns('prospects')]
-    
-    if 'discovery_query_id' not in existing_columns:
-        op.add_column('prospects', sa.Column('discovery_query_id', postgresql.UUID(as_uuid=True), nullable=True))
-    
-    # Create index if it doesn't exist
-    existing_indexes = [idx['name'] for idx in inspector.get_indexes('prospects')]
-    if 'ix_prospects_discovery_query_id' not in existing_indexes:
-        op.create_index('ix_prospects_discovery_query_id', 'prospects', ['discovery_query_id'])
-    
-    # Create foreign key if it doesn't exist
-    existing_fks = [fk['name'] for fk in inspector.get_foreign_keys('prospects')]
-    if 'fk_prospects_discovery_query_id' not in existing_fks:
-        op.create_foreign_key('fk_prospects_discovery_query_id', 'prospects', 'discovery_queries', ['discovery_query_id'], ['id'])
+    # NOTE: discovery_query_id column is added in migration 556b79de2825
+    # This migration only creates the discovery_queries table
 
 
 def downgrade() -> None:
-    # Remove foreign key and column from prospects
-    op.drop_constraint('fk_prospects_discovery_query_id', 'prospects', type_='foreignkey')
-    op.drop_index('ix_prospects_discovery_query_id', table_name='prospects')
-    op.drop_column('prospects', 'discovery_query_id')
+    # NOTE: discovery_query_id removal is handled in migration 556b79de2825 downgrade
     
     # Drop discovery_queries table
     op.drop_index('ix_discovery_queries_created_at', table_name='discovery_queries')

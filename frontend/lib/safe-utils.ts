@@ -186,3 +186,41 @@ export function safeGet<T>(
   }
 }
 
+/**
+ * Safely formats a number with toFixed, handling null, undefined, NaN, and non-numeric values
+ * @param value - The value to format (can be number, string, null, undefined, etc.)
+ * @param decimals - Number of decimal places (default: 2)
+ * @param fallback - Fallback value if conversion fails (default: 'N/A')
+ * @returns Formatted string or fallback
+ */
+export function safeToFixed(
+  value: any,
+  decimals: number = 2,
+  fallback: string = 'N/A'
+): string {
+  // Handle null/undefined
+  if (value === null || value === undefined) {
+    return fallback
+  }
+
+  // Convert to number
+  const num = Number(value)
+
+  // Check if conversion resulted in NaN
+  if (isNaN(num)) {
+    return fallback
+  }
+
+  // Check if decimals is valid
+  if (typeof decimals !== 'number' || decimals < 0 || decimals > 20) {
+    decimals = 2
+  }
+
+  try {
+    return num.toFixed(decimals)
+  } catch (error) {
+    console.warn('⚠️ safeToFixed: Error calling toFixed:', error, 'value:', value)
+    return fallback
+  }
+}
+

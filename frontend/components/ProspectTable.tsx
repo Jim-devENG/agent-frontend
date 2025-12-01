@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { listProspects, composeEmail, sendEmail, type Prospect } from '@/lib/api'
 import { Mail, Send, Edit, Filter } from 'lucide-react'
+import { safeToFixed } from '@/lib/safe-utils'
 
 export default function ProspectTable() {
   const [prospects, setProspects] = useState<Prospect[]>([])
@@ -140,7 +141,7 @@ export default function ProspectTable() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span className="font-medium">{prospect.score?.toFixed(1) || 'N/A'}</span>
+                    <span className="font-medium">{safeToFixed(prospect.score, 1)}</span>
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 rounded-full text-xs ${

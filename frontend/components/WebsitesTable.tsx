@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { ExternalLink, RefreshCw } from 'lucide-react'
 import { listProspects, type Prospect } from '@/lib/api'
+import { safeToFixed } from '@/lib/safe-utils'
 
 export default function WebsitesTable() {
   const [prospects, setProspects] = useState<Prospect[]>([])
@@ -93,10 +94,10 @@ export default function WebsitesTable() {
                       <span className="text-gray-900">{prospect.page_title || 'N/A'}</span>
                     </td>
                     <td className="py-3 px-4">
-                      <span className="text-gray-900">{prospect.da_est?.toFixed(1) || 'N/A'}</span>
+                      <span className="text-gray-900">{safeToFixed(prospect.da_est, 1)}</span>
                     </td>
                     <td className="py-3 px-4">
-                      <span className="text-gray-900">{prospect.score?.toFixed(2) || 'N/A'}</span>
+                      <span className="text-gray-900">{safeToFixed(prospect.score, 2)}</span>
                     </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
