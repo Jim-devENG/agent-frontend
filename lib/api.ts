@@ -107,15 +107,10 @@ export interface Job {
   updated_at: string
 }
 
-export interface EnrichmentResult {
-  success: boolean
-  email?: string
-  confidence?: number
-  source?: string
-  domain: string
-  error?: string
-  stack_trace?: string
-}
+// NOTE: EnrichmentResult shape is defined centrally in ./types and used by the
+// more advanced API client under lib/lib/api.ts. This duplicate interface is
+// intentionally removed to avoid divergence – import from './types' instead
+// in any new code that needs it.
 
 export interface EmailLog {
   id: string

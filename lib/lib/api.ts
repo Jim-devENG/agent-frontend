@@ -397,8 +397,8 @@ export async function getJobStatus(jobId: string): Promise<Job> {
 }
 
 /**
- * Enrich email address for a given domain and optional name
- * Always returns a valid EnrichmentResult object with all properties defined
+ * Enrich email address for a given domain and optional name.
+ * Always returns a valid EnrichmentResult object with all core properties defined.
  * 
  * @param domain - The domain to enrich (e.g., 'example.com')
  * @param name - Optional name to help with enrichment accuracy
@@ -409,14 +409,14 @@ export async function enrichEmail(domain: string, name?: string): Promise<Enrich
   if (!token) {
     // Return valid EnrichmentResult even when auth fails
     return {
-      email: undefined,
-      name: name,
-      company: undefined,
-      title: undefined,
+      email: null,
+      name: name ?? null,
+      company: null,
+      confidence: null,
+      domain,
       success: false,
-      confidence: undefined,
-      source: undefined,
-      domain: domain,
+      title: null,
+      source: null,
       error: 'Authentication required. Please log in first.',
     }
   }
@@ -433,43 +433,48 @@ export async function enrichEmail(domain: string, name?: string): Promise<Enrich
       const error = await res.json().catch(() => ({ detail: 'Failed to enrich email' }))
       // Return a valid EnrichmentResult object even on error - all properties explicitly defined
       return {
-        email: undefined,
-        name: name,
-        company: undefined,
-        title: undefined,
+        email: null,
+        name: name ?? null,
+        company: null,
+        confidence: null,
+        domain,
         success: false,
-        confidence: undefined,
-        source: undefined,
-        domain: domain,
+        title: null,
+        source: null,
         error: error.detail || error.error || 'Failed to enrich email',
       }
     }
     
     const data = await res.json()
-    // Ensure we always return a valid EnrichmentResult object with all properties explicitly defined
+    // Normalize backend payload into EnrichmentResult with all core properties defined
     return {
-      email: data.email || undefined,
-      name: data.name || name || undefined,
-      company: data.company || undefined,
-      title: data.title || undefined,
+      email: data.email ?? null,
+      name: data.name ?? name ?? null,
+      company: data.company ?? null,
+      confidence:
+        typeof data.confidence === 'number'
+          ? data.confidence
+          : typeof data.confidence_score === 'number'
+          ? data.confidence_score
+          : null,
+      domain: data.domain ?? domain,
       success: data.success !== false,
-      confidence: data.confidence || undefined,
-      source: data.source || undefined,
-      domain: data.domain || domain,
-      error: data.error || undefined,
+      title: data.title ?? null,
+      source: data.source ?? null,
+      error: data.error ?? null,
     }
   } catch (error: any) {
     console.error('❌ Error enriching email:', error)
     // Return a valid EnrichmentResult object even on exception - all properties explicitly defined
     return {
-      email: undefined,
-      name: name || undefined,
-      company: undefined,
-      title: undefined,
+      email: null,
+      name: name ?? null,
+      company: null,
+      confidence: null,
+      domain,
       success: false,
-      confidence: undefined,
-      source: undefined,
-      domain: domain,
+      title: null,
+      source: null,
       error: error.message || 'Enrichment failed',
     }
   }

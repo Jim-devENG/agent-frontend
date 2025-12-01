@@ -3,18 +3,24 @@
  */
 
 /**
- * Result of email enrichment operation
- * All properties are optional to handle partial data from various enrichment sources
+ * Result of email enrichment operation.
+ *
+ * The backend may return partial data, so we normalize everything into this shape:
+ * - Core fields are always present on the object
+ * - Values may be null when unknown / not provided
  */
 export interface EnrichmentResult {
-  email?: string
-  name?: string
-  company?: string
-  title?: string
-  success?: boolean
-  confidence?: number
-  source?: string
-  domain?: string
-  error?: string
-}
+  email: string | null
+  name: string | null
+  company: string | null
+  confidence: number | null
+  domain: string
 
+  /**
+   * Backwards‑compatible / auxiliary fields
+   */
+  title?: string | null
+  success?: boolean
+  source?: string | null
+  error?: string | null
+}
