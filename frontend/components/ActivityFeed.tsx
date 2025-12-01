@@ -36,7 +36,9 @@ export default function ActivityFeed({ limit = 20, autoRefresh = false }: Activi
 
     loadActivities()
     if (autoRefresh) {
-      const interval = setInterval(loadActivities, 10000)
+      const interval = setInterval(() => {
+        loadActivities()
+      }, 30000) // Refresh every 30 seconds (debounced to prevent loops)
       return () => clearInterval(interval)
     }
   }, [autoRefresh])

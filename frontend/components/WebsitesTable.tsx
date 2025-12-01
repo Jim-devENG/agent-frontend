@@ -26,7 +26,9 @@ export default function WebsitesTable() {
 
   useEffect(() => {
     loadWebsites()
-    const interval = setInterval(loadWebsites, 10000) // Refresh every 10 seconds
+    const interval = setInterval(() => {
+      loadWebsites()
+    }, 30000) // Refresh every 30 seconds (debounced to prevent loops)
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skip])

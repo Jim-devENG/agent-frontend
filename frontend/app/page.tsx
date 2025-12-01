@@ -46,8 +46,10 @@ export default function Dashboard() {
     }
 
     loadData()
-    // Refresh every 10 seconds for real-time updates
-    const interval = setInterval(loadData, 10000)
+    // Refresh every 30 seconds (debounced to prevent loops) - increased from 10s
+    const interval = setInterval(() => {
+      loadData()
+    }, 30000)
     return () => clearInterval(interval)
   }, [router])
 

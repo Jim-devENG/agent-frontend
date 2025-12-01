@@ -42,7 +42,10 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
 
   useEffect(() => {
     loadProspects()
-    const interval = setInterval(loadProspects, 15000) // Refresh every 15 seconds
+    // Debounced refresh every 30 seconds (increased from 15s to prevent loops)
+    const interval = setInterval(() => {
+      loadProspects()
+    }, 30000)
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skip, emailsOnly])

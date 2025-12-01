@@ -194,10 +194,15 @@ async def list_prospects(
     
     Returns: {success: bool, data: [], error: null | string}
     """
-    # Initialize response structure
+    # Initialize response structure - data MUST be a dict, never an array
     response_data = {
         "success": False,
-        "data": [],
+        "data": {
+            "prospects": [],
+            "total": 0,
+            "skip": skip,
+            "limit": limit
+        },
         "error": None
     }
     
@@ -215,6 +220,7 @@ async def list_prospects(
         except (ValueError, TypeError) as e:
             logger.error(f"🔴 Error parsing skip/limit: {e}")
             response_data["error"] = f"Invalid pagination parameters: {str(e)}"
+            response_data["data"] = {"prospects": [], "total": 0, "skip": 0, "limit": 50}
             return response_data
         
         # Parse has_email as boolean (strict string check)
@@ -253,6 +259,7 @@ async def list_prospects(
         except Exception as e:
             logger.error(f"🔴 Error building query filters: {e}", exc_info=True)
             response_data["error"] = f"Error building query: {str(e)}"
+            response_data["data"] = {"prospects": [], "total": 0, "skip": skip, "limit": limit}
             return response_data
         
         logger.info(f"🔍 Query filters applied successfully")
@@ -282,6 +289,7 @@ async def list_prospects(
                 response_data["error"] = "Database schema mismatch: 'discovery_query_id' column missing. Migration needs to be applied."
             else:
                 response_data["error"] = f"Database error during count query: {str(count_err)}"
+            response_data["data"] = {"prospects": [], "total": 0, "skip": skip, "limit": limit}
             return response_data
         
         # Get paginated results
@@ -293,6 +301,7 @@ async def list_prospects(
         except Exception as e:
             logger.error(f"🔴 Error building paginated query: {e}", exc_info=True)
             response_data["error"] = f"Error building paginated query: {str(e)}"
+            response_data["data"] = {"prospects": [], "total": total, "skip": skip, "limit": limit}
             return response_data
         
         # Execute main query
@@ -309,6 +318,7 @@ async def list_prospects(
                 response_data["error"] = "Database schema mismatch: 'discovery_query_id' column missing. Migration needs to be applied."
             else:
                 response_data["error"] = f"Database error: {str(db_err)}"
+            response_data["data"] = {"prospects": [], "total": total, "skip": skip, "limit": limit}
             return response_data
         
         # Convert to response models
@@ -346,6 +356,7 @@ async def list_prospects(
         import traceback
         logger.error(f"🔴 Full traceback: {traceback.format_exc()}")
         response_data["error"] = f"Internal server error: {str(err)}"
+        response_data["data"] = {"prospects": [], "total": 0, "skip": skip, "limit": limit}
         return response_data
 
 
