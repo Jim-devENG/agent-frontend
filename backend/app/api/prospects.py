@@ -59,6 +59,67 @@ def get_queue(name: str):
     return _queues.get(name)
 
 
+@router.post("/enrich/direct")
+async def enrich_direct(
+    domain: str,
+    name: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Direct enrichment endpoint - takes domain + name, returns email
+    
+    Args:
+        domain: Domain name (e.g., "example.com")
+        name: Optional contact name
+        
+    Returns:
+        { email: str, confidence: float, source: str } or error
+    """
+    import time
+    start_time = time.time()
+    
+    logger.info(f"🔍 [ENRICHMENT API] Direct enrichment request - domain: {domain}, name: {name}")
+    logger.info(f"📥 [ENRICHMENT API] Input - domain: {domain}, name: {name}")
+    
+    try:
+        from app.services.enrichment import enrich_prospect_email
+        
+        result = await enrich_prospect_email(domain, name)
+        
+        if not result:
+            api_time = (time.time() - start_time) * 1000
+            logger.warning(f"⚠️  [ENRICHMENT API] No email found for {domain} after {api_time:.0f}ms")
+            return {
+                "success": False,
+                "error": f"No email found for domain {domain}",
+                "domain": domain
+            }
+        
+        api_time = (time.time() - start_time) * 1000
+        logger.info(f"✅ [ENRICHMENT API] Enrichment completed in {api_time:.0f}ms")
+        logger.info(f"📤 [ENRICHMENT API] Output - {result}")
+        
+        return {
+            "success": True,
+            "email": result["email"],
+            "confidence": result["confidence"],
+            "source": result["source"],
+            "domain": domain
+        }
+        
+    except Exception as e:
+        api_time = (time.time() - start_time) * 1000
+        error_msg = f"Enrichment failed after {api_time:.0f}ms: {str(e)}"
+        logger.error(f"❌ [ENRICHMENT API] {error_msg}", exc_info=True)
+        import traceback
+        return {
+            "success": False,
+            "error": error_msg,
+            "stack_trace": traceback.format_exc(),
+            "domain": domain
+        }
+
+
 @router.post("/enrich")
 async def create_enrichment_job(
     prospect_ids: Optional[List[UUID]] = None,

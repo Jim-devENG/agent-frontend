@@ -153,7 +153,7 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
         all_prospects = []
         discovered_domains = set()
         
-        # Detailed tracking
+        # Detailed tracking with comprehensive logging
         search_stats = {
             "total_queries": 0,
             "queries_executed": 0,
@@ -163,9 +163,13 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
             "results_processed": 0,
             "results_skipped_duplicate": 0,
             "results_skipped_existing": 0,
+            "results_skipped_no_email": 0,  # Track prospects skipped due to no email
             "results_saved": 0,
             "queries_detail": []
         }
+        
+        logger.info(f"🚀 [DISCOVERY] Starting job {job_id}")
+        logger.info(f"📋 [DISCOVERY] Inputs - keywords: '{keywords}', locations: {locations}, categories: {categories}, max_results: {max_results}")
         
         try:
             for loc in locations:
@@ -356,37 +360,52 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                             title = result_item.get("title") or ""
                             title = title[:500] if title else ""
                             
-                            # OPTIONAL: Try to extract email immediately using Hunter.io
-                            # This is optional - if it fails, enrichment job will handle it later
+                            # MANDATORY: Enrich email before saving prospect
+                            # Discovery MUST NOT save prospects without emails
+                            from app.services.enrichment import enrich_prospect_email
+                            
+                            enrich_result = None
                             contact_email = None
                             hunter_payload = None
                             
                             try:
-                                from app.clients.hunter import HunterIOClient
-                                hunter_client = HunterIOClient()
-                                hunter_result = await hunter_client.domain_search(domain)
+                                logger.info(f"🔍 [DISCOVERY] Enriching {domain} before saving...")
+                                enrich_result = await enrich_prospect_email(domain)
                                 
-                                if hunter_result.get("success") and hunter_result.get("emails"):
-                                    emails = hunter_result["emails"]
-                                    if emails and len(emails) > 0:
-                                        first_email = emails[0]
-                                        email_value = first_email.get("value")
-                                        if email_value:
-                                            contact_email = email_value
-                                            hunter_payload = hunter_result
-                                            logger.info(f"📧 Found email during discovery for {domain}: {email_value}")
+                                if enrich_result and enrich_result.get("email"):
+                                    contact_email = enrich_result["email"]
+                                    # Store enrichment metadata
+                                    hunter_payload = {
+                                        "email": contact_email,
+                                        "confidence": enrich_result.get("confidence", 0),
+                                        "source": enrich_result.get("source", "hunter_io")
+                                    }
+                                    logger.info(f"✅ [DISCOVERY] Enriched {domain}: {contact_email}")
+                                else:
+                                    logger.warning(f"⚠️  [DISCOVERY] No email found for {domain} during enrichment")
+                                    
                             except Exception as e:
-                                # Don't fail discovery if Hunter.io fails - enrichment will handle it
-                                logger.debug(f"⚠️  Could not extract email during discovery for {domain}: {e}")
+                                logger.error(f"❌ [DISCOVERY] Enrichment failed for {domain}: {e}", exc_info=True)
+                                # Continue to skip logic below
                             
+                            # MANDATORY RULE: Do not save prospect without email
+                            if not contact_email:
+                                logger.warning(f"⏭️  [DISCOVERY] Skipping {domain} - no email found during enrichment")
+                                search_stats["results_skipped_no_email"] = search_stats.get("results_skipped_no_email", 0) + 1
+                                discovery_query.results_skipped_duplicate += 1  # Track as skipped
+                                continue  # Skip this prospect - do not save
+                            
+                            # Only save if we have an email
+                            logger.info(f"💾 [DISCOVERY] Saving prospect {domain} with email {contact_email}")
                             prospect = Prospect(
                                 domain=domain,
                                 page_url=normalized_url,
                                 page_title=title,
-                                contact_email=contact_email,  # May be None, enrichment will fix
+                                contact_email=contact_email,  # REQUIRED - we skip if None
+                                contact_method="hunter_io",
                                 outreach_status="pending",
-                                discovery_query_id=discovery_query.id,  # Link to discovery query
-                                hunter_payload=hunter_payload,  # May be None
+                                discovery_query_id=discovery_query.id,
+                                hunter_payload=hunter_payload,
                                 dataforseo_payload={
                                     "description": description,
                                     "location": loc,
@@ -451,48 +470,40 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                     "results_processed": search_stats["results_processed"],
                     "results_saved": search_stats["results_saved"],
                     "results_skipped_duplicate": search_stats["results_skipped_duplicate"],
-                    "results_skipped_existing": search_stats["results_skipped_existing"]
+                    "results_skipped_existing": search_stats["results_skipped_existing"],
+                    "results_skipped_no_email": search_stats.get("results_skipped_no_email", 0)
                 },
                 "queries_detail": search_stats["queries_detail"][:20]  # Limit to first 20 for size
             }
             await db.commit()
             
-            logger.info(f"✅ Discovery job {job_id} completed:")
-            logger.info(f"   📊 Queries: {search_stats['queries_executed']} executed, {search_stats['queries_successful']} successful, {search_stats['queries_failed']} failed")
-            logger.info(f"   🔍 Results: {search_stats['total_results_found']} found, {search_stats['results_saved']} saved")
-            logger.info(f"   ⏭️  Skipped: {search_stats['results_skipped_duplicate']} duplicates, {search_stats['results_skipped_existing']} existing")
+            # Calculate total execution time
+            total_time = (datetime.now(timezone.utc) - start_time).total_seconds()
             
-            # Auto-trigger enrichment if prospects were discovered
-            if len(all_prospects) > 0:
-                try:
-                    from app.tasks.enrichment import process_enrichment_job
-                    import asyncio
-                    
-                    # Create enrichment job
-                    enrichment_job = Job(
-                        job_type="enrich",
-                        params={
-                            "prospect_ids": None,  # Enrich all newly discovered
-                            "max_prospects": len(all_prospects)
-                        },
-                        status="pending"
-                    )
-                    db.add(enrichment_job)
-                    await db.commit()
-                    await db.refresh(enrichment_job)
-                    
-                    # Start enrichment in background
-                    asyncio.create_task(process_enrichment_job(str(enrichment_job.id)))
-                    logger.info(f"🔄 Auto-triggered enrichment job {enrichment_job.id} for {len(all_prospects)} prospects")
-                except Exception as e:
-                    logger.warning(f"⚠️  Failed to auto-trigger enrichment: {e}")
-                    # Don't fail discovery job if enrichment trigger fails
+            logger.info(f"✅ [DISCOVERY] Job {job_id} completed in {total_time:.1f}s")
+            logger.info(f"📊 [DISCOVERY] Output - Queries: {search_stats['queries_executed']} executed, {search_stats['queries_successful']} successful, {search_stats['queries_failed']} failed")
+            logger.info(f"🔍 [DISCOVERY] Output - Results: {search_stats['total_results_found']} found, {search_stats['results_saved']} saved")
+            logger.info(f"⏭️  [DISCOVERY] Output - Skipped: {search_stats['results_skipped_duplicate']} duplicates, {search_stats['results_skipped_existing']} existing, {search_stats.get('results_skipped_no_email', 0)} no email")
+            
+            # NOTE: No need to auto-trigger enrichment since we enrich during discovery
+            # All saved prospects already have emails
             
             return {
                 "job_id": job_id,
                 "status": "completed",
                 "prospects_discovered": len(all_prospects),
-                "search_statistics": job.result["search_statistics"]
+                "search_statistics": {
+                    "total_queries": search_stats["total_queries"],
+                    "queries_executed": search_stats["queries_executed"],
+                    "queries_successful": search_stats["queries_successful"],
+                    "queries_failed": search_stats["queries_failed"],
+                    "total_results_found": search_stats["total_results_found"],
+                    "results_processed": search_stats["results_processed"],
+                    "results_saved": search_stats["results_saved"],
+                    "results_skipped_duplicate": search_stats["results_skipped_duplicate"],
+                    "results_skipped_existing": search_stats["results_skipped_existing"],
+                    "results_skipped_no_email": search_stats.get("results_skipped_no_email", 0)
+                }
             }
         
         except Exception as e:

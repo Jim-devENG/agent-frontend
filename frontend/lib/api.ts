@@ -14,8 +14,10 @@ function getAuthToken(): string | null {
 /**
  * Authenticated fetch wrapper with robust error handling and SSL support
  * Handles network errors, SSL issues, and undefined responses gracefully
+ * ALWAYS throws meaningful errors with stack traces
  */
 async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const startTime = Date.now()
   const token = getAuthToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -25,53 +27,90 @@ async function authenticatedFetch(url: string, options: RequestInit = {}): Promi
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
-  // Note: No console warning if token is missing - auth is optional for some endpoints
   
   try {
+    console.log(`📤 [FETCH] ${options.method || 'GET'} ${url}`)
+    console.log(`📥 [FETCH] Input - headers: ${JSON.stringify(Object.keys(headers))}, hasBody: ${!!options.body}`)
+    
     // Attempt fetch with error handling
     const response = await fetch(url, {
       ...options,
       headers,
-      // Add credentials for CORS if needed (but don't require SSL verification in browser)
-      credentials: 'omit', // Browser handles SSL automatically, but we don't send cookies
+      credentials: 'omit',
     })
+    
+    const fetchTime = Date.now() - startTime
+    console.log(`⏱️  [FETCH] Response received in ${fetchTime}ms - status: ${response.status}`)
     
     // If unauthorized, redirect to login (only if auth was actually required)
     if (response.status === 401) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('auth_token')
-        // Only redirect if we actually sent a token (meaning auth was expected)
         if (token) {
           window.location.href = '/login'
         }
       }
-      throw new Error('Unauthorized')
+      const error = new Error(`Unauthorized: ${url}`)
+      console.error(`❌ [FETCH] Unauthorized: ${url}`)
+      throw error
     }
     
+    if (!response.ok) {
+      // Try to get error details from response
+      let errorDetail = `HTTP ${response.status}: ${response.statusText}`
+      try {
+        const errorData = await response.clone().json().catch(() => null)
+        if (errorData) {
+          errorDetail = errorData.error || errorData.detail || errorData.message || errorDetail
+        }
+      } catch {
+        // If JSON parsing fails, use status text
+      }
+      
+      const error = new Error(`Fetch failed: ${errorDetail}`)
+      console.error(`❌ [FETCH] Request failed: ${url}`, {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorDetail,
+        stack: new Error().stack
+      })
+      throw error
+    }
+    
+    console.log(`✅ [FETCH] Success: ${url}`)
     return response
   } catch (error: any) {
-    // Handle network errors, SSL errors, and other fetch failures
+    const fetchTime = Date.now() - startTime
     const errorMessage = error?.message || String(error)
+    const errorStack = error?.stack || new Error().stack
     
-    // Log clear error message for debugging
+    // Create meaningful error with full context
+    const enhancedError = new Error(`Fetch error for ${url}: ${errorMessage}`)
+    enhancedError.stack = errorStack
+    
+    // Log with full context
     if (errorMessage.includes('Failed to fetch') || 
         errorMessage.includes('NetworkError') ||
         errorMessage.includes('ERR_CONNECTION_REFUSED') ||
         errorMessage.includes('ERR_SSL')) {
-      console.error('❌ Network/SSL Error:', {
+      console.error(`❌ [FETCH] Network/SSL Error after ${fetchTime}ms:`, {
         url,
+        method: options.method || 'GET',
         error: errorMessage,
-        message: 'Backend may be unreachable or SSL certificate issue. App will continue running.',
+        stack: errorStack,
+        message: 'Backend may be unreachable or SSL certificate issue.'
       })
     } else {
-      console.error('❌ Fetch Error:', {
+      console.error(`❌ [FETCH] Error after ${fetchTime}ms:`, {
         url,
+        method: options.method || 'GET',
         error: errorMessage,
+        stack: errorStack
       })
     }
     
-    // Re-throw to allow caller to handle, but app won't crash
-    throw error
+    // Re-throw enhanced error with stack trace
+    throw enhancedError
   }
 }
 
@@ -353,6 +392,60 @@ export async function getJobStatus(jobId: string): Promise<Job> {
     throw new Error(error.detail || 'Failed to get job status')
   }
   return res.json()
+}
+
+export async function enrichEmail(domain: string, name?: string): Promise<EnrichmentResult> {
+  const token = getAuthToken()
+  if (!token) {
+    throw new Error('Authentication required. Please log in first.')
+  }
+  
+  try {
+    const res = await authenticatedFetch(`${API_BASE}/prospects/enrich/direct?domain=${encodeURIComponent(domain)}${name ? `&name=${encodeURIComponent(name)}` : ''}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Failed to enrich email' }))
+      throw new Error(error.detail || error.error || 'Failed to enrich email')
+    }
+    
+    const data = await res.json()
+    return data
+  } catch (error: any) {
+    console.error('❌ Error enriching email:', error)
+    throw new Error(`Enrichment failed: ${error.message}`)
+  }
+}
+
+export async function cancelJob(jobId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  const token = getAuthToken()
+  if (!token) {
+    throw new Error('Authentication required. Please log in first.')
+  }
+  
+  try {
+    const res = await authenticatedFetch(`${API_BASE}/jobs/${jobId}/cancel`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Failed to cancel job' }))
+      throw new Error(error.detail || error.error || 'Failed to cancel job')
+    }
+    
+    const data = await res.json()
+    return data
+  } catch (error: any) {
+    console.error('❌ Error cancelling job:', error)
+    throw error
+  }
 }
 
 export async function listJobs(skip = 0, limit = 50): Promise<Job[]> {

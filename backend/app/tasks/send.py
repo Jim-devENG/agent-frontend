@@ -44,13 +44,18 @@ async def process_send_job(job_id: str) -> Dict[str, Any]:
             await db.commit()
             await db.refresh(job)
             
-            logger.info(f"📧 Starting send job {job_id}...")
+            import time
+            send_start_time = time.time()
+            
+            logger.info(f"📧 [SEND] Starting send job {job_id}...")
             
             # Get job parameters
             params = job.params or {}
             prospect_ids = params.get("prospect_ids")
             max_prospects = params.get("max_prospects", 100)
             auto_send = params.get("auto_send", False)
+            
+            logger.info(f"📥 [SEND] Input - prospect_ids: {prospect_ids}, max_prospects: {max_prospects}, auto_send: {auto_send}")
             
             # Build query for prospects with emails that haven't been sent
             query = select(Prospect).where(
@@ -107,9 +112,13 @@ async def process_send_job(job_id: str) -> Dict[str, Any]:
             failed_count = 0
             skipped_count = 0
             
-            # Send to each prospect
+            # Send to each prospect with comprehensive logging
             for idx, prospect in enumerate(prospects, 1):
+                prospect_start_time = time.time()
                 try:
+                    logger.info(f"📧 [SEND] [{idx}/{len(prospects)}] Processing {prospect.domain} ({prospect.contact_email})")
+                    logger.info(f"📥 [SEND] Input - prospect_id: {prospect.id}, email: {prospect.contact_email}, has_draft: {bool(prospect.draft_subject and prospect.draft_body)}")
+                    
                     # Get or compose email
                     subject = prospect.draft_subject
                     body = prospect.draft_body
@@ -159,12 +168,21 @@ async def process_send_job(job_id: str) -> Dict[str, Any]:
                         continue
                     
                     # Send email
-                    logger.info(f"📧 [{idx}/{len(prospects)}] Sending email to {prospect.contact_email}...")
-                    send_result = await gmail_client.send_email(
-                        to_email=prospect.contact_email,
-                        subject=subject,
-                        body=body
-                    )
+                    send_start = time.time()
+                    logger.info(f"📧 [SEND] [{idx}/{len(prospects)}] Sending email to {prospect.contact_email}...")
+                    
+                    try:
+                        send_result = await gmail_client.send_email(
+                            to_email=prospect.contact_email,
+                            subject=subject,
+                            body=body
+                        )
+                        send_time = (time.time() - send_start) * 1000
+                        logger.info(f"⏱️  [SEND] Gmail API call completed in {send_time:.0f}ms")
+                    except Exception as send_err:
+                        send_time = (time.time() - send_start) * 1000
+                        logger.error(f"❌ [SEND] Gmail API call failed after {send_time:.0f}ms: {send_err}", exc_info=True)
+                        send_result = {"success": False, "error": str(send_err)}
                     
                     if send_result.get("success"):
                         # Create email log
@@ -180,10 +198,15 @@ async def process_send_job(job_id: str) -> Dict[str, Any]:
                         prospect.outreach_status = "sent"
                         prospect.last_sent = datetime.now(timezone.utc)
                         sent_count += 1
-                        logger.info(f"✅ [{idx}/{len(prospects)}] Email sent to {prospect.contact_email}")
+                        
+                        total_time = (time.time() - prospect_start_time) * 1000
+                        logger.info(f"✅ [SEND] [{idx}/{len(prospects)}] Email sent to {prospect.contact_email} in {total_time:.0f}ms")
+                        logger.info(f"📤 [SEND] Output - status: sent, message_id: {send_result.get('message_id', 'N/A')}")
                     else:
                         error_msg = send_result.get('error', 'Unknown error')
-                        logger.error(f"❌ [{idx}/{len(prospects)}] Failed to send email to {prospect.contact_email}: {error_msg}")
+                        total_time = (time.time() - prospect_start_time) * 1000
+                        logger.error(f"❌ [SEND] [{idx}/{len(prospects)}] Failed to send email to {prospect.contact_email} after {total_time:.0f}ms: {error_msg}")
+                        logger.error(f"📤 [SEND] Output - error: {error_msg}")
                         failed_count += 1
                     
                     await db.commit()
@@ -193,7 +216,9 @@ async def process_send_job(job_id: str) -> Dict[str, Any]:
                     await asyncio.sleep(2)
                     
                 except Exception as e:
-                    logger.error(f"❌ [{idx}/{len(prospects)}] Error sending to {prospect.contact_email}: {e}", exc_info=True)
+                    total_time = (time.time() - prospect_start_time) * 1000
+                    logger.error(f"❌ [SEND] [{idx}/{len(prospects)}] Error sending to {prospect.contact_email} after {total_time:.0f}ms: {e}", exc_info=True)
+                    logger.error(f"📤 [SEND] Output - error: {str(e)}, stack_trace: {type(e).__name__}")
                     failed_count += 1
                     continue
             
@@ -207,8 +232,9 @@ async def process_send_job(job_id: str) -> Dict[str, Any]:
             }
             await db.commit()
             
-            logger.info(f"✅ Send job {job_id} completed:")
-            logger.info(f"   📊 Sent: {sent_count}, Failed: {failed_count}, Skipped: {skipped_count}")
+            total_time = (time.time() - send_start_time) / 60
+            logger.info(f"✅ [SEND] Job {job_id} completed in {total_time:.1f} minutes")
+            logger.info(f"📤 [SEND] Output - Sent: {sent_count}, Failed: {failed_count}, Skipped: {skipped_count}, Total: {len(prospects)}")
             
             return {
                 "job_id": job_id,

@@ -94,39 +94,62 @@ async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
             failed_count = 0
             no_email_count = 0
             
-            # Enrich each prospect
+            # Enrich each prospect with comprehensive logging
+            import time
+            enrichment_start_time = time.time()
+            
             for idx, prospect in enumerate(prospects, 1):
+                prospect_start_time = time.time()
                 try:
                     domain = prospect.domain
-                    logger.info(f"🔍 [{idx}/{len(prospects)}] Searching emails for {domain}...")
+                    prospect_id = str(prospect.id)
                     
-                    # Call Hunter.io
-                    hunter_result = await hunter_client.domain_search(domain)
+                    logger.info(f"🔍 [ENRICHMENT] [{idx}/{len(prospects)}] Starting enrichment for {domain} (id: {prospect_id})")
+                    logger.info(f"📥 [ENRICHMENT] Input - domain: {domain}, prospect_id: {prospect_id}")
                     
+                    # Call Hunter.io with error handling
+                    try:
+                        hunter_result = await hunter_client.domain_search(domain)
+                        hunter_time = (time.time() - prospect_start_time) * 1000
+                        logger.info(f"⏱️  [ENRICHMENT] Hunter.io API call completed in {hunter_time:.0f}ms")
+                    except Exception as hunter_err:
+                        hunter_time = (time.time() - prospect_start_time) * 1000
+                        logger.error(f"❌ [ENRICHMENT] Hunter.io API call failed after {hunter_time:.0f}ms: {hunter_err}", exc_info=True)
+                        hunter_result = {"success": False, "error": str(hunter_err), "domain": domain}
+                    
+                    # Process Hunter.io response
                     if hunter_result.get("success") and hunter_result.get("emails"):
                         emails = hunter_result["emails"]
                         if emails and len(emails) > 0:
-                            # Get first email (best match)
-                            first_email = emails[0]
-                            email_value = first_email.get("value")
+                            # Get best email (highest confidence)
+                            best_email = None
+                            best_confidence = 0
+                            for email_data in emails:
+                                confidence = email_data.get("confidence_score", 0)
+                                if confidence > best_confidence:
+                                    best_confidence = confidence
+                                    best_email = email_data
                             
-                            if email_value:
+                            if best_email and best_email.get("value"):
+                                email_value = best_email["value"]
                                 prospect.contact_email = email_value
-                                prospect.contact_method = "email"
+                                prospect.contact_method = "hunter_io"
                                 prospect.hunter_payload = hunter_result
                                 enriched_count += 1
-                                logger.info(f"✅ [{idx}/{len(prospects)}] Found email for {domain}: {email_value}")
+                                total_time = (time.time() - prospect_start_time) * 1000
+                                logger.info(f"✅ [ENRICHMENT] [{idx}/{len(prospects)}] Enriched {domain} in {total_time:.0f}ms")
+                                logger.info(f"📤 [ENRICHMENT] Output - email: {email_value}, confidence: {best_confidence}, source: hunter_io")
                             else:
-                                logger.warning(f"⚠️  [{idx}/{len(prospects)}] Email object missing 'value' for {domain}")
+                                logger.warning(f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] Email object missing 'value' for {domain}")
                                 prospect.hunter_payload = hunter_result
                                 no_email_count += 1
                         else:
-                            logger.info(f"⚠️  [{idx}/{len(prospects)}] No emails in response for {domain}")
+                            logger.info(f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] No emails in response for {domain}")
                             prospect.hunter_payload = hunter_result
                             no_email_count += 1
                     else:
                         error_msg = hunter_result.get('error', 'Unknown error')
-                        logger.warning(f"❌ [{idx}/{len(prospects)}] Hunter.io failed for {domain}: {error_msg}")
+                        logger.warning(f"❌ [ENRICHMENT] [{idx}/{len(prospects)}] Hunter.io failed for {domain}: {error_msg}")
                         prospect.hunter_payload = hunter_result
                         failed_count += 1
                     
@@ -137,9 +160,14 @@ async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
                     await asyncio.sleep(1)
                     
                 except Exception as e:
-                    logger.error(f"❌ [{idx}/{len(prospects)}] Error enriching {prospect.domain}: {e}", exc_info=True)
+                    total_time = (time.time() - prospect_start_time) * 1000
+                    logger.error(f"❌ [ENRICHMENT] [{idx}/{len(prospects)}] Error enriching {prospect.domain} after {total_time:.0f}ms: {e}", exc_info=True)
+                    logger.error(f"📤 [ENRICHMENT] Output - error: {str(e)}, stack_trace: {type(e).__name__}")
                     failed_count += 1
                     continue
+            
+            total_enrichment_time = (time.time() - enrichment_start_time) * 1000
+            logger.info(f"⏱️  [ENRICHMENT] Total enrichment time: {total_enrichment_time:.0f}ms")
             
             # Update job status
             job.status = "completed"
