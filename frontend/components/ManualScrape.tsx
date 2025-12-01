@@ -69,10 +69,16 @@ export default function ManualScrape() {
     return hasSearchCriteria && hasLocation && hasMaxResults
   }
 
+  /**
+   * Handle manual scraping with robust error handling and validation
+   * Ensures authentication, validates input, and handles all error cases gracefully
+   */
   const handleScrape = async () => {
+    // Reset state
     setError(null)
     setSuccess(false)
 
+    // Validate input before making request
     if (!canStart()) {
       if (!keywords.trim() && selectedCategories.length === 0) {
         setError('Please select at least one category OR enter keywords to search.')
@@ -84,21 +90,91 @@ export default function ManualScrape() {
       return
     }
 
+    // Check for authentication token before proceeding
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    if (!token) {
+      setError('Authentication required. Please log in first.')
+      // Optionally redirect to login
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 2000)
+      }
+      return
+    }
+
     setLoading(true)
+    
     try {
-      await createDiscoveryJob(
+      console.log('🚀 Starting manual scrape:', {
+        keywords: keywords.trim() || '(none)',
+        locations: selectedLocations.length,
+        categories: selectedCategories.length,
+        maxResults
+      })
+      
+      // Call API with validated parameters
+      const result = await createDiscoveryJob(
         keywords.trim(),
-        selectedLocations,
-        maxResults,
-        selectedCategories
+        selectedLocations, // Already validated as non-empty array
+        maxResults, // Already validated as > 0
+        selectedCategories // Already validated (either this or keywords exists)
       )
+      
+      // Validate response - ensure we got a valid job object
+      if (!result || typeof result !== 'object') {
+        throw new Error('Invalid response from server: expected job object')
+      }
+      
+      // Check if result has required fields (id or job_id)
+      const jobId = result.id || (result as any).job_id
+      if (!jobId) {
+        console.warn('⚠️ Manual scrape: Response missing job ID:', result)
+        // Still show success if status indicates job was created
+        if (result.status === 'pending' || result.status === 'running') {
+          setSuccess(true)
+          setKeywords('')
+          setSelectedCategories([])
+          return
+        }
+        throw new Error('Server response missing job ID')
+      }
+      
+      console.log('✅ Manual scrape job created successfully:', jobId)
+      
+      // Success - clear form and show message
       setSuccess(true)
       setKeywords('') // Clear keywords after successful job creation
       setSelectedCategories([]) // Clear categories after successful job creation
       // Keep locations selected as they are often reused
+      
     } catch (err: any) {
-      console.error('Manual scrape error:', err)
-      setError(err.message || 'Failed to start manual scraping. Check console for details.')
+      // Enhanced error handling with specific error messages
+      const errorMessage = err?.message || String(err) || 'Failed to start manual scraping'
+      
+      console.error('❌ Manual scrape error:', {
+        message: errorMessage,
+        error: err,
+        stack: err?.stack
+      })
+      
+      // Set user-friendly error message
+      if (errorMessage.includes('Authentication') || errorMessage.includes('Unauthorized')) {
+        setError('Authentication required. Please log in and try again.')
+        // Redirect to login after showing error
+        if (typeof window !== 'undefined') {
+          setTimeout(() => {
+            window.location.href = '/login'
+          }, 2000)
+        }
+      } else if (errorMessage.includes('already running')) {
+        setError('A discovery job is already running. Please wait for it to complete or cancel it first.')
+      } else if (errorMessage.includes('Network') || errorMessage.includes('Failed to fetch')) {
+        setError('Network error: Unable to connect to server. Please check your connection and try again.')
+      } else {
+        // Use the error message from the API or a generic one
+        setError(errorMessage || 'Failed to start manual scraping. Please check the console for details.')
+      }
     } finally {
       setLoading(false)
     }

@@ -124,43 +124,150 @@ export interface ProspectListResponse {
 }
 
 // Jobs API
+/**
+ * Create a discovery job with robust error handling and authentication
+ * 
+ * @param keywords - Search keywords (optional if categories provided)
+ * @param locations - Array of location codes/names (required)
+ * @param maxResults - Maximum number of results (default: 100)
+ * @param categories - Array of category names (optional if keywords provided)
+ * @returns Promise resolving to job object or throws error
+ * 
+ * REQUIRES AUTHENTICATION: Valid JWT token must be present in localStorage
+ */
 export async function createDiscoveryJob(
   keywords: string,
   locations?: string[],
   maxResults?: number,
   categories?: string[]
 ): Promise<Job> {
+  // Check for authentication token before making request
+  const token = getAuthToken()
+  if (!token) {
+    const errorMsg = 'Authentication required. Please log in first.'
+    console.error('❌ createDiscoveryJob: No auth token found:', errorMsg)
+    throw new Error(errorMsg)
+  }
+  
+  // Validate required parameters
+  if (!locations || !Array.isArray(locations) || locations.length === 0) {
+    const errorMsg = 'At least one location is required'
+    console.error('❌ createDiscoveryJob: Missing locations:', errorMsg)
+    throw new Error(errorMsg)
+  }
+  
+  if (!keywords?.trim() && (!categories || !Array.isArray(categories) || categories.length === 0)) {
+    const errorMsg = 'Either keywords or at least one category is required'
+    console.error('❌ createDiscoveryJob: Missing search criteria:', errorMsg)
+    throw new Error(errorMsg)
+  }
+  
   // Add cache-busting timestamp to ensure fresh requests
   const timestamp = Date.now()
   const url = `${API_BASE}/jobs/discover?_t=${timestamp}`
   
-  const res = await authenticatedFetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache',
-    },
-    body: JSON.stringify({
-      keywords: keywords || '',
-      locations: locations || [],
-      max_results: maxResults || 100,
-      categories: categories || [],
-    }),
-  })
-  
-  if (!res.ok) {
-    let errorDetail = 'Failed to create discovery job'
-    try {
-      const errorData = await res.json()
-      errorDetail = errorData.detail || errorData.message || errorDetail
-    } catch {
-      // If JSON parsing fails, use status text
-      errorDetail = res.statusText || errorDetail
-    }
-    throw new Error(errorDetail)
+  // Prepare request payload
+  const payload = {
+    keywords: keywords?.trim() || '',
+    locations: Array.isArray(locations) ? locations : [],
+    max_results: maxResults && maxResults > 0 ? maxResults : 100,
+    categories: Array.isArray(categories) ? categories : [],
   }
   
-  return res.json()
+  try {
+    console.log('📤 Creating discovery job:', { 
+      keywords: payload.keywords || '(none)', 
+      locations: payload.locations.length, 
+      categories: payload.categories.length,
+      maxResults: payload.max_results 
+    })
+    
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+      },
+      body: JSON.stringify(payload),
+    })
+    
+    // Parse response - handle both success and error cases
+    let responseData: any
+    try {
+      responseData = await res.json()
+    } catch (parseError) {
+      console.error('❌ createDiscoveryJob: Failed to parse JSON response:', parseError)
+      throw new Error(`Invalid response from server (HTTP ${res.status}): ${res.statusText}`)
+    }
+    
+    // Handle structured error responses from backend
+    if (!res.ok || (responseData && responseData.success === false)) {
+      const errorDetail = responseData?.error || responseData?.detail || responseData?.message || `HTTP ${res.status}: ${res.statusText}`
+      const statusCode = responseData?.status_code || res.status
+      
+      console.error('❌ createDiscoveryJob: Request failed:', {
+        status: statusCode,
+        error: errorDetail,
+        response: responseData
+      })
+      
+      throw new Error(errorDetail)
+    }
+    
+    // Handle success response - extract job from structured response
+    if (responseData && responseData.success === true) {
+      // Backend returns structured response: { success: true, job_id, job, ... }
+      const job = responseData.job || {
+        id: responseData.job_id,
+        job_type: 'discover',
+        status: responseData.status || 'pending',
+        params: payload,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      
+      console.log('✅ Discovery job created successfully:', {
+        job_id: job.id || responseData.job_id,
+        status: job.status || responseData.status
+      })
+      
+      return job
+    }
+    
+    // Fallback: if response doesn't have success field, assume it's the job object directly
+    if (responseData && responseData.id) {
+      console.log('✅ Discovery job created (legacy format):', responseData.id)
+      return responseData
+    }
+    
+    // If we get here, response format is unexpected
+    console.warn('⚠️ createDiscoveryJob: Unexpected response format:', responseData)
+    throw new Error('Unexpected response format from server')
+    
+  } catch (error: any) {
+    // Enhanced error logging with context
+    const errorMessage = error?.message || String(error)
+    
+    // Check for specific error types
+    if (errorMessage.includes('Authentication required') || errorMessage.includes('Unauthorized')) {
+      console.error('❌ createDiscoveryJob: Authentication error - redirecting to login')
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token')
+        window.location.href = '/login'
+      }
+    } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+      console.error('❌ createDiscoveryJob: Network error - backend may be unreachable')
+    } else {
+      console.error('❌ createDiscoveryJob: Error details:', {
+        message: errorMessage,
+        error: error,
+        stack: error?.stack
+      })
+    }
+    
+    // Re-throw with clear message
+    throw new Error(errorMessage)
+  }
 }
 
 export async function createEnrichmentJob(

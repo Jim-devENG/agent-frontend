@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy import inspect as sqlalchemy_inspect
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 import redis
 from rq import Queue
@@ -18,6 +18,7 @@ from app.db.database import get_db
 logger = logging.getLogger(__name__)
 from app.models.job import Job
 from app.schemas.job import JobCreateRequest, JobResponse, JobStatusResponse
+from app.api.auth import get_current_user  # Import auth dependency
 
 load_dotenv()
 
@@ -77,10 +78,11 @@ def job_to_response(job: Job) -> JobResponse:
     )
 
 
-@router.post("/discover", response_model=JobResponse)
+@router.post("/discover")
 async def create_discovery_job(
     request: JobCreateRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)  # REQUIRE AUTHENTICATION
 ):
     """
     Create a new website discovery job
@@ -89,103 +91,192 @@ async def create_discovery_job(
     1. Create a job record in the database
     2. Queue a background task to discover websites
     3. Return the job ID for status tracking
+    
+    REQUIRES AUTHENTICATION: Valid JWT token must be provided in Authorization header
     """
-    # Validate: require either keywords or categories
-    if not request.keywords and not request.categories:
-        raise HTTPException(
-            status_code=400,
-            detail="Please enter keywords or select at least one category"
-        )
+    # Ensure we have a valid authenticated user
+    if not current_user:
+        logger.error("Discovery job creation attempted without authentication")
+        return {
+            "success": False,
+            "error": "Authentication required. Please provide a valid JWT token in the Authorization header.",
+            "status_code": 401
+        }
     
-    # Validate: require at least one location
-    if not request.locations or len(request.locations) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Please select at least one location"
-        )
-    
-    # Check if there's already a running discovery job
-    running_job = await db.execute(
-        select(Job).where(
-            Job.job_type == "discover",
-            Job.status == "running"
-        ).order_by(Job.created_at.desc())
-    )
-    existing_job = running_job.scalar_one_or_none()
-    if existing_job:
-        # Check if job has been running for more than 2 hours (likely stuck)
-        from datetime import datetime, timezone, timedelta
-        if existing_job.updated_at:
-            elapsed = datetime.now(timezone.utc) - existing_job.updated_at.replace(tzinfo=timezone.utc)
-            if elapsed > timedelta(hours=2):
-                logger.warning(f"Found stuck discovery job {existing_job.id}, marking as failed")
-                existing_job.status = "failed"
-                existing_job.error_message = "Job timed out after 2 hours"
-                await db.commit()
-            else:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"A discovery job is already running (ID: {existing_job.id}). Please wait for it to complete or cancel it first."
-                )
-    
-    # Create job record
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
-    job = Job(
-        job_type="discover",
-        params={
-            "keywords": request.keywords or "",
-            "locations": request.locations,
-            "max_results": request.max_results,
-            "categories": request.categories or []
-        },
-        status="pending"
-    )
-    
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-    
-    # Ensure updated_at is set (onupdate doesn't work well with async)
-    if not job.updated_at:
-        job.updated_at = now
-        await db.commit()
-        await db.refresh(job)
-    
-    # Process job directly in backend (free tier compatible - no separate worker needed)
     try:
-        from app.tasks.discovery import process_discovery_job
-        import asyncio
+        # Validate: require either keywords or categories
+        if not request.keywords and not request.categories:
+            logger.warning(f"Discovery job creation failed: Missing keywords or categories")
+            return {
+                "success": False,
+                "error": "Please enter keywords or select at least one category",
+                "status_code": 400
+            }
         
-        # Start background task to process job
-        # This runs asynchronously without blocking the API response
+        # Validate: require at least one location
+        if not request.locations or len(request.locations) == 0:
+            logger.warning(f"Discovery job creation failed: Missing locations")
+            return {
+                "success": False,
+                "error": "Please select at least one location",
+                "status_code": 400
+            }
+        
+        # Check if there's already a running discovery job
         try:
-            task = asyncio.create_task(process_discovery_job(str(job.id)))
-            logger.info(f"Discovery job {job.id} started in background (task_id: {id(task)})")
-        except Exception as task_error:
-            # Task creation failed - update job status immediately
-            logger.error(f"Failed to create background task for job {job.id}: {task_error}", exc_info=True)
-            job.status = "failed"
-            job.error_message = f"Failed to create background task: {task_error}"
+            running_job = await db.execute(
+                select(Job).where(
+                    Job.job_type == "discover",
+                    Job.status == "running"
+                ).order_by(Job.created_at.desc())
+            )
+            existing_job = running_job.scalar_one_or_none()
+            if existing_job:
+                # Check if job has been running for more than 2 hours (likely stuck)
+                from datetime import datetime, timezone, timedelta
+                if existing_job.updated_at:
+                    elapsed = datetime.now(timezone.utc) - existing_job.updated_at.replace(tzinfo=timezone.utc)
+                    if elapsed > timedelta(hours=2):
+                        logger.warning(f"Found stuck discovery job {existing_job.id}, marking as failed")
+                        existing_job.status = "failed"
+                        existing_job.error_message = "Job timed out after 2 hours"
+                        await db.commit()
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"A discovery job is already running (ID: {existing_job.id}). Please wait for it to complete or cancel it first.",
+                            "status_code": 409,
+                            "job_id": str(existing_job.id)
+                        }
+        except Exception as db_check_error:
+            logger.error(f"Error checking for existing jobs: {db_check_error}", exc_info=True)
+            # Continue - don't fail the request if we can't check for existing jobs
+        
+        # Create job record
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        try:
+            job = Job(
+                job_type="discover",
+                params={
+                    "keywords": request.keywords or "",
+                    "locations": request.locations,
+                    "max_results": request.max_results,
+                    "categories": request.categories or []
+                },
+                status="pending"
+            )
+            
+            db.add(job)
             await db.commit()
             await db.refresh(job)
-    except Exception as e:
-        logger.error(f"Failed to start discovery job {job.id}: {e}", exc_info=True)
-        job.status = "failed"
-        job.error_message = f"Failed to start job: {e}"
-        await db.commit()
-        await db.refresh(job)
+            
+            # Ensure updated_at is set (onupdate doesn't work well with async)
+            if not job.updated_at:
+                job.updated_at = now
+                await db.commit()
+                await db.refresh(job)
+        except Exception as job_creation_error:
+            logger.error(f"Error creating job record: {job_creation_error}", exc_info=True)
+            return {
+                "success": False,
+                "error": f"Failed to create job record: {str(job_creation_error)}",
+                "status_code": 500
+            }
+        
+        # Process job directly in backend (free tier compatible - no separate worker needed)
+        try:
+            from app.tasks.discovery import process_discovery_job
+            import asyncio
+            
+            # Start background task to process job
+            # This runs asynchronously without blocking the API response
+            try:
+                task = asyncio.create_task(process_discovery_job(str(job.id)))
+                logger.info(f"Discovery job {job.id} started in background (task_id: {id(task)})")
+            except Exception as task_error:
+                # Task creation failed - update job status immediately
+                logger.error(f"Failed to create background task for job {job.id}: {task_error}", exc_info=True)
+                job.status = "failed"
+                job.error_message = f"Failed to create background task: {task_error}"
+                await db.commit()
+                await db.refresh(job)
+                return {
+                    "success": False,
+                    "error": f"Failed to start background task: {str(task_error)}",
+                    "status_code": 500,
+                    "job_id": str(job.id)
+                }
+        except Exception as e:
+            logger.error(f"Failed to start discovery job {job.id}: {e}", exc_info=True)
+            job.status = "failed"
+            job.error_message = f"Failed to start job: {e}"
+            await db.commit()
+            await db.refresh(job)
+            return {
+                "success": False,
+                "error": f"Failed to start job: {str(e)}",
+                "status_code": 500,
+                "job_id": str(job.id)
+            }
+        
+        # Use helper function to avoid async SQLAlchemy attribute access issues
+        try:
+            job_response = job_to_response(job)
+            return {
+                "success": True,
+                "job_id": str(job.id),
+                "status": job.status,
+                "message": f"Discovery job {job.id} started successfully",
+                "job": {
+                    "id": str(job_response.id),
+                    "job_type": job_response.job_type,
+                    "status": job_response.status,
+                    "params": job_response.params,
+                    "created_at": job_response.created_at.isoformat() if job_response.created_at else None,
+                    "updated_at": job_response.updated_at.isoformat() if job_response.updated_at else None
+                }
+            }
+        except Exception as response_error:
+            logger.error(f"Error creating response for job {job.id}: {response_error}", exc_info=True)
+            # Return basic response even if serialization fails
+            return {
+                "success": True,
+                "job_id": str(job.id),
+                "status": "pending",
+                "message": f"Discovery job {job.id} started successfully"
+            }
     
-    # Use helper function to avoid async SQLAlchemy attribute access issues
-    return job_to_response(job)
+    except HTTPException:
+        # Re-raise HTTP exceptions (they're already properly formatted)
+        raise
+    except Exception as e:
+        # Catch any other unexpected errors and return structured JSON
+        logger.error(f"Unexpected error in create_discovery_job: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": f"Internal server error: {str(e)}",
+            "status_code": 500
+        }
 
 
 @router.get("/{job_id}/status", response_model=JobStatusResponse)
 async def get_job_status(
     job_id: UUID,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)  # REQUIRE AUTHENTICATION
 ):
-    """Get the status of a job"""
+    """
+    Get the status of a job
+    
+    REQUIRES AUTHENTICATION: Valid JWT token must be provided
+    """
+    if not current_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
+    
     result = await db.execute(select(Job).where(Job.id == job_id))
     job = result.scalar_one_or_none()
     
@@ -194,48 +285,114 @@ async def get_job_status(
     
     return JobStatusResponse(
         id=job.id,
+        job_type=job.job_type,
         status=job.status,
-        progress=job.params,  # Can include progress info
+        params=job.params,
         result=job.result,
-        error_message=job.error_message
+        error_message=job.error_message,
+        created_at=job.created_at,
+        updated_at=job.updated_at
     )
+
+
+@router.get("")
+async def list_jobs(
+    skip: int = 0,
+    limit: int = 50,
+    job_type: Optional[str] = None,
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)  # REQUIRE AUTHENTICATION
+):
+    """
+    List all jobs with optional filtering
+    
+    REQUIRES AUTHENTICATION: Valid JWT token must be provided
+    """
+    if not current_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
+    
+    query = select(Job)
+    if job_type:
+        query = query.where(Job.job_type == job_type)
+    if status:
+        query = query.where(Job.status == status)
+    
+    query = query.order_by(Job.created_at.desc()).offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    jobs = result.scalars().all()
+    
+    # Convert to response format safely
+    job_responses = []
+    for job in jobs:
+        try:
+            job_responses.append(job_to_response(job))
+        except Exception as e:
+            logger.warning(f"Error converting job {job.id} to response: {e}")
+            # Skip this job but continue with others
+    
+    return job_responses
+
+
+@router.post("/{job_id}/cancel")
+async def cancel_job(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)  # REQUIRE AUTHENTICATION
+):
+    """
+    Cancel a running or pending job
+    
+    REQUIRES AUTHENTICATION: Valid JWT token must be provided
+    """
+    if not current_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
+    
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.status in ["running", "pending"]:
+        job.status = "cancelled"
+        job.error_message = "Job cancelled by user"
+        from datetime import datetime, timezone
+        job.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(job)
+        logger.info(f"Job {job_id} cancelled by user.")
+        return {"message": f"Job {job_id} cancelled successfully.", "status": "cancelled"}
+    else:
+        raise HTTPException(status_code=400, detail=f"Job {job_id} cannot be cancelled as its status is '{job.status}'.")
 
 
 @router.post("/score", response_model=JobResponse)
 async def create_scoring_job(
     prospect_ids: Optional[List[UUID]] = None,
     max_prospects: int = 1000,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)  # REQUIRE AUTHENTICATION
 ):
     """
-    Create a new scoring job to calculate prospect scores
+    Create a scoring job (not yet implemented)
     
-    Query params:
-    - prospect_ids: Optional list of specific prospect IDs to score
-    - max_prospects: Maximum number of prospects to score (if no IDs specified)
+    REQUIRES AUTHENTICATION: Valid JWT token must be provided
     """
-    # Create job record
-    job = Job(
-        job_type="score",
-        params={
-            "prospect_ids": [str(pid) for pid in prospect_ids] if prospect_ids else None,
-            "max_prospects": max_prospects
-        },
-        status="pending"
-    )
+    if not current_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
     
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-    
-    # TODO: Implement scoring task in backend/app/tasks/scoring.py
-    # For now, mark as not implemented
-    logger.warning("Scoring task not yet implemented in backend")
-    job.status = "failed"
-    job.error_message = "Scoring task not yet implemented. This feature will be available soon."
-    await db.commit()
-    
-    return job_to_response(job)
+    raise HTTPException(status_code=501, detail="Scoring job not yet implemented in backend.")
 
 
 @router.post("/send", response_model=JobResponse)
@@ -243,16 +400,20 @@ async def create_send_job(
     prospect_ids: Optional[List[UUID]] = None,
     max_prospects: int = 100,
     auto_send: bool = False,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)  # REQUIRE AUTHENTICATION
 ):
     """
-    Create a new send job to send emails to prospects
+    Create a job to send emails to prospects
     
-    Query params:
-    - prospect_ids: Optional list of specific prospect IDs to send to
-    - max_prospects: Maximum number of prospects to send to (if no IDs specified)
-    - auto_send: Whether to send without review (uses drafts if available)
+    REQUIRES AUTHENTICATION: Valid JWT token must be provided
     """
+    if not current_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
+    
     # Create job record
     job = Job(
         job_type="send",
@@ -289,123 +450,37 @@ async def create_followup_job(
     days_since_sent: int = 7,
     max_followups: int = 3,
     max_prospects: int = 100,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)  # REQUIRE AUTHENTICATION
 ):
     """
-    Create a new follow-up job to send follow-up emails
+    Create a follow-up job (not yet implemented)
     
-    Query params:
-    - days_since_sent: Days since last email to send follow-up (default: 7)
-    - max_followups: Maximum number of follow-ups per prospect (default: 3)
-    - max_prospects: Maximum number of prospects to process (default: 100)
+    REQUIRES AUTHENTICATION: Valid JWT token must be provided
     """
-    # Create job record
-    job = Job(
-        job_type="followup",
-        params={
-            "days_since_sent": days_since_sent,
-            "max_followups": max_followups,
-            "max_prospects": max_prospects
-        },
-        status="pending"
-    )
+    if not current_user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
     
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-    
-    # TODO: Implement followup task in backend/app/tasks/followup.py
-    # For now, mark as not implemented
-    logger.warning("Followup task not yet implemented in backend")
-    job.status = "failed"
-    job.error_message = "Followup task not yet implemented. This feature will be available soon."
-    await db.commit()
-    
-    return job_to_response(job)
+    raise HTTPException(status_code=501, detail="Follow-up job not yet implemented in backend.")
 
 
 @router.post("/check-replies")
 async def check_replies(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)  # REQUIRE AUTHENTICATION
 ):
     """
-    Manually trigger a reply check job
+    Manually trigger a reply check job (not yet implemented)
     
-    This will check Gmail for replies to sent emails and update prospect statuses
+    REQUIRES AUTHENTICATION: Valid JWT token must be provided
     """
-    # Create job record
-    job = Job(
-        job_type="check_replies",
-        params={},
-        status="pending"
-    )
-    
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-    
-    # TODO: Implement reply handler in backend/app/tasks/reply_handler.py
-    # For now, mark as not implemented
-    logger.warning("Reply handler not yet implemented in backend")
-    job.status = "failed"
-    job.error_message = "Reply handler not yet implemented. This feature will be available soon."
-    await db.commit()
-    return {
-        "job_id": job.id,
-        "status": "failed",
-        "message": "Reply handler not yet implemented. This feature will be available soon."
-    }
-
-
-@router.post("/{job_id}/cancel")
-async def cancel_job(
-    job_id: UUID,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Cancel a running job
-    
-    This will:
-    1. Mark the job as cancelled
-    2. The discovery task will check this status and stop processing
-    """
-    result = await db.execute(select(Job).where(Job.id == job_id))
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    if job.status not in ["pending", "running"]:
+    if not current_user:
         raise HTTPException(
-            status_code=400,
-            detail=f"Job is already {job.status} and cannot be cancelled"
+            status_code=401,
+            detail="Authentication required"
         )
     
-    job.status = "cancelled"
-    job.error_message = "Cancelled by user"
-    await db.commit()
-    
-    logger.info(f"Job {job_id} cancelled by user")
-    
-    return {
-        "message": "Job cancelled successfully",
-        "job_id": str(job_id),
-        "status": "cancelled"
-    }
-
-
-@router.get("", response_model=List[JobResponse])
-async def list_jobs(
-    skip: int = 0,
-    limit: int = 50,
-    db: AsyncSession = Depends(get_db)
-):
-    """List all jobs"""
-    result = await db.execute(
-        select(Job)
-        .order_by(Job.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
-    jobs = result.scalars().all()
-    return [job_to_response(job) for job in jobs]
+    raise HTTPException(status_code=501, detail="Reply check job not yet implemented in backend.")
