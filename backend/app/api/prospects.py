@@ -44,7 +44,17 @@ async def enrich_direct(
         name: Optional contact name
         
     Returns:
-        { email: str, confidence: float, source: str } or error
+        Normalized enrichment result in a shape compatible with the frontend:
+        {
+            email: str | null,
+            name: str | null,
+            company: str | null,
+            confidence: float | null,
+            domain: str,
+            success: bool,
+            source: str | null,
+            error: str | null
+        }
     """
     import time
     start_time = time.time()
@@ -57,13 +67,18 @@ async def enrich_direct(
         
         result = await enrich_prospect_email(domain, name)
         
-        if not result:
+        if not result or not result.get("email"):
             api_time = (time.time() - start_time) * 1000
             logger.warning(f"⚠️  [ENRICHMENT API] No email found for {domain} after {api_time:.0f}ms")
             return {
                 "success": False,
+                "email": None,
+                "name": result.get("name") if isinstance(result, dict) else None,
+                "company": result.get("company") if isinstance(result, dict) else None,
+                "confidence": result.get("confidence") if isinstance(result, dict) else None,
+                "domain": domain,
+                "source": result.get("source") if isinstance(result, dict) else "hunter_io",
                 "error": f"No email found for domain {domain}",
-                "domain": domain
             }
         
         api_time = (time.time() - start_time) * 1000
@@ -72,10 +87,13 @@ async def enrich_direct(
         
         return {
             "success": True,
-            "email": result["email"],
-            "confidence": result["confidence"],
-            "source": result["source"],
-            "domain": domain
+            "email": result.get("email"),
+            "name": result.get("name"),
+            "company": result.get("company"),
+            "confidence": result.get("confidence"),
+            "domain": domain,
+            "source": result.get("source", "hunter_io"),
+            "error": None,
         }
         
     except Exception as e:
@@ -85,9 +103,13 @@ async def enrich_direct(
         import traceback
         return {
             "success": False,
+            "email": None,
+            "name": None,
+            "company": None,
+            "confidence": None,
+            "domain": domain,
+            "source": "hunter_io",
             "error": error_msg,
-            "stack_trace": traceback.format_exc(),
-            "domain": domain
         }
 
 

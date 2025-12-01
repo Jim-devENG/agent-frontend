@@ -1,7 +1,22 @@
 """
 Standalone enrichment service
-Can be called from discovery or as a separate job
-Returns: { email: str, confidence: float, source: str } or None
+Can be called from discovery or as a separate job.
+
+Returns a dict compatible with the frontend EnrichmentResult shape
+for successful lookups:
+
+{
+    "email": str,
+    "name": str | None,
+    "company": str | None,
+    "confidence": float,
+    "domain": str,
+    "success": bool,
+    "source": str | None,
+    "error": str | None,
+}
+
+or None when no email candidate could be found.
 """
 import logging
 import time
@@ -13,17 +28,13 @@ logger = logging.getLogger(__name__)
 
 async def enrich_prospect_email(domain: str, name: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
-    Enrich a prospect's email using Hunter.io
-    
-    Args:
-        domain: Domain name (e.g., "example.com")
-        name: Optional contact name for better matching
-        
-    Returns:
-        Dict with { email: str, confidence: float, source: str } or None if no email found
-        
-    Raises:
-        Exception with full stack trace if enrichment fails
+    Enrich a prospect's email using Hunter.io.
+
+    This service is intentionally low‑level and is used by both discovery and
+    the direct enrichment API.
+
+    Returns a normalized dict on success (see module docstring) or None when
+    no usable email candidate is found.
     """
     start_time = time.time()
     logger.info(f"🔍 [ENRICHMENT] Starting enrichment for domain: {domain}, name: {name or 'N/A'}")
@@ -63,9 +74,11 @@ async def enrich_prospect_email(domain: str, name: Optional[str] = None) -> Opti
         
         # Get best email (highest confidence)
         best_email = None
-        best_confidence = 0
+        best_confidence = 0.0
         for email_data in emails:
-            confidence = email_data.get("confidence_score", 0)
+            if not isinstance(email_data, dict):
+                continue
+            confidence = float(email_data.get("confidence_score", 0) or 0)
             if confidence > best_confidence:
                 best_confidence = confidence
                 best_email = email_data
@@ -75,16 +88,34 @@ async def enrich_prospect_email(domain: str, name: Optional[str] = None) -> Opti
             return None
         
         email_value = best_email["value"]
+        # Build a simple display name from first/last name if present
+        first_name = best_email.get("first_name") or ""
+        last_name = best_email.get("last_name") or ""
+        full_name = f"{first_name} {last_name}".strip() or None
+        company = best_email.get("company")
+        
         total_time = (time.time() - start_time) * 1000
         
-        result = {
+        result: Dict[str, Any] = {
             "email": email_value,
+            "name": full_name,
+            "company": company,
             "confidence": best_confidence,
-            "source": "hunter_io"
+            "domain": domain,
+            "success": True,
+            "source": "hunter_io",
+            "error": None,
         }
         
         logger.info(f"✅ [ENRICHMENT] Enriched {domain} in {total_time:.0f}ms")
-        logger.info(f"📤 [ENRICHMENT] Output - email: {email_value}, confidence: {best_confidence}, source: hunter_io")
+        logger.info(
+            "📤 [ENRICHMENT] Output - email=%s, name=%s, company=%s, confidence=%.1f, source=%s",
+            email_value,
+            full_name,
+            company,
+            best_confidence,
+            "hunter_io",
+        )
         
         return result
         

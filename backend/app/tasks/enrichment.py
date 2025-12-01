@@ -18,13 +18,12 @@ logger = logging.getLogger(__name__)
 
 async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
     """
-    Process enrichment job to find emails for prospects using Hunter.io
-    
-    Args:
-        job_id: UUID of the job to process
-        
-    Returns:
-        Dict with job results or error
+    Process enrichment job to find / improve emails for prospects using Hunter.io.
+
+    Behaviour:
+    - Never skips a prospect just because it already has an email.
+    - Always compares new vs existing email confidence and updates when better.
+    - Uses a very low‑confidence guesser fallback when the provider returns no emails.
     """
     async with AsyncSessionLocal() as db:
         try:
@@ -48,9 +47,10 @@ async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
             prospect_ids = params.get("prospect_ids")
             max_prospects = params.get("max_prospects", 100)
             
-            # Build query for prospects without emails
+            # Build query for prospects that are eligible for enrichment.
+            # IMPORTANT: we DO NOT filter on contact_email here so we can improve
+            # previously scraped emails when we find a better match.
             query = select(Prospect).where(
-                Prospect.contact_email.is_(None),
                 Prospect.outreach_status == "pending"
             )
             
@@ -62,7 +62,7 @@ async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
             result = await db.execute(query)
             prospects = result.scalars().all()
             
-            logger.info(f"🔍 Found {len(prospects)} prospects to enrich...")
+            logger.info(f"🔍 Found {len(prospects)} prospects to enrich (including ones with existing emails)...")
             
             if len(prospects) == 0:
                 job.status = "completed"
@@ -117,41 +117,132 @@ async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
                         logger.error(f"❌ [ENRICHMENT] Hunter.io API call failed after {hunter_time:.0f}ms: {hunter_err}", exc_info=True)
                         hunter_result = {"success": False, "error": str(hunter_err), "domain": domain}
                     
+                    # Helper: compute previous best confidence from stored hunter_payload
+                    previous_confidence: Optional[float] = None
+                    previous_email: Optional[str] = None
+                    if prospect.hunter_payload and isinstance(prospect.hunter_payload, dict):
+                        try:
+                            prev_emails = prospect.hunter_payload.get("emails", [])
+                            # Prefer confidence for the currently stored email if present
+                            if prev_emails and isinstance(prev_emails, list):
+                                for e_data in prev_emails:
+                                    if not isinstance(e_data, dict):
+                                        continue
+                                    if prospect.contact_email and e_data.get("value") == prospect.contact_email:
+                                        previous_email = e_data.get("value")
+                                        previous_confidence = float(e_data.get("confidence_score", 0) or 0)
+                                        break
+                                # Fallback: take max confidence across previous entries
+                                if previous_confidence is None:
+                                    for e_data in prev_emails:
+                                        if not isinstance(e_data, dict):
+                                            continue
+                                        c_val = float(e_data.get("confidence_score", 0) or 0)
+                                        if previous_confidence is None or c_val > previous_confidence:
+                                            previous_confidence = c_val
+                                            previous_email = e_data.get("value")
+                        except Exception as prev_err:
+                            logger.warning(
+                                f"⚠️  [ENRICHMENT] Failed to parse previous Hunter payload for {domain}: {prev_err}",
+                                exc_info=True,
+                            )
+
+                    new_email: Optional[str] = None
+                    new_confidence: Optional[float] = None
+                    provider_source = "hunter_io"
+                    fallback_used = False
+
                     # Process Hunter.io response
                     if hunter_result.get("success") and hunter_result.get("emails"):
                         emails = hunter_result["emails"]
                         if emails and len(emails) > 0:
                             # Get best email (highest confidence)
                             best_email = None
-                            best_confidence = 0
+                            best_confidence: float = 0
                             for email_data in emails:
-                                confidence = email_data.get("confidence_score", 0)
+                                if not isinstance(email_data, dict):
+                                    continue
+                                confidence = float(email_data.get("confidence_score", 0) or 0)
                                 if confidence > best_confidence:
                                     best_confidence = confidence
                                     best_email = email_data
                             
                             if best_email and best_email.get("value"):
-                                email_value = best_email["value"]
-                                prospect.contact_email = email_value
-                                prospect.contact_method = "hunter_io"
-                                prospect.hunter_payload = hunter_result
-                                enriched_count += 1
-                                total_time = (time.time() - prospect_start_time) * 1000
-                                logger.info(f"✅ [ENRICHMENT] [{idx}/{len(prospects)}] Enriched {domain} in {total_time:.0f}ms")
-                                logger.info(f"📤 [ENRICHMENT] Output - email: {email_value}, confidence: {best_confidence}, source: hunter_io")
+                                new_email = best_email["value"]
+                                new_confidence = best_confidence
                             else:
-                                logger.warning(f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] Email object missing 'value' for {domain}")
-                                prospect.hunter_payload = hunter_result
-                                no_email_count += 1
+                                logger.warning(
+                                    f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] Email object missing 'value' for {domain}"
+                                )
                         else:
-                            logger.info(f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] No emails in response for {domain}")
-                            prospect.hunter_payload = hunter_result
-                            no_email_count += 1
+                            logger.info(
+                                f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] No emails in response for {domain}"
+                            )
                     else:
                         error_msg = hunter_result.get('error', 'Unknown error')
-                        logger.warning(f"❌ [ENRICHMENT] [{idx}/{len(prospects)}] Hunter.io failed for {domain}: {error_msg}")
+                        logger.warning(
+                            f"❌ [ENRICHMENT] [{idx}/{len(prospects)}] Hunter.io failed for {domain}: {error_msg}"
+                        )
+
+                    # If provider returned nothing usable, fall back to a low‑confidence guess
+                    if not new_email:
+                        guessed_email = f"info@{domain}" if domain else None
+                        if guessed_email:
+                            new_email = guessed_email
+                            new_confidence = 10.0  # very low confidence to ensure provider matches win
+                            provider_source = "guess"
+                            fallback_used = True
+                            logger.info(
+                                f"🟡 [ENRICHMENT] [{idx}/{len(prospects)}] Using fallback guesser for {domain}: {guessed_email}"
+                            )
+                        else:
+                            no_email_count += 1
+
+                    # Decide whether to update existing email
+                    if new_email:
+                        # Normalize confidence numbers
+                        new_conf_val = float(new_confidence or 0)
+                        old_conf_val = float(previous_confidence or 0)
+
+                        should_update = False
+                        reason = ""
+
+                        if not (prospect.contact_email and str(prospect.contact_email).strip()):
+                            should_update = True
+                            reason = "no_previous_email"
+                        elif prospect.contact_method != "hunter_io" and provider_source == "hunter_io":
+                            # Provider match beats guessed / unknown sources
+                            should_update = True
+                            reason = f"provider_preferred_over_{prospect.contact_method or 'unknown'}"
+                        elif new_conf_val > old_conf_val:
+                            should_update = True
+                            reason = f"higher_confidence ({new_conf_val} > {old_conf_val})"
+
+                        if should_update:
+                            old_email_log = str(prospect.contact_email) if prospect.contact_email else None
+                            logger.info(
+                                f"✅ [ENRICHMENT] [{idx}/{len(prospects)}] Updating email for {domain}: "
+                                f"{old_email_log or 'None'} (conf={old_conf_val}) "
+                                f"-> {new_email} (conf={new_conf_val}), source={provider_source}, reason={reason}"
+                            )
+                            prospect.contact_email = new_email
+                            prospect.contact_method = provider_source
+                            prospect.hunter_payload = hunter_result
+                            enriched_count += 1
+                        else:
+                            logger.info(
+                                f"ℹ️  [ENRICHMENT] [{idx}/{len(prospects)}] Keeping existing email for {domain}: "
+                                f"{prospect.contact_email} (conf={old_conf_val}) over "
+                                f"candidate {new_email} (conf={new_conf_val}), source={provider_source}"
+                            )
+                            # Still store latest payload for debugging / future improvements
+                            prospect.hunter_payload = hunter_result
+                    else:
+                        # Nothing usable, just persist payload for diagnostics
+                        logger.info(
+                            f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] No usable email or fallback for {domain}"
+                        )
                         prospect.hunter_payload = hunter_result
-                        failed_count += 1
                     
                     await db.commit()
                     await db.refresh(prospect)
