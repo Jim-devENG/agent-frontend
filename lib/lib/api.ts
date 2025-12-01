@@ -1,6 +1,8 @@
 /**
  * API client for new backend architecture
  */
+import type { EnrichmentResult } from '../types'
+
 // Remove /v1 if present - new backend uses /api directly
 const envBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api'
 const API_BASE = envBase.replace('/api/v1', '/api').replace('/v1', '')
@@ -410,14 +412,43 @@ export async function enrichEmail(domain: string, name?: string): Promise<Enrich
     
     if (!res.ok) {
       const error = await res.json().catch(() => ({ detail: 'Failed to enrich email' }))
-      throw new Error(error.detail || error.error || 'Failed to enrich email')
+      // Return a valid EnrichmentResult object even on error
+      return {
+        email: undefined,
+        name: name,
+        company: undefined,
+        title: undefined,
+        success: false,
+        error: error.detail || error.error || 'Failed to enrich email',
+        domain: domain,
+      }
     }
     
     const data = await res.json()
-    return data
+    // Ensure we always return a valid EnrichmentResult object
+    return {
+      email: data.email,
+      name: data.name || name,
+      company: data.company,
+      title: data.title,
+      success: data.success !== false,
+      confidence: data.confidence,
+      source: data.source,
+      domain: data.domain || domain,
+      error: data.error,
+    }
   } catch (error: any) {
     console.error('❌ Error enriching email:', error)
-    throw new Error(`Enrichment failed: ${error.message}`)
+    // Return a valid EnrichmentResult object even on exception
+    return {
+      email: undefined,
+      name: name,
+      company: undefined,
+      title: undefined,
+      success: false,
+      error: error.message || 'Enrichment failed',
+      domain: domain,
+    }
   }
 }
 
