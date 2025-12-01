@@ -566,10 +566,11 @@ export async function getStats(): Promise<Stats | null> {
     // Safely handle jobs array - defensive guard
     let jobsArray: any[] = []
     if (jobs) {
-      if (Array.isArray(jobs)) {
-        jobsArray = jobs
-      } else if (jobs.data && Array.isArray(jobs.data)) {
-        jobsArray = jobs.data
+      const jobsAny = jobs as any
+      if (Array.isArray(jobsAny)) {
+        jobsArray = jobsAny
+      } else if ('data' in jobsAny && jobsAny.data && Array.isArray(jobsAny.data)) {
+        jobsArray = jobsAny.data
       }
     }
     
