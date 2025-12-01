@@ -355,6 +355,33 @@ export async function getJobStatus(jobId: string): Promise<Job> {
   return res.json()
 }
 
+export async function cancelJob(jobId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  const token = getAuthToken()
+  if (!token) {
+    throw new Error('Authentication required. Please log in first.')
+  }
+  
+  try {
+    const res = await authenticatedFetch(`${API_BASE}/jobs/${jobId}/cancel`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Failed to cancel job' }))
+      throw new Error(error.detail || error.error || 'Failed to cancel job')
+    }
+    
+    const data = await res.json()
+    return data
+  } catch (error: any) {
+    console.error('❌ Error cancelling job:', error)
+    throw error
+  }
+}
+
 export async function listJobs(skip = 0, limit = 50): Promise<Job[]> {
   try {
     const res = await authenticatedFetch(`${API_BASE}/jobs?skip=${skip}&limit=${limit}`)
@@ -515,8 +542,8 @@ export async function getStats(): Promise<Stats | null> {
     if (allProspects) {
       if (Array.isArray(allProspects.prospects)) {
         allProspectsList = allProspects.prospects
-      } else if ('data' in allProspects && allProspects.data && Array.isArray((allProspects as any).data.prospects)) {
-        allProspectsList = (allProspects as any).data.prospects
+      } else if (allProspects.data && Array.isArray(allProspects.data.prospects)) {
+        allProspectsList = allProspects.data.prospects
       } else if (Array.isArray(allProspects)) {
         allProspectsList = allProspects
       }
@@ -526,16 +553,16 @@ export async function getStats(): Promise<Stats | null> {
     if (prospectsWithEmail) {
       if (Array.isArray(prospectsWithEmail.prospects)) {
         prospectsWithEmailList = prospectsWithEmail.prospects
-      } else if ('data' in prospectsWithEmail && prospectsWithEmail.data && Array.isArray((prospectsWithEmail as any).data.prospects)) {
-        prospectsWithEmailList = (prospectsWithEmail as any).data.prospects
+      } else if (prospectsWithEmail.data && Array.isArray(prospectsWithEmail.data.prospects)) {
+        prospectsWithEmailList = prospectsWithEmail.data.prospects
       } else if (Array.isArray(prospectsWithEmail)) {
         prospectsWithEmailList = prospectsWithEmail
       }
     }
     
     // Safely extract totals with defensive checks
-    const allProspectsTotal = (allProspects?.total ?? ('data' in allProspects ? (allProspects as any).data?.total : undefined) ?? 0) || 0
-    const prospectsWithEmailTotal = (prospectsWithEmail?.total ?? ('data' in prospectsWithEmail ? (prospectsWithEmail as any).data?.total : undefined) ?? 0) || 0
+    const allProspectsTotal = (allProspects?.total ?? allProspects?.data?.total ?? 0) || 0
+    const prospectsWithEmailTotal = (prospectsWithEmail?.total ?? prospectsWithEmail?.data?.total ?? 0) || 0
     
     // Count prospects by status - defensive forEach guard
     let prospects_pending = 0
@@ -566,11 +593,10 @@ export async function getStats(): Promise<Stats | null> {
     // Safely handle jobs array - defensive guard
     let jobsArray: any[] = []
     if (jobs) {
-      const jobsAny = jobs as any
-      if (Array.isArray(jobsAny)) {
-        jobsArray = jobsAny
-      } else if ('data' in jobsAny && jobsAny.data && Array.isArray(jobsAny.data)) {
-        jobsArray = jobsAny.data
+      if (Array.isArray(jobs)) {
+        jobsArray = jobs
+      } else if (jobs.data && Array.isArray(jobs.data)) {
+        jobsArray = jobs.data
       }
     }
     

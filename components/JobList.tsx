@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getJobStatus, type Job } from '@/lib/api'
-import { RefreshCw, CheckCircle, XCircle, Clock, Loader } from 'lucide-react'
+import { getJobStatus, cancelJob, type Job } from '@/lib/api'
+import { RefreshCw, CheckCircle, XCircle, Clock, Loader, X } from 'lucide-react'
 
 interface JobListProps {
   jobs: Job[]
@@ -11,6 +11,7 @@ interface JobListProps {
 
 export default function JobList({ jobs, onRefresh }: JobListProps) {
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set())
+  const [cancellingJobs, setCancellingJobs] = useState<Set<string>>(new Set())
 
   const toggleJob = (jobId: string) => {
     const newExpanded = new Set(expandedJobs)
@@ -20,6 +21,26 @@ export default function JobList({ jobs, onRefresh }: JobListProps) {
       newExpanded.add(jobId)
     }
     setExpandedJobs(newExpanded)
+  }
+
+  const handleCancelJob = async (jobId: string) => {
+    if (!confirm('Are you sure you want to cancel this job?')) {
+      return
+    }
+    
+    setCancellingJobs(prev => new Set(prev).add(jobId))
+    try {
+      await cancelJob(jobId)
+      onRefresh() // Refresh the job list
+    } catch (error: any) {
+      alert(`Failed to cancel job: ${error.message}`)
+    } finally {
+      setCancellingJobs(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(jobId)
+        return newSet
+      })
+    }
   }
 
   const getStatusIcon = (status: string) => {
@@ -95,6 +116,17 @@ export default function JobList({ jobs, onRefresh }: JobListProps) {
                 <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(job.status)}`}>
                   {job.status}
                 </span>
+                {(job.status === 'running' || job.status === 'pending') && (
+                  <button
+                    onClick={() => handleCancelJob(job.id)}
+                    disabled={cancellingJobs.has(job.id)}
+                    className="px-2 py-1 text-xs text-red-600 hover:text-red-800 hover:bg-red-50 rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                    title="Stop this job"
+                  >
+                    <X className="w-3 h-3" />
+                    {cancellingJobs.has(job.id) ? 'Stopping...' : 'Stop'}
+                  </button>
+                )}
                 <button
                   onClick={() => toggleJob(job.id)}
                   className="text-sm text-gray-600 hover:text-gray-900"
