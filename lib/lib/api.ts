@@ -712,12 +712,8 @@ export async function getStats(): Promise<Stats | null> {
     
     // Safely handle jobs array - listJobs returns Job[] directly
     let jobsArray: any[] = []
-    if (jobs) {
-      if (Array.isArray(jobs)) {
-        jobsArray = jobs
-      } else if (typeof jobs === 'object' && 'data' in jobs && Array.isArray((jobs as any).data)) {
-        jobsArray = (jobs as any).data
-      }
+    if (jobs && Array.isArray(jobs)) {
+      jobsArray = jobs
     }
     
     // Defensive filter operations with safe array checks
