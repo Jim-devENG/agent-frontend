@@ -4,7 +4,8 @@
 import type { EnrichmentResult } from '@/lib/types'
 
 // Remove /v1 if present - new backend uses /api directly
-const envBase = (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:8000/api'
+// @ts-ignore - process.env is available in Next.js at build time
+const envBase = (typeof window !== 'undefined' && (window as any).__NEXT_DATA__?.env?.NEXT_PUBLIC_API_BASE_URL) || (typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:8000/api'
 const API_BASE = envBase.replace('/api/v1', '/api').replace('/v1', '')
 
 // Get auth token from localStorage
@@ -649,7 +650,7 @@ export async function getStats(): Promise<Stats | null> {
     ])
     
     // Log actual API responses for debugging (only in development)
-    if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
+    if (typeof process !== 'undefined' && process?.env?.NODE_ENV !== 'production') {
       console.log('🔍 getStats - allProspects response:', allProspects)
       console.log('🔍 getStats - prospectsWithEmail response:', prospectsWithEmail)
       console.log('🔍 getStats - jobs response:', jobs)
