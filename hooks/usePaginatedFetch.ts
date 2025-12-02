@@ -71,7 +71,7 @@ export function usePaginatedFetch<T = any>(
         }
       } else {
         // Fallback to other response formats
-        const responseAny = response as Record<string, unknown>
+        const responseAny = response as unknown as Record<string, unknown>
         if (Array.isArray(responseAny.prospects)) {
           items = responseAny.prospects as T[]
         } else if (Array.isArray(responseAny.items)) {
@@ -79,7 +79,7 @@ export function usePaginatedFetch<T = any>(
         }
       }
       
-      const totalPages = response.totalPages || (response as Record<string, unknown>).total_pages as number || 0
+      const totalPages = response.totalPages || (response as unknown as Record<string, unknown>).total_pages as number || 0
       const total = response.total || 0
       
       // Ensure items is always an array
