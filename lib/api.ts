@@ -925,10 +925,3 @@ export async function getScraperHistory(page: number = 1, limit: number = 10): P
   console.warn('Unexpected response format from /api/scraper/history:', response)
   return { data: [], page, limit, total: 0, totalPages: 0 }
 }
-  const res = await authenticatedFetch(`${API_BASE}/scraper/history?page=${page}&limit=${limit}`)
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to get scraper history' }))
-    throw new Error(error.detail || 'Failed to get scraper history')
-  }
-  return res.json()
-}
