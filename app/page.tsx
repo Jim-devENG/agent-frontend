@@ -16,7 +16,6 @@ import SystemStatus from '@/components/SystemStatus'
 import ScrapedEmailsTable from '@/components/ScrapedEmailsTable'
 import { getStats, listJobs, listProspects } from '@/lib/api'
 import type { Stats, Job } from '@/lib/api'
-import type { EnrichmentResult } from '@/lib/types'
 import { 
   LayoutDashboard, 
   Globe, 
@@ -35,8 +34,6 @@ export default function Dashboard() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [connectionError, setConnectionError] = useState(false)
-  const [scrapedEmails, setScrapedEmails] = useState<EnrichmentResult[]>([])
-  const [scrapedEmailsLoading, setScrapedEmailsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<
     'overview' | 'leads' | 'scraped_emails' | 'emails' | 'jobs' | 'websites' | 'settings' | 'guide'
   >('overview')
@@ -92,38 +89,6 @@ export default function Dashboard() {
     loadData()
   }
 
-  const loadScrapedEmails = async () => {
-    setScrapedEmailsLoading(true)
-    try {
-      // Reuse prospects API and normalize into EnrichmentResult[]
-      const resp = await listProspects(0, 500, undefined, undefined, true)
-      const mapped: EnrichmentResult[] = (resp.prospects || []).map((p) => ({
-        email: p.contact_email ?? null,
-        name: null,
-        company: null,
-        confidence:
-          typeof p.hunter_payload?.confidence === 'number'
-            ? p.hunter_payload.confidence
-            : typeof p.hunter_payload?.confidence_score === 'number'
-            ? p.hunter_payload.confidence_score
-            : null,
-        domain: p.domain,
-      }))
-      setScrapedEmails(mapped)
-    } catch (err) {
-      console.error('Failed to load scraped emails:', err)
-    } finally {
-      setScrapedEmailsLoading(false)
-    }
-  }
-
-  // Keep scraped emails tab live while it's active
-  useEffect(() => {
-    if (activeTab !== 'scraped_emails') return
-    loadScrapedEmails()
-    const interval = setInterval(loadScrapedEmails, 10000)
-    return () => clearInterval(interval)
-  }, [activeTab])
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -266,13 +231,7 @@ export default function Dashboard() {
 
         {activeTab === 'leads' && <LeadsTable />}
 
-        {activeTab === 'scraped_emails' && (
-          <ScrapedEmailsTable
-            emails={scrapedEmails}
-            loading={scrapedEmailsLoading}
-            onRefresh={loadScrapedEmails}
-          />
-        )}
+        {activeTab === 'scraped_emails' && <ScrapedEmailsTable />}
 
         {activeTab === 'emails' && <EmailsTable />}
 

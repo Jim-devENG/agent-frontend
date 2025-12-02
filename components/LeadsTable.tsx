@@ -1,52 +1,42 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Mail, ExternalLink, RefreshCw, Send, X, Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { listProspects, composeEmail, sendEmail, type Prospect } from '@/lib/api'
 import { safeToFixed } from '@/lib/safe-utils'
+import { usePaginatedFetch } from '@/hooks/usePaginatedFetch'
 
 interface LeadsTableProps {
   emailsOnly?: boolean
 }
 
 export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
-  const [prospects, setProspects] = useState<Prospect[]>([])
-  const [loading, setLoading] = useState(true)
-  const [skip, setSkip] = useState(0)
-  const [total, setTotal] = useState(0)
-  const limit = 50
+  const {
+    page,
+    setPage,
+    data: prospects,
+    totalPages,
+    loading,
+    limit,
+    refresh,
+    goToNext,
+    goToPrev,
+    canGoNext,
+    canGoPrev,
+  } = usePaginatedFetch<Prospect>({
+    fetchFn: async (page, limit) => {
+      return listProspects(page, limit, undefined, undefined, emailsOnly ? true : undefined)
+    },
+    initialPage: 1,
+    limit: 10,
+    autoLoad: true,
+  })
 
   const [activeProspect, setActiveProspect] = useState<Prospect | null>(null)
   const [draftSubject, setDraftSubject] = useState('')
   const [draftBody, setDraftBody] = useState('')
   const [isComposing, setIsComposing] = useState(false)
   const [isSending, setIsSending] = useState(false)
-
-  const loadProspects = async () => {
-    try {
-      setLoading(true)
-      const response = await listProspects(
-        skip,
-        limit,
-        undefined,
-        undefined,
-        emailsOnly ? true : undefined
-      )
-      setProspects(response.prospects)
-      setTotal(response.total)
-    } catch (error) {
-      console.error('Failed to load prospects:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    loadProspects()
-    const interval = setInterval(loadProspects, 15000) // Refresh every 15 seconds
-    return () => clearInterval(interval)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip, emailsOnly])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString()
@@ -97,7 +87,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     setIsSending(true)
     try {
       await sendEmail(activeProspect.id, draftSubject, draftBody)
-      await loadProspects()
+      await refresh()
       alert('Email sent successfully!')
       closeComposeModal()
     } catch (error: any) {
@@ -115,7 +105,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
           {emailsOnly ? 'Scraped Emails' : 'Leads'}
         </h2>
         <button
-          onClick={loadProspects}
+          onClick={refresh}
           className="flex items-center space-x-2 px-3 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700"
         >
           <RefreshCw className="w-4 h-4" />
@@ -213,22 +203,24 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
           </div>
           <div className="flex items-center justify-between mt-4">
             <p className="text-sm text-gray-600">
-              Showing {skip + 1}-{Math.min(skip + limit, total)} of {total}
+              Page {page} of {totalPages || 1} ({prospects.length} items)
             </p>
             <div className="flex space-x-2">
               <button
-                onClick={() => setSkip(Math.max(0, skip - limit))}
-                disabled={skip === 0}
-                className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+                onClick={goToPrev}
+                disabled={!canGoPrev}
+                className="flex items-center space-x-1 px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Previous
+                <ChevronLeft className="w-4 h-4" />
+                <span>Previous</span>
               </button>
               <button
-                onClick={() => setSkip(skip + limit)}
-                disabled={skip + limit >= total}
-                className="px-3 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50"
+                onClick={goToNext}
+                disabled={!canGoNext}
+                className="flex items-center space-x-1 px-3 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Next
+                <span>Next</span>
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>

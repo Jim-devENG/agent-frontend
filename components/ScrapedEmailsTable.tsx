@@ -1,22 +1,42 @@
 'use client'
 
-import { useMemo } from 'react'
-import { Mail, Globe, User, ShieldCheck, RefreshCw } from 'lucide-react'
+import { Mail, Globe, User, ShieldCheck, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { EnrichmentResult } from '@/lib/types'
 import { safeToFixed } from '@/lib/safe-utils'
+import { usePaginatedFetch } from '@/hooks/usePaginatedFetch'
+import { listProspects, type Prospect } from '@/lib/api'
 
-interface ScrapedEmailsTableProps {
-  emails: EnrichmentResult[]
-  loading: boolean
-  onRefresh?: () => void
-}
+export default function ScrapedEmailsTable() {
+  const {
+    page,
+    data: prospects,
+    totalPages,
+    loading,
+    refresh,
+    goToNext,
+    goToPrev,
+    canGoNext,
+    canGoPrev,
+  } = usePaginatedFetch<Prospect>({
+    fetchFn: async (page, limit) => {
+      return listProspects(page, limit, undefined, undefined, true)
+    },
+    initialPage: 1,
+    limit: 10,
+    autoLoad: true,
+  })
 
-export default function ScrapedEmailsTable({
-  emails,
-  loading,
-  onRefresh,
-}: ScrapedEmailsTableProps) {
-  const rows = useMemo(() => emails ?? [], [emails])
+  // Convert prospects to EnrichmentResult format
+  const rows: EnrichmentResult[] = prospects.map((p) => ({
+    email: p.contact_email || null,
+    name: null, // Prospects don't have name field
+    company: null,
+    confidence: p.hunter_payload ? (typeof p.hunter_payload === 'object' && 'confidence' in p.hunter_payload ? Number(p.hunter_payload.confidence) : null) : null,
+    domain: p.domain,
+    success: !!p.contact_email,
+    source: p.hunter_payload ? (typeof p.hunter_payload === 'object' && 'source' in p.hunter_payload ? String(p.hunter_payload.source) : 'hunter_io') : null,
+    error: null,
+  }))
 
   return (
     <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
@@ -30,15 +50,13 @@ export default function ScrapedEmailsTable({
             </p>
           </div>
         </div>
-        {onRefresh && (
-          <button
-            onClick={onRefresh}
-            className="flex items-center space-x-2 px-3 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 text-sm"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
-          </button>
-        )}
+        <button
+          onClick={refresh}
+          className="flex items-center space-x-2 px-3 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 text-sm"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+        </button>
       </div>
 
       {loading && rows.length === 0 ? (
@@ -113,6 +131,29 @@ export default function ScrapedEmailsTable({
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-sm text-gray-600">
+              Page {page} of {totalPages || 1} ({rows.length} items)
+            </p>
+            <div className="flex space-x-2">
+              <button
+                onClick={goToPrev}
+                disabled={!canGoPrev}
+                className="flex items-center space-x-1 px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Previous</span>
+              </button>
+              <button
+                onClick={goToNext}
+                disabled={!canGoNext}
+                className="flex items-center space-x-1 px-3 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </>
       )}

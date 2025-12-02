@@ -481,17 +481,27 @@ export async function listJobs(skip = 0, limit = 50): Promise<Job[]> {
 }
 
 // Prospects API
+export interface PaginatedResponse<T> {
+  data: T[]
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
 export async function listProspects(
-  skip = 0,
-  limit = 50,
+  page: number = 1,
+  limit: number = 10,
   status?: string,
   minScore?: number,
   hasEmail?: boolean
-): Promise<ProspectListResponse> {
-  const params = new URLSearchParams({
-    skip: skip.toString(),
-    limit: limit.toString(),
-  })
+): Promise<PaginatedResponse<Prospect>> {
+  // Enforce max limit of 10
+  limit = Math.min(limit, 10)
+  
+  const params = new URLSearchParams()
+  params.append('page', page.toString())
+  params.append('limit', limit.toString())
   if (status) params.append('status', status)
   if (minScore !== undefined) params.append('min_score', minScore.toString())
   if (hasEmail !== undefined) params.append('has_email', hasEmail.toString())
@@ -505,21 +515,64 @@ export async function listProspects(
   }
   const response = await res.json()
   
-  // API returns { prospects, total, skip, limit } directly
-  // Backend may wrap in { success: true, data: {...} }, so unwrap if needed
+  // Handle standardized format: { success: true, data: { data: [], page, limit, total, totalPages } }
   if (response && typeof response === 'object') {
-    if ('prospects' in response && 'total' in response) {
-      // Direct shape: { prospects, total, skip, limit }
-      return response as ProspectListResponse
-    } else if (response.success && response.data && 'prospects' in response.data) {
-      // Wrapped shape: { success: true, data: { prospects, total, skip, limit } }
-      return response.data as ProspectListResponse
+    if (response.success && response.data) {
+      const data = response.data
+      return {
+        data: data.data || data.prospects || [],
+        page: data.page || page,
+        limit: data.limit || limit,
+        total: data.total || 0,
+        totalPages: data.totalPages || 0
+      }
+    } else if ('data' in response && 'page' in response) {
+      // Direct standardized format
+      return response as PaginatedResponse<Prospect>
+    } else if ('prospects' in response && 'total' in response) {
+      // Backward compatibility: convert old format to new
+      const oldResponse = response as ProspectListResponse
+      const totalPages = oldResponse.total > 0 ? Math.ceil(oldResponse.total / limit) : 0
+      return {
+        data: oldResponse.prospects || [],
+        page: page,
+        limit: limit,
+        total: oldResponse.total || 0,
+        totalPages: totalPages
+      }
     }
   }
   
   // If response doesn't match expected format, return empty structure
   console.warn('Unexpected response format from /api/prospects:', response)
-  return { prospects: [], total: 0, skip: 0, limit: 0 }
+  return { data: [], page, limit, total: 0, totalPages: 0 }
+}
+
+export async function listWebsites(
+  page: number = 1,
+  limit: number = 10
+): Promise<PaginatedResponse<Prospect>> {
+  // Enforce max limit of 10
+  limit = Math.min(limit, 10)
+  
+  const params = new URLSearchParams()
+  params.append('page', page.toString())
+  params.append('limit', limit.toString())
+  
+  const res = await authenticatedFetch(`${API_BASE}/prospects/websites?${params}`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to list websites' }))
+    throw new Error(error.detail || 'Failed to list websites')
+  }
+  const response = await res.json()
+  
+  // Handle standardized format
+  if (response && typeof response === 'object' && 'data' in response) {
+    return response as PaginatedResponse<Prospect>
+  }
+  
+  console.warn('Unexpected response format from /api/prospects/websites:', response)
+  return { data: [], page, limit, total: 0, totalPages: 0 }
 }
 
 export async function getProspect(prospectId: string): Promise<Prospect> {
@@ -588,11 +641,16 @@ export interface Stats {
 export async function getStats(): Promise<Stats | null> {
   try {
     // Fetch all data in parallel with defensive error handling
+    // Use page=1, limit=10 for pagination, but we only need totals for stats
     const [allProspects, jobs, prospectsWithEmail] = await Promise.all([
-      listProspects(0, 1000).catch(() => ({ prospects: [], total: 0, skip: 0, limit: 0 })),
+      listProspects(1, 10).catch(() => ({ data: [], page: 1, limit: 10, total: 0, totalPages: 0 })),
       listJobs(0, 100).catch(() => []),
-      listProspects(0, 1000, undefined, undefined, true).catch(() => ({ prospects: [], total: 0, skip: 0, limit: 0 })),
+      listProspects(1, 10, undefined, undefined, true).catch(() => ({ data: [], page: 1, limit: 10, total: 0, totalPages: 0 })),
     ])
+    
+    // Extract totals from paginated responses
+    const allProspectsTotal = 'total' in allProspects ? allProspects.total : 0
+    const prospectsWithEmailTotal = 'total' in prospectsWithEmail ? prospectsWithEmail.total : 0
     
     // Log actual API responses for debugging (only in development)
     if (process.env.NODE_ENV !== 'production') {
@@ -830,7 +888,37 @@ export async function setScraperConfig(
   return res.json()
 }
 
-export async function getScraperHistory(page: number = 1, limit: number = 10): Promise<ScraperHistoryResponse> {
+export async function getScraperHistory(page: number = 1, limit: number = 10): Promise<PaginatedResponse<ScraperHistoryItem>> {
+  // Enforce max limit of 10
+  limit = Math.min(limit, 10)
+  
+  const params = new URLSearchParams()
+  params.append('page', page.toString())
+  params.append('limit', limit.toString())
+  
+  const res = await authenticatedFetch(`${API_BASE}/scraper/history?${params}`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to get scraper history' }))
+    throw new Error(error.detail || 'Failed to get scraper history')
+  }
+  const response = await res.json()
+  
+  // Handle standardized format
+  if (response && typeof response === 'object') {
+    if ('data' in response && 'page' in response) {
+      return {
+        data: response.data || [],
+        page: response.page || page,
+        limit: response.limit || limit,
+        total: response.total || 0,
+        totalPages: response.totalPages || response.total_pages || 0
+      }
+    }
+  }
+  
+  console.warn('Unexpected response format from /api/scraper/history:', response)
+  return { data: [], page, limit, total: 0, totalPages: 0 }
+}
   const res = await authenticatedFetch(`${API_BASE}/scraper/history?page=${page}&limit=${limit}`)
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to get scraper history' }))
