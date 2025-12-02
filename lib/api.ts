@@ -14,8 +14,10 @@ function getAuthToken(): string | null {
 /**
  * Authenticated fetch wrapper with robust error handling and SSL support
  * Handles network errors, SSL issues, and undefined responses gracefully
+ * ALWAYS throws meaningful errors with stack traces
  */
 async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const startTime = Date.now()
   const token = getAuthToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -25,53 +27,90 @@ async function authenticatedFetch(url: string, options: RequestInit = {}): Promi
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
-  // Note: No console warning if token is missing - auth is optional for some endpoints
   
   try {
+    console.log(`📤 [FETCH] ${options.method || 'GET'} ${url}`)
+    console.log(`📥 [FETCH] Input - headers: ${JSON.stringify(Object.keys(headers))}, hasBody: ${!!options.body}`)
+    
     // Attempt fetch with error handling
     const response = await fetch(url, {
       ...options,
       headers,
-      // Add credentials for CORS if needed (but don't require SSL verification in browser)
-      credentials: 'omit', // Browser handles SSL automatically, but we don't send cookies
+      credentials: 'omit',
     })
+    
+    const fetchTime = Date.now() - startTime
+    console.log(`⏱️  [FETCH] Response received in ${fetchTime}ms - status: ${response.status}`)
     
     // If unauthorized, redirect to login (only if auth was actually required)
     if (response.status === 401) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('auth_token')
-        // Only redirect if we actually sent a token (meaning auth was expected)
         if (token) {
           window.location.href = '/login'
         }
       }
-      throw new Error('Unauthorized')
+      const error = new Error(`Unauthorized: ${url}`)
+      console.error(`❌ [FETCH] Unauthorized: ${url}`)
+      throw error
     }
     
+    if (!response.ok) {
+      // Try to get error details from response
+      let errorDetail = `HTTP ${response.status}: ${response.statusText}`
+      try {
+        const errorData = await response.clone().json().catch(() => null)
+        if (errorData) {
+          errorDetail = errorData.error || errorData.detail || errorData.message || errorDetail
+        }
+      } catch {
+        // If JSON parsing fails, use status text
+      }
+      
+      const error = new Error(`Fetch failed: ${errorDetail}`)
+      console.error(`❌ [FETCH] Request failed: ${url}`, {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorDetail,
+        stack: new Error().stack
+      })
+      throw error
+    }
+    
+    console.log(`✅ [FETCH] Success: ${url}`)
     return response
   } catch (error: any) {
-    // Handle network errors, SSL errors, and other fetch failures
+    const fetchTime = Date.now() - startTime
     const errorMessage = error?.message || String(error)
+    const errorStack = error?.stack || new Error().stack
     
-    // Log clear error message for debugging
+    // Create meaningful error with full context
+    const enhancedError = new Error(`Fetch error for ${url}: ${errorMessage}`)
+    enhancedError.stack = errorStack
+    
+    // Log with full context
     if (errorMessage.includes('Failed to fetch') || 
         errorMessage.includes('NetworkError') ||
         errorMessage.includes('ERR_CONNECTION_REFUSED') ||
         errorMessage.includes('ERR_SSL')) {
-      console.error('❌ Network/SSL Error:', {
+      console.error(`❌ [FETCH] Network/SSL Error after ${fetchTime}ms:`, {
         url,
+        method: options.method || 'GET',
         error: errorMessage,
-        message: 'Backend may be unreachable or SSL certificate issue. App will continue running.',
+        stack: errorStack,
+        message: 'Backend may be unreachable or SSL certificate issue.'
       })
     } else {
-      console.error('❌ Fetch Error:', {
+      console.error(`❌ [FETCH] Error after ${fetchTime}ms:`, {
         url,
+        method: options.method || 'GET',
         error: errorMessage,
+        stack: errorStack
       })
     }
     
-    // Re-throw to allow caller to handle, but app won't crash
-    throw error
+    // Re-throw enhanced error with stack trace
+    throw enhancedError
   }
 }
 
@@ -106,11 +145,6 @@ export interface Job {
   created_at: string
   updated_at: string
 }
-
-// NOTE: EnrichmentResult shape is defined centrally in ./types and used by the
-// more advanced API client under lib/lib/api.ts. This duplicate interface is
-// intentionally removed to avoid divergence – import from './types' instead
-// in any new code that needs it.
 
 export interface EmailLog {
   id: string
@@ -360,6 +394,33 @@ export async function getJobStatus(jobId: string): Promise<Job> {
   return res.json()
 }
 
+export async function enrichEmail(domain: string, name?: string): Promise<EnrichmentResult> {
+  const token = getAuthToken()
+  if (!token) {
+    throw new Error('Authentication required. Please log in first.')
+  }
+  
+  try {
+    const res = await authenticatedFetch(`${API_BASE}/prospects/enrich/direct?domain=${encodeURIComponent(domain)}${name ? `&name=${encodeURIComponent(name)}` : ''}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Failed to enrich email' }))
+      throw new Error(error.detail || error.error || 'Failed to enrich email')
+    }
+    
+    const data = await res.json()
+    return data
+  } catch (error: any) {
+    console.error('❌ Error enriching email:', error)
+    throw new Error(`Enrichment failed: ${error.message}`)
+  }
+}
+
 export async function cancelJob(jobId: string): Promise<{ success: boolean; message?: string; error?: string }> {
   const token = getAuthToken()
   if (!token) {
@@ -419,24 +480,16 @@ export async function listJobs(skip = 0, limit = 50): Promise<Job[]> {
 
 // Prospects API
 export async function listProspects(
-  skip?: number,
+  skip = 0,
   limit = 50,
   status?: string,
   minScore?: number,
-  hasEmail?: boolean,
-  page?: number  // New page-based pagination
-): Promise<ProspectListResponse & { page?: number; totalPages?: number }> {
+  hasEmail?: boolean
+): Promise<ProspectListResponse> {
   const params = new URLSearchParams({
+    skip: skip.toString(),
     limit: limit.toString(),
   })
-  
-  // Support both page-based and skip-based pagination
-  if (page !== undefined) {
-    params.append('page', page.toString())
-  } else if (skip !== undefined) {
-    params.append('skip', skip.toString())
-  }
-  
   if (status) params.append('status', status)
   if (minScore !== undefined) params.append('min_score', minScore.toString())
   if (hasEmail !== undefined) params.append('has_email', hasEmail.toString())
@@ -450,7 +503,7 @@ export async function listProspects(
   }
   const response = await res.json()
   
-  // Handle new response format: {success: bool, data: {prospects, total, page, totalPages, skip, limit}, error: null | string}
+  // Handle new response format: {success: bool, data: {prospects, total, skip, limit}, error: null | string}
   if (response.success && response.data) {
     return response.data
   }
@@ -462,7 +515,7 @@ export async function listProspects(
   
   // If response doesn't match expected format, return empty structure
   console.warn('Unexpected response format from /api/prospects:', response)
-  return { prospects: [], total: 0, page: 1, totalPages: 0, skip: 0, limit: 0 }
+  return { prospects: [], total: 0, skip: 0, limit: 0 }
 }
 
 export async function getProspect(prospectId: string): Promise<Prospect> {
@@ -532,62 +585,102 @@ export async function getStats(): Promise<Stats | null> {
   try {
     // Fetch all data in parallel with defensive error handling
     const [allProspects, jobs, prospectsWithEmail] = await Promise.all([
-      listProspects(0, 1000).catch((err) => {
-        console.error('❌ getStats: Failed to fetch allProspects:', err)
-        return { prospects: [], total: 0, skip: 0, limit: 0 }
-      }),
-      listJobs(0, 100).catch((err) => {
-        console.error('❌ getStats: Failed to fetch jobs:', err)
-        return []
-      }),
-      listProspects(0, 1000, undefined, undefined, true).catch((err) => {
-        console.error('❌ getStats: Failed to fetch prospectsWithEmail:', err)
-        return { prospects: [], total: 0, skip: 0, limit: 0 }
-      }),
+      listProspects(0, 1000).catch(() => ({ prospects: [], total: 0, skip: 0, limit: 0 })),
+      listJobs(0, 100).catch(() => []),
+      listProspects(0, 1000, undefined, undefined, true).catch(() => ({ prospects: [], total: 0, skip: 0, limit: 0 })),
     ])
     
-    // CRITICAL: listProspects ALWAYS returns ProspectListResponse: { prospects: [], total: 0, skip: 0, limit: 0 }
-    // Extract prospects arrays - ALWAYS ensure they are arrays, never objects
-    let allProspectsList: Prospect[] = []
-    if (allProspects && typeof allProspects === 'object' && 'prospects' in allProspects) {
-      const prospects = (allProspects as ProspectListResponse).prospects
-      allProspectsList = Array.isArray(prospects) ? prospects : []
-    } else {
-      console.warn('⚠️ getStats: allProspects is not ProspectListResponse:', typeof allProspects, allProspects)
-      allProspectsList = []
+    // Log actual API responses for debugging (only in development)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔍 getStats - allProspects response:', allProspects)
+      console.log('🔍 getStats - prospectsWithEmail response:', prospectsWithEmail)
+      console.log('🔍 getStats - jobs response:', jobs)
     }
     
-    let prospectsWithEmailList: Prospect[] = []
-    if (prospectsWithEmail && typeof prospectsWithEmail === 'object' && 'prospects' in prospectsWithEmail) {
-      const prospects = (prospectsWithEmail as ProspectListResponse).prospects
-      prospectsWithEmailList = Array.isArray(prospects) ? prospects : []
-    } else {
-      console.warn('⚠️ getStats: prospectsWithEmail is not ProspectListResponse:', typeof prospectsWithEmail, prospectsWithEmail)
-      prospectsWithEmailList = []
+    // Defensive guard: Ensure all inputs are defined before processing
+    if (!allProspects && !prospectsWithEmail && !jobs) {
+      console.warn('⚠️ getStats: All API responses are undefined/null')
+      return null
     }
     
-    // Ensure jobs is always an array
-    const jobsArray: Job[] = Array.isArray(jobs) ? jobs : []
+    // Safely extract prospects array with multiple fallbacks
+    let allProspectsList: any[] = []
+    if (allProspects) {
+      if (Array.isArray(allProspects.prospects)) {
+        allProspectsList = allProspects.prospects
+      } else if (allProspects.data && Array.isArray(allProspects.data.prospects)) {
+        allProspectsList = allProspects.data.prospects
+      } else if (Array.isArray(allProspects)) {
+        allProspectsList = allProspects
+      }
+    }
     
-    // Extract totals - ProspectListResponse always has total
-    const allProspectsTotal = (allProspects as ProspectListResponse)?.total ?? 0
-    const prospectsWithEmailTotal = (prospectsWithEmail as ProspectListResponse)?.total ?? 0
+    let prospectsWithEmailList: any[] = []
+    if (prospectsWithEmail) {
+      if (Array.isArray(prospectsWithEmail.prospects)) {
+        prospectsWithEmailList = prospectsWithEmail.prospects
+      } else if (prospectsWithEmail.data && Array.isArray(prospectsWithEmail.data.prospects)) {
+        prospectsWithEmailList = prospectsWithEmail.data.prospects
+      } else if (Array.isArray(prospectsWithEmail)) {
+        prospectsWithEmailList = prospectsWithEmail
+      }
+    }
     
-    // Count prospects by status - allProspectsList is guaranteed to be an array
+    // Safely extract totals with defensive checks
+    const allProspectsTotal = (allProspects?.total ?? allProspects?.data?.total ?? 0) || 0
+    const prospectsWithEmailTotal = (prospectsWithEmail?.total ?? prospectsWithEmail?.data?.total ?? 0) || 0
+    
+    // Count prospects by status - defensive forEach guard
     let prospects_pending = 0
     let prospects_sent = 0
     let prospects_replied = 0
     
-    for (const p of allProspectsList) {
-      if (p?.outreach_status === 'pending') prospects_pending++
-      if (p?.outreach_status === 'sent') prospects_sent++
-      if (p?.outreach_status === 'replied') prospects_replied++
+    // Critical defensive guard: Never call forEach on undefined/null
+    // Use safe array check and try-catch for maximum safety
+    if (Array.isArray(allProspectsList) && allProspectsList.length > 0) {
+      try {
+        allProspectsList.forEach((p: any) => {
+          // Additional safety check for each item
+          if (p && typeof p === 'object' && p.outreach_status) {
+            if (p.outreach_status === 'pending') prospects_pending++
+            if (p.outreach_status === 'sent') prospects_sent++
+            if (p.outreach_status === 'replied') prospects_replied++
+          }
+        })
+      } catch (forEachError) {
+        console.error('⚠️ Error in forEach loop (likely from devtools hook or invalid data):', forEachError)
+        // Continue with zero counts rather than failing - app stays running
+      }
+    } else if (allProspectsList !== null && allProspectsList !== undefined) {
+      // Log warning if we expected an array but got something else
+      console.warn('⚠️ getStats: allProspectsList is not a valid array:', typeof allProspectsList, allProspectsList)
     }
     
-    // Count jobs by status - jobsArray is guaranteed to be an array
-    const jobs_running = jobsArray.filter(j => j?.status === 'running').length
-    const jobs_completed = jobsArray.filter(j => j?.status === 'completed').length
-    const jobs_failed = jobsArray.filter(j => j?.status === 'failed').length
+    // Safely handle jobs array - defensive guard
+    let jobsArray: any[] = []
+    if (jobs) {
+      if (Array.isArray(jobs)) {
+        jobsArray = jobs
+      } else if (jobs.data && Array.isArray(jobs.data)) {
+        jobsArray = jobs.data
+      }
+    }
+    
+    // Defensive filter operations with safe array checks
+    let jobs_running = 0
+    let jobs_completed = 0
+    let jobs_failed = 0
+    
+    if (Array.isArray(jobsArray) && jobsArray.length > 0) {
+      try {
+        jobs_running = jobsArray.filter((j: any) => j && typeof j === 'object' && j.status === 'running').length
+        jobs_completed = jobsArray.filter((j: any) => j && typeof j === 'object' && j.status === 'completed').length
+        jobs_failed = jobsArray.filter((j: any) => j && typeof j === 'object' && j.status === 'failed').length
+      } catch (filterError) {
+        console.error('⚠️ Error in filter operations:', filterError)
+        // Continue with zero counts - app stays running
+      }
+    }
     
     const stats: Stats = {
       total_prospects: allProspectsTotal,
@@ -672,117 +765,6 @@ export async function getAPIKeysStatus(): Promise<Record<string, boolean>> {
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to get API keys status' }))
     throw new Error(error.detail || 'Failed to get API keys status')
-  }
-  return res.json()
-}
-
-// ============================================
-// Scraper Control API
-// ============================================
-
-export interface ScraperStatus {
-  master_enabled: boolean
-  auto_enabled: boolean
-  locations: string[]
-  categories: string[]
-  interval: string
-  next_run_at: string | null
-  status: 'idle' | 'running' | 'disabled'
-  can_enable_auto: boolean
-  missing_fields: string[]
-}
-
-export interface ScraperHistoryItem {
-  id: string
-  triggered_at: string
-  completed_at: string | null
-  success_count: number
-  failed_count: number
-  duration_seconds: number | null
-  status: string
-  error_message: string | null
-}
-
-export interface ScraperHistoryResponse {
-  data: ScraperHistoryItem[]
-  page: number
-  limit: number
-  total: number
-  total_pages: number
-}
-
-export async function getScraperStatus(): Promise<ScraperStatus> {
-  const res = await authenticatedFetch(`${API_BASE}/scraper/status`)
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to get scraper status' }))
-    throw new Error(error.detail || 'Failed to get scraper status')
-  }
-  return res.json()
-}
-
-export async function getMasterSwitch(): Promise<{ enabled: boolean; message: string }> {
-  const res = await authenticatedFetch(`${API_BASE}/scraper/master`)
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to get master switch' }))
-    throw new Error(error.detail || 'Failed to get master switch')
-  }
-  return res.json()
-}
-
-export async function setMasterSwitch(enabled: boolean): Promise<{ enabled: boolean; message: string }> {
-  const res = await authenticatedFetch(`${API_BASE}/scraper/master`, {
-    method: 'POST',
-    body: JSON.stringify({ enabled }),
-  })
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to update master switch' }))
-    throw new Error(error.detail || 'Failed to update master switch')
-  }
-  return res.json()
-}
-
-export async function getAutoSwitch(): Promise<{ enabled: boolean; message: string; can_enable: boolean; missing_fields: string[] }> {
-  const res = await authenticatedFetch(`${API_BASE}/scraper/automatic`)
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to get auto switch' }))
-    throw new Error(error.detail || 'Failed to get auto switch')
-  }
-  return res.json()
-}
-
-export async function setAutoSwitch(enabled: boolean): Promise<{ enabled: boolean; message: string; can_enable: boolean; missing_fields: string[] }> {
-  const res = await authenticatedFetch(`${API_BASE}/scraper/automatic`, {
-    method: 'POST',
-    body: JSON.stringify({ enabled }),
-  })
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to update auto switch' }))
-    throw new Error(error.detail || 'Failed to update auto switch')
-  }
-  return res.json()
-}
-
-export async function setScraperConfig(
-  locations: string[],
-  categories: string[],
-  interval: string
-): Promise<{ locations: string[]; categories: string[]; interval: string; next_run_at: string | null }> {
-  const res = await authenticatedFetch(`${API_BASE}/scraper/config`, {
-    method: 'POST',
-    body: JSON.stringify({ locations, categories, interval }),
-  })
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to save config' }))
-    throw new Error(error.detail || 'Failed to save config')
-  }
-  return res.json()
-}
-
-export async function getScraperHistory(page: number = 1, limit: number = 10): Promise<ScraperHistoryResponse> {
-  const res = await authenticatedFetch(`${API_BASE}/scraper/history?page=${page}&limit=${limit}`)
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to get scraper history' }))
-    throw new Error(error.detail || 'Failed to get scraper history')
   }
   return res.json()
 }
