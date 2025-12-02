@@ -56,6 +56,16 @@ async def enrich_direct(
             error: str | null
         }
     """
+    # Check master switch
+    try:
+        from app.api.scraper import validate_master_switch
+        await validate_master_switch(db)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking master switch: {e}", exc_info=True)
+        # Continue if check fails
+    
     import time
     start_time = time.time()
     
@@ -126,6 +136,15 @@ async def create_enrichment_job(
     - prospect_ids: Optional list of specific prospect IDs to enrich
     - max_prospects: Maximum number of prospects to enrich (if no IDs specified)
     """
+    # Check master switch
+    try:
+        from app.api.scraper import validate_master_switch
+        await validate_master_switch(db)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking master switch: {e}", exc_info=True)
+        # Continue if check fails
     # Create job record
     job = Job(
         job_type="enrich",
@@ -167,8 +186,9 @@ async def create_enrichment_job(
 
 @router.get("")
 async def list_prospects(
-    skip: int = 0,
+    skip: Optional[int] = None,
     limit: int = 50,
+    page: Optional[int] = None,  # New page-based pagination
     status: Optional[str] = None,
     min_score: Optional[float] = None,
     has_email: Optional[str] = None,  # Changed to str to handle string "true"/"false" from frontend
@@ -176,16 +196,17 @@ async def list_prospects(
     current_user: Optional[str] = Depends(get_current_user_optional)
 ):
     """
-    List prospects with filtering
+    List prospects with filtering and pagination
     
     Query params:
-    - skip: Pagination offset
-    - limit: Number of results (max 200)
+    - page: Page number (1-based, alternative to skip)
+    - skip: Pagination offset (alternative to page)
+    - limit: Number of results per page (max 1000)
     - status: Filter by outreach_status
     - min_score: Minimum score threshold
     - has_email: Filter by whether prospect has email (string "true"/"false")
     
-    Returns: {success: bool, data: [], error: null | string}
+    Returns: {success: bool, data: {prospects, total, page, totalPages, skip, limit}, error: null | string}
     """
     # Initialize response structure - data MUST be a dict, never an array
     response_data = {
@@ -203,17 +224,29 @@ async def list_prospects(
         # DEBUG: Log incoming parameters
         logger.info(f"🔍 GET /api/prospects - skip={skip}, limit={limit}, status={status}, min_score={min_score}, has_email={has_email} (type: {type(has_email)})")
         
-        # Parse skip and limit as numbers (defensive)
+        # Parse pagination (support both page-based and skip-based)
         try:
-            skip = int(skip) if skip is not None else 0
             limit = int(limit) if limit is not None else 50
-            # Enforce max limit
-            limit = min(limit, 1000) if limit > 0 else 50
-            logger.info(f"🔍 Parsed skip={skip} (type: {type(skip)}), limit={limit} (type: {type(limit)})")
+            limit = max(1, min(limit, 1000))  # Enforce 1-1000 range
+            
+            if page is not None:
+                # Page-based pagination (1-based)
+                page = max(1, int(page))
+                skip = (page - 1) * limit
+            elif skip is not None:
+                # Skip-based pagination (backwards compatibility)
+                skip = max(0, int(skip))
+                page = (skip // limit) + 1
+            else:
+                # Default: page 1
+                skip = 0
+                page = 1
+            
+            logger.info(f"🔍 Parsed page={page}, skip={skip}, limit={limit}")
         except (ValueError, TypeError) as e:
-            logger.error(f"🔴 Error parsing skip/limit: {e}")
+            logger.error(f"🔴 Error parsing pagination: {e}")
             response_data["error"] = f"Invalid pagination parameters: {str(e)}"
-            response_data["data"] = {"prospects": [], "total": 0, "skip": 0, "limit": 50}
+            response_data["data"] = {"prospects": [], "total": 0, "page": 1, "totalPages": 0, "skip": 0, "limit": 50}
             return response_data
         
         # Parse has_email as boolean (strict string check)
@@ -327,11 +360,16 @@ async def list_prospects(
         
         logger.info(f"✅ Successfully converted {len(prospect_responses)} prospects")
         
+        # Calculate total pages
+        total_pages = (total + limit - 1) // limit if total > 0 else 0
+        
         # Build success response
         response_data["success"] = True
         response_data["data"] = {
             "prospects": prospect_responses,
             "total": total,
+            "page": page,
+            "totalPages": total_pages,
             "skip": skip,
             "limit": limit
         }

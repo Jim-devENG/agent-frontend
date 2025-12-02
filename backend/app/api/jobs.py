@@ -74,6 +74,17 @@ async def create_discovery_job(
             "status_code": 401
         }
     
+    # Check master switch (unless system user)
+    if current_user != "system":
+        try:
+            from app.api.scraper import validate_master_switch
+            await validate_master_switch(db)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error checking master switch: {e}", exc_info=True)
+            # Continue if check fails (don't block system user)
+    
     try:
         # Validate: require either keywords or categories
         if not request.keywords and not request.categories:
