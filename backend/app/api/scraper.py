@@ -398,9 +398,9 @@ async def get_scraper_history(
     """Get scraper history with pagination"""
     from app.models.scraper_history import ScraperHistory
     
-    # Validate pagination
+    # Validate pagination - enforce max limit of 10
     page = max(1, page)
-    limit = max(1, min(limit, 100))  # Cap at 100
+    limit = max(1, min(limit, 10))  # Cap at 10
     skip = (page - 1) * limit
     
     # Get total count
@@ -433,6 +433,57 @@ async def get_scraper_history(
         page=page,
         limit=limit,
         total=total,
-        total_pages=total_pages
+        totalPages=total_pages
     )
+
+
+# ============================================
+# Websites Endpoint (if needed)
+# ============================================
+
+@router.get("/websites")
+async def list_websites(
+    page: int = 1,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    List websites (prospects) with pagination
+    Same as /prospects but with standardized response format
+    """
+    from app.api.prospects import list_prospects
+    
+    # Enforce max limit of 10
+    limit = max(1, min(limit, 10))
+    
+    # Call prospects endpoint with page-based pagination
+    result = await list_prospects(
+        skip=None,
+        limit=limit,
+        page=page,
+        status=None,
+        min_score=None,
+        has_email=None,
+        db=db,
+        current_user=None
+    )
+    
+    # Return standardized format
+    if result.get("success") and result.get("data"):
+        data = result["data"]
+        return {
+            "data": data.get("prospects", []),
+            "page": data.get("page", page),
+            "limit": data.get("limit", limit),
+            "total": data.get("total", 0),
+            "totalPages": data.get("totalPages", 0)
+        }
+    
+    return {
+        "data": [],
+        "page": page,
+        "limit": limit,
+        "total": 0,
+        "totalPages": 0
+    }
 

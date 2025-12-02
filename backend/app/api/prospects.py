@@ -184,6 +184,52 @@ async def create_enrichment_job(
     }
 
 
+@router.get("/websites")
+async def list_websites(
+    page: int = 1,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
+):
+    """
+    List websites (prospects) with pagination - standardized format
+    Returns: { data: Prospect[], page, limit, total, totalPages }
+    """
+    # Enforce max limit of 10
+    limit = max(1, min(limit, 10))
+    
+    # Call list_prospects with page-based pagination
+    result = await list_prospects(
+        skip=None,
+        limit=limit,
+        page=page,
+        status=None,
+        min_score=None,
+        has_email=None,
+        db=db,
+        current_user=current_user
+    )
+    
+    # Return standardized format
+    if result.get("success") and result.get("data"):
+        data = result["data"]
+        return {
+            "data": data.get("data", data.get("prospects", [])),
+            "page": data.get("page", page),
+            "limit": data.get("limit", limit),
+            "total": data.get("total", 0),
+            "totalPages": data.get("totalPages", 0)
+        }
+    
+    return {
+        "data": [],
+        "page": page,
+        "limit": limit,
+        "total": 0,
+        "totalPages": 0
+    }
+
+
 @router.get("")
 async def list_prospects(
     skip: Optional[int] = None,
@@ -226,27 +272,26 @@ async def list_prospects(
         
         # Parse pagination (support both page-based and skip-based)
         try:
-            limit = int(limit) if limit is not None else 50
-            limit = max(1, min(limit, 1000))  # Enforce 1-1000 range
-            
+            # Default: page=1, limit=10, max limit=10
             if page is not None:
                 # Page-based pagination (1-based)
                 page = max(1, int(page))
-                skip = (page - 1) * limit
-            elif skip is not None:
-                # Skip-based pagination (backwards compatibility)
-                skip = max(0, int(skip))
-                page = (skip // limit) + 1
             else:
                 # Default: page 1
-                skip = 0
                 page = 1
+            
+            # Enforce max limit of 10
+            limit = int(limit) if limit is not None else 10
+            limit = max(1, min(limit, 10))  # Enforce 1-10 range
+            
+            # Calculate skip from page
+            skip = (page - 1) * limit
             
             logger.info(f"🔍 Parsed page={page}, skip={skip}, limit={limit}")
         except (ValueError, TypeError) as e:
             logger.error(f"🔴 Error parsing pagination: {e}")
             response_data["error"] = f"Invalid pagination parameters: {str(e)}"
-            response_data["data"] = {"prospects": [], "total": 0, "page": 1, "totalPages": 0, "skip": 0, "limit": 50}
+            response_data["data"] = {"data": [], "prospects": [], "total": 0, "page": 1, "totalPages": 0, "skip": 0, "limit": 10}
             return response_data
         
         # Parse has_email as boolean (strict string check)
@@ -285,7 +330,7 @@ async def list_prospects(
         except Exception as e:
             logger.error(f"🔴 Error building query filters: {e}", exc_info=True)
             response_data["error"] = f"Error building query: {str(e)}"
-            response_data["data"] = {"prospects": [], "total": 0, "skip": skip, "limit": limit}
+            response_data["data"] = {"data": [], "prospects": [], "total": 0, "page": page, "totalPages": 0, "skip": skip, "limit": limit}
             return response_data
         
         logger.info(f"🔍 Query filters applied successfully")
@@ -315,7 +360,7 @@ async def list_prospects(
                 response_data["error"] = "Database schema mismatch: 'discovery_query_id' column missing. Migration needs to be applied."
             else:
                 response_data["error"] = f"Database error during count query: {str(count_err)}"
-            response_data["data"] = {"prospects": [], "total": 0, "skip": skip, "limit": limit}
+            response_data["data"] = {"data": [], "prospects": [], "total": 0, "page": page, "totalPages": 0, "skip": skip, "limit": limit}
             return response_data
         
         # Get paginated results
@@ -327,7 +372,8 @@ async def list_prospects(
         except Exception as e:
             logger.error(f"🔴 Error building paginated query: {e}", exc_info=True)
             response_data["error"] = f"Error building paginated query: {str(e)}"
-            response_data["data"] = {"prospects": [], "total": total, "skip": skip, "limit": limit}
+            total_pages = (total + limit - 1) // limit if total > 0 else 0
+            response_data["data"] = {"data": [], "prospects": [], "total": total, "page": page, "totalPages": total_pages, "skip": skip, "limit": limit}
             return response_data
         
         # Execute main query
@@ -344,7 +390,8 @@ async def list_prospects(
                 response_data["error"] = "Database schema mismatch: 'discovery_query_id' column missing. Migration needs to be applied."
             else:
                 response_data["error"] = f"Database error: {str(db_err)}"
-            response_data["data"] = {"prospects": [], "total": total, "skip": skip, "limit": limit}
+            total_pages = (total + limit - 1) // limit if total > 0 else 0
+            response_data["data"] = {"data": [], "prospects": [], "total": total, "page": page, "totalPages": total_pages, "skip": skip, "limit": limit}
             return response_data
         
         # Convert to response models
@@ -363,15 +410,16 @@ async def list_prospects(
         # Calculate total pages
         total_pages = (total + limit - 1) // limit if total > 0 else 0
         
-        # Build success response
+        # Build success response - standardized format
         response_data["success"] = True
         response_data["data"] = {
-            "prospects": prospect_responses,
+            "data": prospect_responses,  # Main data array
+            "prospects": prospect_responses,  # Backward compatibility
             "total": total,
             "page": page,
+            "limit": limit,
             "totalPages": total_pages,
-            "skip": skip,
-            "limit": limit
+            "skip": skip  # Backward compatibility
         }
         
         logger.info(f"✅ Returning success response with {len(prospect_responses)} prospects")
@@ -387,7 +435,11 @@ async def list_prospects(
         import traceback
         logger.error(f"🔴 Full traceback: {traceback.format_exc()}")
         response_data["error"] = f"Internal server error: {str(err)}"
-        response_data["data"] = {"prospects": [], "total": 0, "skip": skip, "limit": limit}
+        total_pages = 0
+        page = 1
+        skip = 0
+        limit = 10
+        response_data["data"] = {"data": [], "prospects": [], "total": 0, "page": page, "totalPages": total_pages, "skip": skip, "limit": limit}
         return response_data
 
 
