@@ -654,13 +654,16 @@ export async function getStats(): Promise<Stats | null> {
       console.warn('⚠️ getStats: allProspectsList is not a valid array:', typeof allProspectsList, allProspectsList)
     }
     
-    // Safely handle jobs array - defensive guard
+    // Safely handle jobs array - listJobs returns Job[]
     let jobsArray: any[] = []
-    if (jobs) {
-      if (Array.isArray(jobs)) {
-        jobsArray = jobs
-      } else if (typeof jobs === 'object' && 'data' in jobs && Array.isArray((jobs as any).data)) {
+    if (jobs && Array.isArray(jobs)) {
+      jobsArray = jobs
+    } else if (jobs && typeof jobs === 'object') {
+      // Fallback: if jobs is an object, try to extract array from common properties
+      if ('data' in jobs && Array.isArray((jobs as any).data)) {
         jobsArray = (jobs as any).data
+      } else if ('items' in jobs && Array.isArray((jobs as any).items)) {
+        jobsArray = (jobs as any).items
       }
     }
     
