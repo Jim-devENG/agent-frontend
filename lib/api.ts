@@ -605,32 +605,28 @@ export async function getStats(): Promise<Stats | null> {
       return null
     }
     
-    // Safely extract prospects array with multiple fallbacks
+    // Safely extract prospects array - ProspectListResponse has .prospects directly
     let allProspectsList: any[] = []
-    if (allProspects) {
-      if (Array.isArray(allProspects.prospects)) {
-        allProspectsList = allProspects.prospects
-      } else if (allProspects.data && Array.isArray(allProspects.data.prospects)) {
-        allProspectsList = allProspects.data.prospects
-      } else if (Array.isArray(allProspects)) {
-        allProspectsList = allProspects
-      }
+    if (allProspects && typeof allProspects === 'object' && 'prospects' in allProspects) {
+      const prospects = (allProspects as ProspectListResponse).prospects
+      allProspectsList = Array.isArray(prospects) ? prospects : []
+    } else {
+      console.warn('⚠️ getStats: allProspects is not ProspectListResponse:', typeof allProspects, allProspects)
+      allProspectsList = []
     }
     
     let prospectsWithEmailList: any[] = []
-    if (prospectsWithEmail) {
-      if (Array.isArray(prospectsWithEmail.prospects)) {
-        prospectsWithEmailList = prospectsWithEmail.prospects
-      } else if (prospectsWithEmail.data && Array.isArray(prospectsWithEmail.data.prospects)) {
-        prospectsWithEmailList = prospectsWithEmail.data.prospects
-      } else if (Array.isArray(prospectsWithEmail)) {
-        prospectsWithEmailList = prospectsWithEmail
-      }
+    if (prospectsWithEmail && typeof prospectsWithEmail === 'object' && 'prospects' in prospectsWithEmail) {
+      const prospects = (prospectsWithEmail as ProspectListResponse).prospects
+      prospectsWithEmailList = Array.isArray(prospects) ? prospects : []
+    } else {
+      console.warn('⚠️ getStats: prospectsWithEmail is not ProspectListResponse:', typeof prospectsWithEmail, prospectsWithEmail)
+      prospectsWithEmailList = []
     }
     
     // Safely extract totals with defensive checks
-    const allProspectsTotal = (allProspects?.total ?? allProspects?.data?.total ?? 0) || 0
-    const prospectsWithEmailTotal = (prospectsWithEmail?.total ?? prospectsWithEmail?.data?.total ?? 0) || 0
+    const allProspectsTotal = (allProspects as ProspectListResponse)?.total ?? 0
+    const prospectsWithEmailTotal = (prospectsWithEmail as ProspectListResponse)?.total ?? 0
     
     // Count prospects by status - defensive forEach guard
     let prospects_pending = 0
