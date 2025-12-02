@@ -505,14 +505,16 @@ export async function listProspects(
   }
   const response = await res.json()
   
-  // Handle new response format: {success: bool, data: {prospects, total, skip, limit}, error: null | string}
-  if (response.success && response.data) {
-    return response.data
-  }
-  
-  // Fallback for old format or error case
-  if (response.error) {
-    throw new Error(response.error)
+  // API returns { prospects, total, skip, limit } directly
+  // Backend may wrap in { success: true, data: {...} }, so unwrap if needed
+  if (response && typeof response === 'object') {
+    if ('prospects' in response && 'total' in response) {
+      // Direct shape: { prospects, total, skip, limit }
+      return response as ProspectListResponse
+    } else if (response.success && response.data && 'prospects' in response.data) {
+      // Wrapped shape: { success: true, data: { prospects, total, skip, limit } }
+      return response.data as ProspectListResponse
+    }
   }
   
   // If response doesn't match expected format, return empty structure
@@ -599,34 +601,20 @@ export async function getStats(): Promise<Stats | null> {
       console.log('🔍 getStats - jobs response:', jobs)
     }
     
-    // Defensive guard: Ensure all inputs are defined before processing
-    if (!allProspects && !prospectsWithEmail && !jobs) {
-      console.warn('⚠️ getStats: All API responses are undefined/null')
-      return null
+    // Extract prospects array - API returns { prospects, total, skip, limit }
+    let allProspectsList: Prospect[] = []
+    if ("prospects" in allProspects && Array.isArray(allProspects.prospects)) {
+      allProspectsList = allProspects.prospects
     }
     
-    // Safely extract prospects array - ProspectListResponse has .prospects directly
-    let allProspectsList: any[] = []
-    if (allProspects && typeof allProspects === 'object' && 'prospects' in allProspects) {
-      const prospects = (allProspects as ProspectListResponse).prospects
-      allProspectsList = Array.isArray(prospects) ? prospects : []
-    } else {
-      console.warn('⚠️ getStats: allProspects is not ProspectListResponse:', typeof allProspects, allProspects)
-      allProspectsList = []
+    let prospectsWithEmailList: Prospect[] = []
+    if ("prospects" in prospectsWithEmail && Array.isArray(prospectsWithEmail.prospects)) {
+      prospectsWithEmailList = prospectsWithEmail.prospects
     }
     
-    let prospectsWithEmailList: any[] = []
-    if (prospectsWithEmail && typeof prospectsWithEmail === 'object' && 'prospects' in prospectsWithEmail) {
-      const prospects = (prospectsWithEmail as ProspectListResponse).prospects
-      prospectsWithEmailList = Array.isArray(prospects) ? prospects : []
-    } else {
-      console.warn('⚠️ getStats: prospectsWithEmail is not ProspectListResponse:', typeof prospectsWithEmail, prospectsWithEmail)
-      prospectsWithEmailList = []
-    }
-    
-    // Safely extract totals with defensive checks
-    const allProspectsTotal = (allProspects as ProspectListResponse)?.total ?? 0
-    const prospectsWithEmailTotal = (prospectsWithEmail as ProspectListResponse)?.total ?? 0
+    // Extract totals
+    const allProspectsTotal = allProspects?.total ?? 0
+    const prospectsWithEmailTotal = prospectsWithEmail?.total ?? 0
     
     // Count prospects by status - defensive forEach guard
     let prospects_pending = 0
