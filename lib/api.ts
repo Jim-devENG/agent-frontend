@@ -745,3 +745,65 @@ export async function getAPIKeysStatus(): Promise<Record<string, boolean>> {
   }
   return res.json()
 }
+
+// Scraper Automation API
+export interface ScraperStatus {
+  master_enabled: boolean
+  auto_enabled: boolean
+  locations: string[]
+  categories: string[]
+  interval: string
+  next_run_at: string | null
+  status: 'idle' | 'running' | 'disabled'
+  can_enable_auto: boolean
+  missing_fields: string[]
+}
+
+export async function getScraperStatus(): Promise<ScraperStatus> {
+  const res = await authenticatedFetch(`${API_BASE}/scraper/status`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to get scraper status' }))
+    throw new Error(error.detail || 'Failed to get scraper status')
+  }
+  return res.json()
+}
+
+export async function setMasterSwitch(enabled: boolean): Promise<{ enabled: boolean; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/scraper/master`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled }),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to set master switch' }))
+    throw new Error(error.detail || 'Failed to set master switch')
+  }
+  return res.json()
+}
+
+export async function setAutoSwitch(enabled: boolean): Promise<{ enabled: boolean; message: string; can_enable: boolean; missing_fields: string[] }> {
+  const res = await authenticatedFetch(`${API_BASE}/scraper/automatic`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled }),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to set auto switch' }))
+    throw new Error(error.detail || 'Failed to set auto switch')
+  }
+  return res.json()
+}
+
+export async function setScraperConfig(
+  locations: string[],
+  categories: string[],
+  interval: string
+): Promise<{ locations: string[]; categories: string[]; interval: string; next_run_at: string | null }> {
+  const res = await authenticatedFetch(`${API_BASE}/scraper/config`, {
+    method: 'POST',
+    body: JSON.stringify({ locations, categories, interval }),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to set scraper config' }))
+    throw new Error(error.detail || 'Failed to set scraper config')
+  }
+  return res.json()
+}
