@@ -4,7 +4,7 @@ Prospect management API endpoints
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
-from typing import List, Optional
+from typing import List, Optional, Dict
 from uuid import UUID
 import os
 from dotenv import load_dotenv
@@ -123,11 +123,76 @@ async def enrich_direct(
         }
 
 
+@router.post("/enrich/{prospect_id}")
+async def enrich_prospect_by_id(
+    prospect_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Enrich a single prospect by ID and update it in the database
+    """
+    try:
+        # Get prospect
+        result = await db.execute(select(Prospect).where(Prospect.id == prospect_id))
+        prospect = result.scalar_one_or_none()
+        
+        if not prospect:
+            raise HTTPException(status_code=404, detail="Prospect not found")
+        
+        # Enrich using domain
+        from app.services.enrichment import enrich_prospect_email
+        enrich_result = await enrich_prospect_email(prospect.domain)
+        
+        if enrich_result and enrich_result.get("email"):
+            # Update prospect with email
+            prospect.contact_email = enrich_result["email"]
+            prospect.contact_method = enrich_result.get("source", "hunter_io")
+            prospect.hunter_payload = enrich_result
+            await db.commit()
+            await db.refresh(prospect)
+            
+            return {
+                "success": True,
+                "email": enrich_result["email"],
+                "name": enrich_result.get("name"),
+                "company": enrich_result.get("company"),
+                "confidence": enrich_result.get("confidence"),
+                "domain": prospect.domain,
+                "source": enrich_result.get("source", "hunter_io"),
+                "message": f"Email enriched for {prospect.domain}"
+            }
+        else:
+            # No email found, but update hunter_payload for retry
+            if enrich_result:
+                prospect.hunter_payload = enrich_result
+                await db.commit()
+            
+            return {
+                "success": False,
+                "email": None,
+                "name": None,
+                "company": None,
+                "confidence": None,
+                "domain": prospect.domain,
+                "source": None,
+                "message": f"No email found for {prospect.domain}. Will retry later."
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"❌ Error enriching prospect {prospect_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to enrich prospect: {str(e)}")
+
+
 @router.post("/enrich")
 async def create_enrichment_job(
     prospect_ids: Optional[List[UUID]] = None,
     max_prospects: int = 100,
-    db: AsyncSession = Depends(get_db)
+    only_missing_emails: bool = False,  # New parameter: only enrich prospects without emails
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
 ):
     """
     Create a new enrichment job to find emails for prospects
@@ -135,6 +200,7 @@ async def create_enrichment_job(
     Query params:
     - prospect_ids: Optional list of specific prospect IDs to enrich
     - max_prospects: Maximum number of prospects to enrich (if no IDs specified)
+    - only_missing_emails: If True, only enrich prospects that don't have emails yet (prioritizes existing prospects without emails)
     """
     # Check master switch
     try:
@@ -150,7 +216,8 @@ async def create_enrichment_job(
         job_type="enrich",
         params={
             "prospect_ids": [str(pid) for pid in prospect_ids] if prospect_ids else None,
-            "max_prospects": max_prospects
+            "max_prospects": max_prospects,
+            "only_missing_emails": only_missing_emails
         },
         status="pending"
     )
@@ -182,6 +249,201 @@ async def create_enrichment_job(
         "status": "pending",
         "message": f"Enrichment job {job.id} started successfully"
     }
+
+
+@router.post("/deduplicate")
+async def deduplicate_prospects(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
+):
+    """
+    Remove duplicate prospects by domain, keeping the best version of each.
+    
+    Strategy:
+    - Groups prospects by domain (case-insensitive)
+    - For each domain, keeps the prospect with:
+      1. Highest priority: Has email (contact_email IS NOT NULL)
+      2. Second priority: Most recent updated_at
+      3. Third priority: Most recent created_at
+    - Deletes all other duplicates
+    """
+    try:
+        logger.info("🔍 Starting prospect deduplication...")
+        
+        # Find all prospects grouped by domain
+        # Use func.lower() for case-insensitive comparison
+        from sqlalchemy import func as sql_func
+        
+        # Get all prospects with their domain (lowercased for grouping)
+        result = await db.execute(
+            select(
+                Prospect.id,
+                Prospect.domain,
+                Prospect.contact_email,
+                Prospect.updated_at,
+                Prospect.created_at,
+                sql_func.lower(Prospect.domain).label('domain_lower')
+            )
+        )
+        all_prospects = result.all()
+        
+        # Group by domain (case-insensitive)
+        domain_groups: Dict[str, List[Dict]] = {}
+        for p in all_prospects:
+            domain_lower = p.domain_lower
+            if domain_lower not in domain_groups:
+                domain_groups[domain_lower] = []
+            domain_groups[domain_lower].append({
+                'id': p.id,
+                'domain': p.domain,
+                'has_email': p.contact_email is not None and str(p.contact_email).strip() != '',
+                'updated_at': p.updated_at,
+                'created_at': p.created_at
+            })
+        
+        # Find duplicates (domains with more than 1 prospect)
+        duplicates_found = 0
+        to_delete = []
+        kept = []
+        
+        for domain_lower, prospects_list in domain_groups.items():
+            if len(prospects_list) > 1:
+                duplicates_found += len(prospects_list) - 1
+                
+                # Sort to find the best one to keep
+                # Priority: 1) Has email, 2) Most recent updated_at, 3) Most recent created_at
+                sorted_prospects = sorted(
+                    prospects_list,
+                    key=lambda p: (
+                        not p['has_email'],  # False (has email) comes before True (no email)
+                        -(p['updated_at'].timestamp() if p['updated_at'] else 0),  # Most recent first
+                        -(p['created_at'].timestamp() if p['created_at'] else 0)  # Most recent first
+                    )
+                )
+                
+                # Keep the first (best) one
+                best = sorted_prospects[0]
+                kept.append({
+                    'id': best['id'],
+                    'domain': best['domain'],
+                    'has_email': best['has_email']
+                })
+                
+                # Mark others for deletion
+                for p in sorted_prospects[1:]:
+                    to_delete.append(p['id'])
+        
+        # Delete duplicates
+        deleted_count = 0
+        if to_delete:
+            logger.info(f"🗑️  Deleting {len(to_delete)} duplicate prospects...")
+            delete_result = await db.execute(
+                select(Prospect).where(Prospect.id.in_(to_delete))
+            )
+            duplicates_to_delete = delete_result.scalars().all()
+            
+            for prospect in duplicates_to_delete:
+                await db.delete(prospect)
+            
+            await db.commit()
+            deleted_count = len(duplicates_to_delete)
+            logger.info(f"✅ Deleted {deleted_count} duplicate prospects")
+        else:
+            logger.info("✅ No duplicates found - all prospects are unique")
+        
+        return {
+            "success": True,
+            "duplicates_found": duplicates_found,
+            "deleted": deleted_count,
+            "kept": len(kept),
+            "message": f"Removed {deleted_count} duplicate prospect(s), kept {len(kept)} unique domain(s)"
+        }
+        
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"❌ Error deduplicating prospects: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to deduplicate prospects: {str(e)}")
+
+
+@router.post("/enrich-and-deduplicate")
+async def enrich_and_deduplicate(
+    max_prospects: int = 100,
+    only_missing_emails: bool = True,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
+):
+    """
+    Combined endpoint: First enrich existing prospects, then deduplicate.
+    
+    This is the main endpoint for the "Enrich & Clean" button.
+    """
+    try:
+        # Step 1: Create enrichment job (reuse the existing endpoint logic)
+        logger.info("🔍 Step 1: Starting enrichment job...")
+        
+        # Check master switch
+        try:
+            from app.api.scraper import validate_master_switch
+            await validate_master_switch(db)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error checking master switch: {e}", exc_info=True)
+        
+        # Create job record
+        job = Job(
+            job_type="enrich",
+            params={
+                "prospect_ids": None,
+                "max_prospects": max_prospects,
+                "only_missing_emails": only_missing_emails
+            },
+            status="pending"
+        )
+        
+        db.add(job)
+        await db.commit()
+        await db.refresh(job)
+        
+        # Start enrichment task in background
+        try:
+            from app.tasks.enrichment import process_enrichment_job
+            import asyncio
+            asyncio.create_task(process_enrichment_job(str(job.id)))
+            logger.info(f"✅ Enrichment job {job.id} started in background")
+        except Exception as e:
+            logger.error(f"❌ Failed to start enrichment job {job.id}: {e}", exc_info=True)
+            job.status = "failed"
+            job.error_message = f"Failed to start job: {e}"
+            await db.commit()
+            await db.refresh(job)
+            return {
+                "success": False,
+                "job_id": job.id,
+                "status": "failed",
+                "error": str(e)
+            }
+        
+        enrichment_result = {
+            "job_id": str(job.id),
+            "status": "pending",
+            "message": f"Enrichment job {job.id} started successfully"
+        }
+        
+        # Step 2: Deduplicate
+        logger.info("🔍 Step 2: Starting deduplication...")
+        deduplicate_result = await deduplicate_prospects(db=db, current_user=current_user)
+        
+        return {
+            "success": True,
+            "enrichment": enrichment_result,
+            "deduplication": deduplicate_result,
+            "message": "Enrichment job started and deduplication completed"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error in enrich-and-deduplicate: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
 
 
 @router.get("/websites")

@@ -46,23 +46,44 @@ async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
             params = job.params or {}
             prospect_ids = params.get("prospect_ids")
             max_prospects = params.get("max_prospects", 100)
+            only_missing_emails = params.get("only_missing_emails", False)
             
             # Build query for prospects that are eligible for enrichment.
-            # IMPORTANT: we DO NOT filter on contact_email here so we can improve
-            # previously scraped emails when we find a better match.
+            # PRIORITIZE prospects without emails, but also process ones with emails to improve them.
+            # Order by: NULL emails first (highest priority), then by created_at (oldest first)
+            from sqlalchemy import or_, nullslast
+            
             query = select(Prospect).where(
                 Prospect.outreach_status == "pending"
             )
             
+            # If only_missing_emails is True, filter to only prospects without emails
+            if only_missing_emails:
+                query = query.where(Prospect.contact_email.is_(None))
+                logger.info(f"🔍 Filtering to only prospects without emails (only_missing_emails=True)")
+            
             if prospect_ids:
                 query = query.where(Prospect.id.in_([UUID(pid) for pid in prospect_ids]))
+            else:
+                # If no specific IDs, prioritize prospects without emails
+                # This ensures we enrich the ones that were skipped during discovery
+                query = query.order_by(
+                    Prospect.contact_email.is_(None).desc(),  # NULL emails first
+                    Prospect.created_at.asc()  # Oldest first
+                )
             
             query = query.limit(max_prospects)
             
             result = await db.execute(query)
             prospects = result.scalars().all()
             
-            logger.info(f"🔍 Found {len(prospects)} prospects to enrich (including ones with existing emails)...")
+            # Count how many don't have emails
+            no_email_count_query = sum(1 for p in prospects if not p.contact_email)
+            has_email_count = len(prospects) - no_email_count_query
+            
+            logger.info(f"🔍 Found {len(prospects)} prospects to enrich:")
+            logger.info(f"   📧 {no_email_count_query} without emails (priority)")
+            logger.info(f"   ✉️  {has_email_count} with existing emails (will improve if better match found)")
             
             if len(prospects) == 0:
                 job.status = "completed"

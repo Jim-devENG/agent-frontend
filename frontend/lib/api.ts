@@ -504,7 +504,7 @@ export async function listProspects(
     throw new Error(error.detail || 'Failed to list prospects')
   }
   const result: any = await res.json()
-
+  
   // Normalize to PaginatedResponse<Prospect>
   return {
     data: (result.prospects || result.data || []) as Prospect[],

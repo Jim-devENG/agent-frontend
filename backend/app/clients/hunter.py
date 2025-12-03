@@ -111,10 +111,22 @@ class HunterIOClient:
                     }
         
         except httpx.HTTPStatusError as e:
-            logger.error(f"Hunter.io API HTTP error for {domain}: {e.response.status_code} - {e.response.text}")
+            status_code = e.response.status_code
+            logger.error(f"Hunter.io API HTTP error for {domain}: {status_code} - {e.response.text}")
+            
+            # Detect 429 rate limit - DO NOT treat as "no email found"
+            if status_code == 429:
+                logger.warning(f"⚠️  [HUNTER] Rate limit (429) detected for {domain}")
+                return {
+                    "success": False,
+                    "status": "rate_limited",
+                    "error": f"HTTP {status_code}: {e.response.text}",
+                    "domain": domain
+                }
+            
             return {
                 "success": False,
-                "error": f"HTTP {e.response.status_code}: {e.response.text}",
+                "error": f"HTTP {status_code}: {e.response.text}",
                 "domain": domain
             }
         except Exception as e:

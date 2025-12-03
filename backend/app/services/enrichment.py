@@ -14,16 +14,66 @@ for successful lookups:
     "success": bool,
     "source": str | None,
     "error": str | None,
+    "status": str | None,  # "rate_limited", "pending_retry", etc.
 }
 
 or None when no email candidate could be found.
 """
 import logging
 import time
+import re
+import httpx
 from typing import Optional, Dict, Any
 from app.clients.hunter import HunterIOClient
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_emails_from_html(html_content: str) -> list[str]:
+    """
+    Extract email addresses from HTML content using regex.
+    Simple fallback when Hunter.io fails.
+    """
+    emails = set()
+    
+    # Standard email regex
+    email_pattern = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
+    
+    # Extract from text
+    found_emails = email_pattern.findall(html_content)
+    emails.update(found_emails)
+    
+    # Filter out common false positives
+    filtered = []
+    for email in emails:
+        email_lower = email.lower()
+        # Skip common false positives
+        if any(skip in email_lower for skip in ['example.com', 'test@', 'noreply', 'no-reply', '@sentry', '@wix']):
+            continue
+        filtered.append(email)
+    
+    return filtered
+
+
+async def _scrape_email_from_url(url: str) -> Optional[str]:
+    """
+    Scrape email from a website URL using local HTML parsing.
+    Returns first valid email found, or None.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            html = response.text
+            
+            emails = _extract_emails_from_html(html)
+            if emails:
+                # Return the first email (usually the most relevant)
+                return emails[0]
+    except Exception as e:
+        logger.debug(f"Local email scraping failed for {url}: {e}")
+    
+    return None
 
 
 async def enrich_prospect_email(domain: str, name: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -61,16 +111,131 @@ async def enrich_prospect_email(domain: str, name: Optional[str] = None) -> Opti
             logger.error(f"❌ [ENRICHMENT] {error_msg}", exc_info=True)
             raise Exception(error_msg) from api_err
         
-        # Process response
+        # Process response - handle rate limits specially
         if not hunter_result.get("success"):
             error_msg = hunter_result.get('error', 'Unknown error')
-            logger.warning(f"⚠️  [ENRICHMENT] Hunter.io returned error: {error_msg}")
-            return None
+            status = hunter_result.get('status')
+            
+            # Handle rate limit - return special status, DO NOT return None
+            if status == "rate_limited":
+                logger.warning(f"⚠️  [ENRICHMENT] Hunter.io rate limited for {domain}")
+                # Try local scraping fallback
+                try:
+                    # Try to scrape from domain's homepage
+                    homepage_url = f"https://{domain}"
+                    local_email = await _scrape_email_from_url(homepage_url)
+                    if local_email:
+                        logger.info(f"✅ [ENRICHMENT] Local scraping found email for {domain}: {local_email}")
+                        return {
+                            "email": local_email,
+                            "name": None,
+                            "company": None,
+                            "confidence": 50.0,  # Lower confidence for local scraping
+                            "domain": domain,
+                            "success": True,
+                            "source": "local_scraping",
+                            "error": None,
+                            "status": None,
+                        }
+                    else:
+                        # No email found locally, mark for retry
+                        logger.warning(f"⚠️  [ENRICHMENT] No email found via local scraping for {domain}, marking for retry")
+                        return {
+                            "email": None,
+                            "name": None,
+                            "company": None,
+                            "confidence": 0.0,
+                            "domain": domain,
+                            "success": False,
+                            "source": None,
+                            "error": "Rate limited and local scraping found no email",
+                            "status": "pending_retry",
+                        }
+                except Exception as scrape_err:
+                    logger.warning(f"⚠️  [ENRICHMENT] Local scraping failed for {domain}: {scrape_err}, marking for retry")
+                    return {
+                        "email": None,
+                        "name": None,
+                        "company": None,
+                        "confidence": 0.0,
+                        "domain": domain,
+                        "success": False,
+                        "source": None,
+                        "error": f"Rate limited and local scraping failed: {scrape_err}",
+                        "status": "pending_retry",
+                    }
+            
+            # For other errors, try local scraping fallback
+            logger.warning(f"⚠️  [ENRICHMENT] Hunter.io returned error: {error_msg}, trying local scraping fallback")
+            try:
+                homepage_url = f"https://{domain}"
+                local_email = await _scrape_email_from_url(homepage_url)
+                if local_email:
+                    logger.info(f"✅ [ENRICHMENT] Local scraping found email for {domain}: {local_email}")
+                    return {
+                        "email": local_email,
+                        "name": None,
+                        "company": None,
+                        "confidence": 50.0,
+                        "domain": domain,
+                        "success": True,
+                        "source": "local_scraping",
+                        "error": None,
+                        "status": None,
+                    }
+            except Exception as scrape_err:
+                logger.debug(f"Local scraping fallback failed for {domain}: {scrape_err}")
+            
+            # If local scraping also fails, mark for retry instead of returning None
+            logger.warning(f"⚠️  [ENRICHMENT] All enrichment methods failed for {domain}, marking for retry")
+            return {
+                "email": None,
+                "name": None,
+                "company": None,
+                "confidence": 0.0,
+                "domain": domain,
+                "success": False,
+                "source": None,
+                "error": error_msg,
+                "status": "pending_retry",
+            }
         
         emails = hunter_result.get("emails", [])
         if not emails or len(emails) == 0:
-            logger.info(f"⚠️  [ENRICHMENT] No emails found for {domain}")
-            return None
+            logger.info(f"⚠️  [ENRICHMENT] No emails found for {domain} via Hunter.io, trying local scraping")
+            # Try local scraping fallback
+            try:
+                homepage_url = f"https://{domain}"
+                local_email = await _scrape_email_from_url(homepage_url)
+                if local_email:
+                    logger.info(f"✅ [ENRICHMENT] Local scraping found email for {domain}: {local_email}")
+                    return {
+                        "email": local_email,
+                        "name": None,
+                        "company": None,
+                        "confidence": 50.0,
+                        "domain": domain,
+                        "success": True,
+                        "source": "local_scraping",
+                        "error": None,
+                        "status": None,
+                    }
+            except Exception as scrape_err:
+                logger.debug(f"Local scraping fallback failed for {domain}: {scrape_err}")
+            
+            # Mark for retry instead of returning None
+            logger.warning(f"⚠️  [ENRICHMENT] No emails found for {domain}, marking for retry")
+            return {
+                "email": None,
+                "name": None,
+                "company": None,
+                "confidence": 0.0,
+                "domain": domain,
+                "success": False,
+                "source": None,
+                "error": "No emails found via Hunter.io or local scraping",
+                "status": "pending_retry",
+            }
         
         # Get best email (highest confidence)
         best_email = None

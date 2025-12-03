@@ -378,39 +378,79 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                                 logger.info(f"🔍 [DISCOVERY] Enriching {domain} before saving...")
                                 enrich_result = await enrich_prospect_email(domain)
                                 
-                                if enrich_result and enrich_result.get("email"):
-                                    contact_email = enrich_result["email"]
-                                    # Store enrichment metadata
-                                    hunter_payload = {
-                                        "email": contact_email,
-                                        "confidence": enrich_result.get("confidence", 0),
-                                        "source": enrich_result.get("source", "hunter_io")
-                                    }
-                                    logger.info(f"✅ [DISCOVERY] Enriched {domain}: {contact_email}")
+                                if enrich_result:
+                                    enrich_status = enrich_result.get("status")
+                                    
+                                    # Handle rate limits and retry status - DO NOT skip, mark for retry
+                                    if enrich_status in ["rate_limited", "pending_retry"]:
+                                        logger.warning(f"⚠️  [DISCOVERY] {domain} marked for retry (status: {enrich_status})")
+                                        # Still save prospect, but mark email as pending
+                                        contact_email = None  # Will be set later via retry
+                                        hunter_payload = {
+                                            "status": enrich_status,
+                                            "error": enrich_result.get("error"),
+                                            "retry_needed": True
+                                        }
+                                    elif enrich_result.get("email"):
+                                        contact_email = enrich_result["email"]
+                                        # Store enrichment metadata
+                                        hunter_payload = {
+                                            "email": contact_email,
+                                            "confidence": enrich_result.get("confidence", 0),
+                                            "source": enrich_result.get("source", "hunter_io")
+                                        }
+                                        logger.info(f"✅ [DISCOVERY] Enriched {domain}: {contact_email}")
+                                    else:
+                                        # No email but not rate limited - mark for retry
+                                        logger.warning(f"⚠️  [DISCOVERY] No email found for {domain}, marking for retry")
+                                        contact_email = None
+                                        hunter_payload = {
+                                            "status": "pending_retry",
+                                            "error": enrich_result.get("error", "No email found"),
+                                            "retry_needed": True
+                                        }
                                 else:
-                                    logger.warning(f"⚠️  [DISCOVERY] No email found for {domain} during enrichment")
+                                    # Enrichment returned None - mark for retry
+                                    logger.warning(f"⚠️  [DISCOVERY] Enrichment returned None for {domain}, marking for retry")
+                                    contact_email = None
+                                    hunter_payload = {
+                                        "status": "pending_retry",
+                                        "error": "Enrichment returned no result",
+                                        "retry_needed": True
+                                    }
                                     
                             except Exception as e:
-                                # DEFENSIVE: Log error but don't break pipeline - just skip this prospect
+                                # DEFENSIVE: Log error but DO NOT skip - mark for retry instead
                                 logger.error(f"❌ [DISCOVERY] Enrichment failed for {domain}: {e}", exc_info=True)
-                                logger.warning(f"⏭️  [DISCOVERY] Skipping {domain} due to enrichment failure - pipeline continues")
-                                # Continue to skip logic below - don't raise, don't break loop
+                                logger.warning(f"⚠️  [DISCOVERY] Marking {domain} for retry due to enrichment error")
+                                contact_email = None
+                                hunter_payload = {
+                                    "status": "pending_retry",
+                                    "error": str(e),
+                                    "retry_needed": True
+                                }
                             
-                            # MANDATORY RULE: Do not save prospect without email
+                            # NEW RULE: Save prospect even without email, mark for retry if needed
+                            # DO NOT skip domains because of Hunter errors
+                            # ALWAYS save prospects - even without email, they can be enriched later
                             if not contact_email:
-                                logger.warning(f"⏭️  [DISCOVERY] Skipping {domain} - no email found during enrichment")
-                                search_stats["results_skipped_no_email"] = search_stats.get("results_skipped_no_email", 0) + 1
-                                discovery_query.results_skipped_duplicate += 1  # Track as skipped
-                                continue  # Skip this prospect - do not save
+                                # Always save prospects, even without email
+                                # They will be marked for retry/enrichment later
+                                logger.info(f"💾 [DISCOVERY] Saving {domain} without email (will retry enrichment later)")
+                                # Continue to save logic below - don't skip
                             
-                            # Only save if we have an email
-                            logger.info(f"💾 [DISCOVERY] Saving prospect {domain} with email {contact_email}")
+                            # Save prospect (with or without email - retry will handle missing emails)
+                            if contact_email:
+                                logger.info(f"💾 [DISCOVERY] Saving prospect {domain} with email {contact_email}")
+                            else:
+                                logger.info(f"💾 [DISCOVERY] Saving prospect {domain} without email (retry pending)")
+                            
                             prospect = Prospect(
                                 domain=domain,
                                 page_url=normalized_url,
                                 page_title=title,
-                                contact_email=contact_email,  # REQUIRED - we skip if None
-                                contact_method="hunter_io",
+                                contact_email=contact_email,  # May be None if retry needed
+                                contact_method="hunter_io" if contact_email else "pending_retry",
                                 outreach_status="pending",
                                 discovery_query_id=discovery_query.id,
                                 hunter_payload=hunter_payload,
