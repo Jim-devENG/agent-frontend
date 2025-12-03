@@ -563,27 +563,45 @@ export async function listProspects(
   }
   const result: unknown = await res.json()
 
-  // Type guard for response structure
-  function isPaginatedProspectResponse(value: unknown): value is { data?: Prospect[]; prospects?: Prospect[]; total?: number } {
-    return typeof value === 'object' && value !== null
-  }
-
-  // Normalize to PaginatedResponse<Prospect>
-  if (isPaginatedProspectResponse(result)) {
-    const data = (result.data || result.prospects || []) as Prospect[]
-    const total = (typeof result.total === 'number' ? result.total : 0)
-    return {
-      data,
-      total,
-      skip,
-      limit,
+  // Backend returns: {success: true, data: {data: [...], prospects: [...], total: ...}, error: null}
+  // Extract the nested data structure
+  let prospectsArray: Prospect[] = []
+  let totalCount = 0
+  
+  if (result && typeof result === 'object' && result !== null) {
+    const resultObj = result as Record<string, unknown>
+    
+    // Check if response has the nested structure (backend format)
+    if (resultObj.data && typeof resultObj.data === 'object' && resultObj.data !== null) {
+      const dataObj = resultObj.data as Record<string, unknown>
+      // Extract from data.data or data.prospects
+      if (Array.isArray(dataObj.data)) {
+        prospectsArray = dataObj.data as Prospect[]
+      } else if (Array.isArray(dataObj.prospects)) {
+        prospectsArray = dataObj.prospects as Prospect[]
+      }
+      // Extract total from nested data
+      if (typeof dataObj.total === 'number') {
+        totalCount = dataObj.total
+      }
+    } else if (Array.isArray(resultObj.prospects)) {
+      // Fallback: direct prospects array (legacy format)
+      prospectsArray = resultObj.prospects as Prospect[]
+    } else if (Array.isArray(resultObj.data)) {
+      // Fallback: direct data array (alternative format)
+      prospectsArray = resultObj.data as Prospect[]
+    }
+    
+    // Extract total from top level if not found in nested structure
+    if (totalCount === 0 && typeof resultObj.total === 'number') {
+      totalCount = resultObj.total
     }
   }
 
-  // Fallback for unexpected format
+  // Normalize to PaginatedResponse<Prospect>
   return {
-    data: [] as Prospect[],
-    total: 0,
+    data: prospectsArray,
+    total: totalCount,
     skip,
     limit,
   }
