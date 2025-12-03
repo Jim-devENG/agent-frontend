@@ -12,6 +12,7 @@ import ActivityFeed from '@/components/ActivityFeed'
 import AutomationControl from '@/components/AutomationControl'
 import ManualScrape from '@/components/ManualScrape'
 import WebsitesTable from '@/components/WebsitesTable'
+import DeduplicateButton from '@/components/DeduplicateButton'
 import SystemStatus from '@/components/SystemStatus'
 import ScrapedEmailsTable from '@/components/ScrapedEmailsTable'
 import { getStats, listJobs, listProspects } from '@/lib/api'
@@ -211,6 +212,7 @@ export default function Dashboard() {
             <div className="lg:col-span-7 space-y-6">
               <AutomationControl />
               <ManualScrape />
+              <DeduplicateButton />
             </div>
 
             {/* Right Column - Jobs & Activity */}

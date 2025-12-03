@@ -345,11 +345,15 @@ export async function createDiscoveryJob(
 
 export async function createEnrichmentJob(
   prospectIds?: string[],
-  maxProspects?: number
+  maxProspects?: number,
+  onlyMissingEmails?: boolean
 ): Promise<{ job_id: string; status: string; message?: string }> {
   const params = new URLSearchParams()
-  if (prospectIds) params.append('prospect_ids', prospectIds.join(','))
+  if (prospectIds && prospectIds.length > 0) {
+    params.append('prospect_ids', prospectIds.join(','))
+  }
   if (maxProspects) params.append('max_prospects', maxProspects.toString())
+  if (onlyMissingEmails) params.append('only_missing_emails', 'true')
   
   const res = await authenticatedFetch(`${API_BASE}/prospects/enrich?${params}`, {
     method: 'POST',
@@ -357,6 +361,46 @@ export async function createEnrichmentJob(
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to create enrichment job' }))
     throw new Error(error.detail || 'Failed to create enrichment job')
+  }
+  return res.json()
+}
+
+export async function deduplicateProspects(): Promise<{
+  success: boolean
+  duplicates_found: number
+  deleted: number
+  kept: number
+  message: string
+}> {
+  const res = await authenticatedFetch(`${API_BASE}/prospects/deduplicate`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to deduplicate prospects' }))
+    throw new Error(error.detail || 'Failed to deduplicate prospects')
+  }
+  return res.json()
+}
+
+export async function enrichAndDeduplicate(
+  maxProspects: number = 100,
+  onlyMissingEmails: boolean = true
+): Promise<{
+  success: boolean
+  enrichment: { job_id: string; status: string; message?: string }
+  deduplication: { success: boolean; duplicates_found: number; deleted: number; kept: number; message: string }
+  message: string
+}> {
+  const params = new URLSearchParams()
+  params.append('max_prospects', maxProspects.toString())
+  if (onlyMissingEmails) params.append('only_missing_emails', 'true')
+  
+  const res = await authenticatedFetch(`${API_BASE}/prospects/enrich-and-deduplicate?${params}`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to enrich and deduplicate' }))
+    throw new Error(error.detail || 'Failed to enrich and deduplicate')
   }
   return res.json()
 }
@@ -469,6 +513,17 @@ export async function enrichEmail(domain: string, name?: string): Promise<Enrich
     
     throw new Error(`Enrichment failed: ${errorMessage}`)
   }
+}
+
+export async function enrichProspectById(prospectId: string, domain: string): Promise<EnrichmentResult & { message?: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/prospects/enrich/${prospectId}`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to enrich prospect' }))
+    throw new Error(error.detail || 'Failed to enrich prospect')
+  }
+  return res.json()
 }
 
 export async function cancelJob(jobId: string): Promise<{ success: boolean; message?: string; error?: string }> {
