@@ -187,4 +187,215 @@ class HunterIOClient:
                 "error": str(e),
                 "email": email
             }
+    
+    async def email_finder(
+        self,
+        domain: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Find email for a specific person
+        
+        Args:
+            domain: Domain name (e.g., "example.com")
+            first_name: First name (optional)
+            last_name: Last name (optional)
+        
+        Returns:
+            Dictionary with email result
+        """
+        url = f"{self.BASE_URL}/email-finder"
+        
+        params = {
+            "domain": domain,
+            "api_key": self.api_key
+        }
+        
+        if first_name:
+            params["first_name"] = first_name
+        if last_name:
+            params["last_name"] = last_name
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                logger.info(f"Calling Hunter.io email-finder for {domain} (name: {first_name} {last_name})")
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("data") and result["data"].get("email"):
+                    data = result["data"]
+                    return {
+                        "success": True,
+                        "email": data.get("email"),
+                        "score": data.get("score", 0),
+                        "sources": data.get("sources", []),
+                        "first_name": data.get("first_name"),
+                        "last_name": data.get("last_name"),
+                        "company": data.get("company"),
+                        "position": data.get("position"),
+                        "raw_response": result
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": "No email found",
+                        "domain": domain
+                    }
+        
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code
+            if status_code == 429:
+                return {
+                    "success": False,
+                    "status": "rate_limited",
+                    "error": f"HTTP {status_code}: Rate limit exceeded"
+                }
+            return {
+                "success": False,
+                "error": f"HTTP {status_code}: {e.response.text}",
+                "domain": domain
+            }
+        except Exception as e:
+            logger.error(f"Hunter.io email-finder failed for {domain}: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "domain": domain
+            }
+    
+    async def company_enrichment(
+        self,
+        domain: str
+    ) -> Dict[str, Any]:
+        """
+        Get company information for a domain
+        
+        Args:
+            domain: Domain name (e.g., "example.com")
+        
+        Returns:
+            Dictionary with company information
+        """
+        url = f"{self.BASE_URL}/companies/find"
+        
+        params = {
+            "domain": domain,
+            "api_key": self.api_key
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                logger.info(f"Calling Hunter.io company enrichment for {domain}")
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("data"):
+                    data = result["data"]
+                    return {
+                        "success": True,
+                        "domain": domain,
+                        "name": data.get("name"),
+                        "country": data.get("country"),
+                        "industry": data.get("industry"),
+                        "employees": data.get("employees"),
+                        "linkedin_url": data.get("linkedin_url"),
+                        "twitter_url": data.get("twitter_url"),
+                        "facebook_url": data.get("facebook_url"),
+                        "phone_numbers": data.get("phone_numbers", []),
+                        "raw_response": result
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": "No company data found",
+                        "domain": domain
+                    }
+        
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code
+            if status_code == 429:
+                return {
+                    "success": False,
+                    "status": "rate_limited",
+                    "error": f"HTTP {status_code}: Rate limit exceeded"
+                }
+            return {
+                "success": False,
+                "error": f"HTTP {status_code}: {e.response.text}",
+                "domain": domain
+            }
+        except Exception as e:
+            logger.error(f"Hunter.io company enrichment failed for {domain}: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "domain": domain
+            }
+    
+    async def combined_enrichment(
+        self,
+        email: str
+    ) -> Dict[str, Any]:
+        """
+        Get combined enrichment data (person + company) for an email
+        
+        Args:
+            email: Email address
+        
+        Returns:
+            Dictionary with combined enrichment data
+        """
+        url = f"{self.BASE_URL}/combined/find"
+        
+        params = {
+            "email": email,
+            "api_key": self.api_key
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                logger.info(f"Calling Hunter.io combined enrichment for {email}")
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                result = response.json()
+                
+                if result.get("data"):
+                    data = result["data"]
+                    return {
+                        "success": True,
+                        "email": email,
+                        "person": data.get("person", {}),
+                        "company": data.get("company", {}),
+                        "raw_response": result
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": "No enrichment data found",
+                        "email": email
+                    }
+        
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code
+            if status_code == 429:
+                return {
+                    "success": False,
+                    "status": "rate_limited",
+                    "error": f"HTTP {status_code}: Rate limit exceeded"
+                }
+            return {
+                "success": False,
+                "error": f"HTTP {status_code}: {e.response.text}",
+                "email": email
+            }
+        except Exception as e:
+            logger.error(f"Hunter.io combined enrichment failed for {email}: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "email": email
+            }
 

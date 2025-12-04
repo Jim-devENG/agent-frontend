@@ -458,6 +458,20 @@ async def enrich_prospect_email(domain: str, name: Optional[str] = None, page_ur
         full_name = f"{first_name} {last_name}".strip() or None
         company = best_email.get("company")
         
+        # Optionally verify the email to increase confidence
+        # Only verify if confidence is below 80 to avoid unnecessary API calls
+        verified = False
+        verification_score = 0
+        if best_confidence < 80:
+            try:
+                verify_result = await hunter_client.email_verifier(email_value)
+                if verify_result.get("success") and verify_result.get("result") == "deliverable":
+                    verified = True
+                    verification_score = verify_result.get("score", 0)
+                    logger.info(f"✅ [ENRICHMENT] Email {email_value} verified (score: {verification_score})")
+            except Exception as verify_err:
+                logger.debug(f"Email verification skipped for {email_value}: {verify_err}")
+        
         total_time = (time.time() - start_time) * 1000
         
         result: Dict[str, Any] = {
@@ -465,6 +479,8 @@ async def enrich_prospect_email(domain: str, name: Optional[str] = None, page_ur
             "name": full_name,
             "company": company,
             "confidence": best_confidence,
+            "verified": verified,
+            "verification_score": verification_score,
             "domain": domain,
             "success": True,
             "source": "hunter_io",
@@ -473,11 +489,12 @@ async def enrich_prospect_email(domain: str, name: Optional[str] = None, page_ur
         
         logger.info(f"✅ [ENRICHMENT] Enriched {domain} in {total_time:.0f}ms")
         logger.info(
-            "📤 [ENRICHMENT] Output - email=%s, name=%s, company=%s, confidence=%.1f, source=%s",
+            "📤 [ENRICHMENT] Output - email=%s, name=%s, company=%s, confidence=%.1f, verified=%s, source=%s",
             email_value,
             full_name,
             company,
             best_confidence,
+            verified,
             "hunter_io",
         )
         
