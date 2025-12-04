@@ -393,15 +393,16 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                                             "retry_needed": True
                                         }
                                     elif enrich_result.get("email"):
-                                    contact_email = enrich_result["email"]
-                                    # Store enrichment metadata
-                                    hunter_payload = {
-                                        "email": contact_email,
-                                        "confidence": enrich_result.get("confidence", 0),
-                                        "source": enrich_result.get("source", "hunter_io")
-                                    }
-                                    logger.info(f"✅ [DISCOVERY] Enriched {domain}: {contact_email}")
-                                else:
+                                        # Email found successfully
+                                        contact_email = enrich_result["email"]
+                                        # Store enrichment metadata
+                                        hunter_payload = {
+                                            "email": contact_email,
+                                            "confidence": enrich_result.get("confidence", 0),
+                                            "source": enrich_result.get("source", "hunter_io")
+                                        }
+                                        logger.info(f"✅ [DISCOVERY] Enriched {domain}: {contact_email}")
+                                    else:
                                         # No email but not rate limited - mark for retry
                                         logger.warning(f"⚠️  [DISCOVERY] No email found for {domain}, marking for retry")
                                         contact_email = None

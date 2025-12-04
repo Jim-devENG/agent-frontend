@@ -417,8 +417,39 @@ async def enrich_prospect_email(domain: str, name: Optional[str] = None, page_ur
                 best_email = email_data
         
         if not best_email or not best_email.get("value"):
-            logger.warning(f"⚠️  [ENRICHMENT] No valid email value in response for {domain}")
-            return None
+            logger.warning(f"⚠️  [ENRICHMENT] No valid email value in response for {domain}, trying local scraping")
+            # Try local scraping as fallback before giving up
+            try:
+                local_email = await _scrape_email_from_domain(domain, page_url)
+                if local_email:
+                    logger.info(f"✅ [ENRICHMENT] Local scraping found email for {domain}: {local_email}")
+                    return {
+                        "email": local_email,
+                        "name": None,
+                        "company": None,
+                        "confidence": 50.0,
+                        "domain": domain,
+                        "success": True,
+                        "source": "local_scraping",
+                        "error": None,
+                        "status": None,
+                    }
+            except Exception as scrape_err:
+                logger.debug(f"Local scraping fallback failed for {domain}: {scrape_err}")
+            
+            # No email found anywhere - return structured response instead of None
+            logger.warning(f"⚠️  [ENRICHMENT] No emails found for {domain} via Hunter.io or local scraping")
+            return {
+                "email": None,
+                "name": None,
+                "company": None,
+                "confidence": 0.0,
+                "domain": domain,
+                "success": False,
+                "source": None,
+                "error": "No valid email value in Hunter.io response and local scraping failed",
+                "status": "pending_retry",
+            }
         
         email_value = best_email["value"]
         # Build a simple display name from first/last name if present
@@ -456,6 +487,37 @@ async def enrich_prospect_email(domain: str, name: Optional[str] = None, page_ur
         total_time = (time.time() - start_time) * 1000
         error_msg = f"Enrichment failed for {domain} after {total_time:.0f}ms: {str(e)}"
         logger.error(f"❌ [ENRICHMENT] {error_msg}", exc_info=True)
-        # Re-raise with full context
-        raise Exception(error_msg) from e
+        
+        # Try local scraping as last resort before giving up
+        try:
+            logger.info(f"🔄 [ENRICHMENT] Attempting local scraping fallback after error for {domain}")
+            local_email = await _scrape_email_from_domain(domain, page_url)
+            if local_email:
+                logger.info(f"✅ [ENRICHMENT] Local scraping found email for {domain} after error: {local_email}")
+                return {
+                    "email": local_email,
+                    "name": None,
+                    "company": None,
+                    "confidence": 50.0,
+                    "domain": domain,
+                    "success": True,
+                    "source": "local_scraping",
+                    "error": None,
+                    "status": None,
+                }
+        except Exception as scrape_err:
+            logger.debug(f"Local scraping fallback also failed for {domain}: {scrape_err}")
+        
+        # Return structured error response instead of raising
+        return {
+            "email": None,
+            "name": None,
+            "company": None,
+            "confidence": 0.0,
+            "domain": domain,
+            "success": False,
+            "source": None,
+            "error": error_msg,
+            "status": "pending_retry",
+        }
 
