@@ -443,7 +443,7 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                             
                             # Save prospect (with or without email - retry will handle missing emails)
                             if contact_email:
-                            logger.info(f"💾 [DISCOVERY] Saving prospect {domain} with email {contact_email}")
+                                logger.info(f"💾 [DISCOVERY] Saving prospect {domain} with email {contact_email}")
                             else:
                                 logger.info(f"💾 [DISCOVERY] Saving prospect {domain} without email (retry pending)")
                             

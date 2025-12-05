@@ -639,19 +639,19 @@ async def enrich_prospect_email(domain: str, name: Optional[str] = None, page_ur
         try:
             logger.info(f"🔄 [ENRICHMENT] Attempting local scraping fallback after error for {normalized_domain}")
             local_email = await _scrape_email_from_domain(normalized_domain, page_url)
-                if local_email:
-                    logger.info(f"✅ [ENRICHMENT] Local scraping found email for {normalized_domain} after error: {local_email}")
-                    return {
-                        "email": local_email,
-                        "name": None,
-                        "company": None,
-                        "confidence": 50.0,
-                        "domain": normalized_domain,
-                        "success": True,
-                        "source": "local_scraping",
-                        "error": None,
-                        "status": None,
-                    }
+            if local_email:
+                logger.info(f"✅ [ENRICHMENT] Local scraping found email for {normalized_domain} after error: {local_email}")
+                return {
+                    "email": local_email,
+                    "name": None,
+                    "company": None,
+                    "confidence": 50.0,
+                    "domain": normalized_domain,
+                    "success": True,
+                    "source": "local_scraping",
+                    "error": None,
+                    "status": None,
+                }
         except Exception as scrape_err:
             logger.debug(f"Local scraping fallback also failed for {normalized_domain}: {scrape_err}")
         
