@@ -12,6 +12,7 @@ from app.db.database import AsyncSessionLocal
 from app.models.prospect import Prospect
 from app.models.job import Job
 from app.clients.hunter import HunterIOClient
+from app.utils.email_validation import is_plausible_email
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +258,12 @@ async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
                             reason = f"higher_confidence ({new_conf_val} > {old_conf_val})"
 
                         if should_update:
+                            # Final validation before saving
+                            if not is_plausible_email(new_email):
+                                logger.warning(f"🚫 [ENRICHMENT] Rejecting implausible email before save: {new_email}")
+                                no_email_count += 1
+                                continue
+                            
                             old_email_log = str(prospect.contact_email) if prospect.contact_email else None
                             logger.info(
                                 f"✅ [ENRICHMENT] [{idx}/{len(prospects)}] Updating email for {domain}: "
