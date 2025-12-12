@@ -12,10 +12,8 @@ import ActivityFeed from '@/components/ActivityFeed'
 import AutomationControl from '@/components/AutomationControl'
 import ManualScrape from '@/components/ManualScrape'
 import WebsitesTable from '@/components/WebsitesTable'
-import DeduplicateButton from '@/components/DeduplicateButton'
 import SystemStatus from '@/components/SystemStatus'
-import ScrapedEmailsTable from '@/components/ScrapedEmailsTable'
-import { getStats, listJobs, listProspects } from '@/lib/api'
+import { getStats, listJobs } from '@/lib/api'
 import type { Stats, Job } from '@/lib/api'
 import { 
   LayoutDashboard, 
@@ -48,8 +46,10 @@ export default function Dashboard() {
     }
 
     loadData()
-    // Refresh every 10 seconds for real-time updates
-    const interval = setInterval(loadData, 10000)
+    // Refresh every 30 seconds (debounced to prevent loops) - increased from 10s
+    const interval = setInterval(() => {
+      loadData()
+    }, 30000)
     return () => clearInterval(interval)
   }, [router])
 
@@ -89,7 +89,6 @@ export default function Dashboard() {
   const refreshData = () => {
     loadData()
   }
-
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -212,7 +211,6 @@ export default function Dashboard() {
             <div className="lg:col-span-7 space-y-6">
               <AutomationControl />
               <ManualScrape />
-              <DeduplicateButton />
             </div>
 
             {/* Right Column - Jobs & Activity */}
@@ -233,7 +231,7 @@ export default function Dashboard() {
 
         {activeTab === 'leads' && <LeadsTable />}
 
-        {activeTab === 'scraped_emails' && <ScrapedEmailsTable />}
+        {activeTab === 'scraped_emails' && <LeadsTable emailsOnly />}
 
         {activeTab === 'emails' && <EmailsTable />}
 

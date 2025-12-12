@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, AlertCircle } from 'lucide-react'
-import { listProspects, composeEmail, sendEmail, getLatestDiscoveryJob, type Prospect } from '@/lib/api'
+import { Mail, ExternalLink, RefreshCw, Send, X, Loader2 } from 'lucide-react'
+import { listProspects, composeEmail, sendEmail, type Prospect } from '@/lib/api'
 import { safeToFixed } from '@/lib/safe-utils'
 
 interface LeadsTableProps {
@@ -14,8 +14,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
   const [loading, setLoading] = useState(true)
   const [skip, setSkip] = useState(0)
   const [total, setTotal] = useState(0)
-  const [lastJobInfo, setLastJobInfo] = useState<{ saved: number; found: number } | null>(null)
-  const limit = 10
+  const limit = 50
 
   const [activeProspect, setActiveProspect] = useState<Prospect | null>(null)
   const [draftSubject, setDraftSubject] = useState('')
@@ -35,19 +34,6 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
       )
       setProspects(response.data)
       setTotal(response.total)
-      
-      // Fetch latest discovery job info
-      const latestJob = await getLatestDiscoveryJob()
-      if (latestJob && latestJob.result) {
-        const result = latestJob.result as any
-        const stats = result.search_statistics
-        if (stats) {
-          setLastJobInfo({
-            saved: stats.results_saved || 0,
-            found: stats.total_results_found || 0,
-          })
-        }
-      }
     } catch (error) {
       console.error('Failed to load prospects:', error)
     } finally {
@@ -140,21 +126,6 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
         </button>
       </div>
 
-      {/* Last Discovery Job Hint */}
-      {lastJobInfo && lastJobInfo.saved === 0 && lastJobInfo.found > 0 && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start space-x-2">
-          <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-yellow-800">
-              Last discovery job found {lastJobInfo.found} results but saved 0 new prospects.
-            </p>
-            <p className="text-xs text-yellow-700 mt-1">
-              This usually means enrichment failed (Hunter.io rate limits or no emails found). Check the Jobs tab for details.
-            </p>
-          </div>
-        </div>
-      )}
-
       {loading && prospects.length === 0 ? (
         <div className="text-center py-8">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-olive-600 border-t-transparent"></div>
@@ -177,7 +148,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                 </tr>
               </thead>
               <tbody>
-                {Array.isArray(prospects) ? prospects.map((prospect) => (
+                {prospects.map((prospect) => (
                   <tr key={prospect.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-2">
@@ -239,7 +210,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                       </div>
                     </td>
                   </tr>
-                )) : null}
+                ))}
               </tbody>
             </table>
           </div>

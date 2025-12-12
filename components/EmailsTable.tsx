@@ -9,7 +9,7 @@ export default function EmailsTable() {
   const [loading, setLoading] = useState(true)
   const [skip, setSkip] = useState(0)
   const [total, setTotal] = useState(0)
-  const limit = 10
+  const limit = 50
 
   const loadSentEmails = async () => {
     try {
@@ -61,7 +61,7 @@ export default function EmailsTable() {
                 </tr>
               </thead>
               <tbody>
-                {Array.isArray(prospects) ? prospects.map((prospect) => (
+                {prospects.map((prospect) => (
                   <tr key={prospect.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-2">
@@ -88,7 +88,7 @@ export default function EmailsTable() {
                       <span className="text-gray-900">{prospect.followups_sent || 0}</span>
                     </td>
                   </tr>
-                )) : null}
+                ))}
               </tbody>
             </table>
           </div>

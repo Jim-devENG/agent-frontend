@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle, XCircle, Clock, Loader, ChevronDown, ChevronUp, Search, Globe, Mail, Filter, X } from 'lucide-react'
-import { cancelJob, type Job } from '@/lib/api'
+import { CheckCircle, XCircle, Clock, Loader, ChevronDown, ChevronUp, Search, Globe, Mail, Filter } from 'lucide-react'
+import type { Job } from '@/lib/api'
 
 interface JobStatusPanelProps {
   jobs: Job[]
@@ -11,7 +11,6 @@ interface JobStatusPanelProps {
 
 export default function JobStatusPanel({ jobs, expanded = false }: JobStatusPanelProps) {
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set())
-  const [cancellingJobs, setCancellingJobs] = useState<Set<string>>(new Set())
 
   const toggleJob = (jobId: string) => {
     const newExpanded = new Set(expandedJobs)
@@ -21,27 +20,6 @@ export default function JobStatusPanel({ jobs, expanded = false }: JobStatusPane
       newExpanded.add(jobId)
     }
     setExpandedJobs(newExpanded)
-  }
-
-  const handleCancelJob = async (jobId: string, jobType: string) => {
-    // Skip confirmation since browser popups are disabled
-    // User can click again if they change their mind
-    setCancellingJobs(prev => new Set(prev).add(jobId))
-    try {
-      await cancelJob(jobId)
-      // Refresh the page to update job status after a short delay
-      setTimeout(() => {
-        window.location.reload()
-      }, 500)
-    } catch (error: any) {
-      console.error(`Failed to cancel job: ${error.message}`)
-      // Show error in console since alerts are disabled
-      setCancellingJobs(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(jobId)
-        return newSet
-      })
-    }
   }
 
   const getStatusIcon = (status: string) => {
@@ -162,7 +140,7 @@ export default function JobStatusPanel({ jobs, expanded = false }: JobStatusPane
               <span>Query Details ({queries.length} shown)</span>
             </div>
             <div className="space-y-1 max-h-40 overflow-y-auto">
-              {Array.isArray(queries) ? queries.slice(0, 10).map((q: any, idx: number) => (
+              {queries.slice(0, 10).map((q: any, idx: number) => (
                 <div key={idx} className="text-xs bg-white rounded p-2 border border-gray-200">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-gray-800">&quot;{q.query}&quot;</span>
@@ -183,7 +161,7 @@ export default function JobStatusPanel({ jobs, expanded = false }: JobStatusPane
                     <div className="mt-1 text-red-600 text-xs">Error: {q.error}</div>
                   )}
                 </div>
-              )) : null}
+              ))}
             </div>
           </div>
         )}
@@ -215,7 +193,7 @@ export default function JobStatusPanel({ jobs, expanded = false }: JobStatusPane
         <p className="text-gray-500 text-sm">No jobs found</p>
       ) : (
         <div className="space-y-3">
-          {Array.isArray(displayJobs) ? displayJobs.map((job) => {
+          {displayJobs.map((job) => {
             const isExpanded = expandedJobs.has(job.id)
             return (
               <div
@@ -237,17 +215,6 @@ export default function JobStatusPanel({ jobs, expanded = false }: JobStatusPane
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className="text-xs text-gray-500">{formatDate(job.created_at)}</span>
-                    {(job.status === 'running' || job.status === 'pending') && (
-                      <button
-                        onClick={() => handleCancelJob(job.id, job.job_type)}
-                        disabled={cancellingJobs.has(job.id)}
-                        className="px-2 py-1 text-xs text-red-600 hover:text-red-800 hover:bg-red-50 rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                        title="Stop this job"
-                      >
-                        <X className="w-3 h-3" />
-                        {cancellingJobs.has(job.id) ? 'Stopping...' : 'Stop'}
-                      </button>
-                    )}
                     {job.result && (
                       <button
                         onClick={() => toggleJob(job.id)}
@@ -272,7 +239,7 @@ export default function JobStatusPanel({ jobs, expanded = false }: JobStatusPane
                 )}
               </div>
             )
-          }) : null}
+          })}
         </div>
       )}
     </div>

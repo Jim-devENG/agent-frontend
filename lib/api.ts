@@ -1,8 +1,6 @@
 /**
  * API client for new backend architecture
  */
-import type { EnrichmentResult } from './types'
-
 // Remove /v1 if present - new backend uses /api directly
 const envBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api'
 const API_BASE = envBase.replace('/api/v1', '/api').replace('/v1', '')
@@ -81,10 +79,10 @@ async function authenticatedFetch(url: string, options: RequestInit = {}): Promi
     
     console.log(`✅ [FETCH] Success: ${url}`)
     return response
-  } catch (error: unknown) {
+  } catch (error: any) {
     const fetchTime = Date.now() - startTime
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    const errorStack = error instanceof Error ? error.stack : new Error().stack
+    const errorMessage = error?.message || String(error)
+    const errorStack = error?.stack || new Error().stack
     
     // Create meaningful error with full context
     const enhancedError = new Error(`Fetch error for ${url}: ${errorMessage}`)
@@ -116,28 +114,7 @@ async function authenticatedFetch(url: string, options: RequestInit = {}): Promi
   }
 }
 
-// ============================================
-// Unified API Response Types
-// ============================================
-
-export interface ApiResponse<T> {
-  success: boolean
-  data: T
-  message?: string
-  error?: string
-}
-
-export interface PaginatedResponse<T> {
-  data: T[]
-  total: number
-  skip: number
-  limit: number
-}
-
-// ============================================
-// Core Entity Types
-// ============================================
-
+// Types
 export interface Prospect {
   id: string
   domain: string
@@ -152,8 +129,8 @@ export interface Prospect {
   followups_sent: number
   draft_subject?: string
   draft_body?: string
-  dataforseo_payload?: Record<string, unknown>
-  hunter_payload?: Record<string, unknown>
+  dataforseo_payload?: any
+  hunter_payload?: any
   created_at: string
   updated_at: string
 }
@@ -162,8 +139,8 @@ export interface Job {
   id: string
   job_type: string
   status: string
-  params?: Record<string, unknown>
-  result?: Record<string, unknown>
+  params?: any
+  result?: any
   error_message?: string
   created_at: string
   updated_at: string
@@ -174,8 +151,15 @@ export interface EmailLog {
   prospect_id: string
   subject: string
   body: string
-  response?: Record<string, unknown>
+  response?: any
   sent_at: string
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  total: number
+  skip: number
+  limit: number
 }
 
 export type ProspectListResponse = PaginatedResponse<Prospect>
@@ -249,7 +233,7 @@ export async function createDiscoveryJob(
     })
     
     // Parse response - handle both success and error cases
-    let responseData: unknown
+    let responseData: any
     try {
       responseData = await res.json()
     } catch (parseError) {
@@ -258,10 +242,9 @@ export async function createDiscoveryJob(
     }
     
     // Handle structured error responses from backend
-    const responseObj = responseData && typeof responseData === 'object' ? responseData as Record<string, unknown> : null
-    if (!res.ok || (responseObj && responseObj.success === false)) {
-      const errorDetail = (responseObj?.error || responseObj?.detail || responseObj?.message || `HTTP ${res.status}: ${res.statusText}`) as string
-      const statusCode = (responseObj?.status_code || res.status) as number
+    if (!res.ok || (responseData && responseData.success === false)) {
+      const errorDetail = responseData?.error || responseData?.detail || responseData?.message || `HTTP ${res.status}: ${res.statusText}`
+      const statusCode = responseData?.status_code || res.status
       
       console.error('❌ createDiscoveryJob: Request failed:', {
         status: statusCode,
@@ -273,53 +256,38 @@ export async function createDiscoveryJob(
     }
     
     // Handle success response - extract job from structured response
-    if (responseObj && responseObj.success === true) {
+    if (responseData && responseData.success === true) {
       // Backend returns structured response: { success: true, job_id, job, ... }
-      const jobId = (responseObj.job_id || responseObj.id) as string | undefined
-      const jobData = responseObj.job as Job | undefined
-      const status = (responseObj.status || 'pending') as string
-      
-      const job: Job = jobData || {
-        id: jobId || '',
+      const job = responseData.job || {
+        id: responseData.job_id,
         job_type: 'discover',
-        status,
+        status: responseData.status || 'pending',
         params: payload,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
       
       console.log('✅ Discovery job created successfully:', {
-        job_id: job.id || jobId,
-        status: job.status || status
+        job_id: job.id || responseData.job_id,
+        status: job.status || responseData.status
       })
       
       return job
     }
     
     // Fallback: if response doesn't have success field, assume it's the job object directly
-    if (responseObj && 'id' in responseObj && typeof responseObj.id === 'string' && 
-        'job_type' in responseObj && typeof responseObj.job_type === 'string' &&
-        'status' in responseObj && typeof responseObj.status === 'string') {
-      console.log('✅ Discovery job created (legacy format):', responseObj.id)
-      return {
-        id: responseObj.id as string,
-        job_type: responseObj.job_type as string,
-        status: responseObj.status as string,
-        params: 'params' in responseObj ? responseObj.params as Record<string, unknown> : undefined,
-        result: 'result' in responseObj ? responseObj.result as Record<string, unknown> : undefined,
-        error_message: 'error_message' in responseObj ? responseObj.error_message as string | undefined : undefined,
-        created_at: 'created_at' in responseObj && typeof responseObj.created_at === 'string' ? responseObj.created_at : new Date().toISOString(),
-        updated_at: 'updated_at' in responseObj && typeof responseObj.updated_at === 'string' ? responseObj.updated_at : new Date().toISOString(),
-      }
+    if (responseData && responseData.id) {
+      console.log('✅ Discovery job created (legacy format):', responseData.id)
+      return responseData
     }
     
     // If we get here, response format is unexpected
     console.warn('⚠️ createDiscoveryJob: Unexpected response format:', responseData)
     throw new Error('Unexpected response format from server')
     
-  } catch (error: unknown) {
+  } catch (error: any) {
     // Enhanced error logging with context
-    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorMessage = error?.message || String(error)
     
     // Check for specific error types
     if (errorMessage.includes('Authentication required') || errorMessage.includes('Unauthorized')) {
@@ -334,7 +302,7 @@ export async function createDiscoveryJob(
       console.error('❌ createDiscoveryJob: Error details:', {
         message: errorMessage,
         error: error,
-        stack: error instanceof Error ? error.stack : undefined
+        stack: error?.stack
       })
     }
     
@@ -345,15 +313,11 @@ export async function createDiscoveryJob(
 
 export async function createEnrichmentJob(
   prospectIds?: string[],
-  maxProspects?: number,
-  onlyMissingEmails?: boolean
+  maxProspects?: number
 ): Promise<{ job_id: string; status: string; message?: string }> {
   const params = new URLSearchParams()
-  if (prospectIds && prospectIds.length > 0) {
-    params.append('prospect_ids', prospectIds.join(','))
-  }
+  if (prospectIds) params.append('prospect_ids', prospectIds.join(','))
   if (maxProspects) params.append('max_prospects', maxProspects.toString())
-  if (onlyMissingEmails) params.append('only_missing_emails', 'true')
   
   const res = await authenticatedFetch(`${API_BASE}/prospects/enrich?${params}`, {
     method: 'POST',
@@ -361,46 +325,6 @@ export async function createEnrichmentJob(
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to create enrichment job' }))
     throw new Error(error.detail || 'Failed to create enrichment job')
-  }
-  return res.json()
-}
-
-export async function deduplicateProspects(): Promise<{
-  success: boolean
-  duplicates_found: number
-  deleted: number
-  kept: number
-  message: string
-}> {
-  const res = await authenticatedFetch(`${API_BASE}/prospects/deduplicate`, {
-    method: 'POST',
-  })
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to deduplicate prospects' }))
-    throw new Error(error.detail || 'Failed to deduplicate prospects')
-  }
-  return res.json()
-}
-
-export async function enrichAndDeduplicate(
-  maxProspects: number = 100,
-  onlyMissingEmails: boolean = true
-): Promise<{
-  success: boolean
-  enrichment: { job_id: string; status: string; message?: string }
-  deduplication: { success: boolean; duplicates_found: number; deleted: number; kept: number; message: string }
-  message: string
-}> {
-  const params = new URLSearchParams()
-  params.append('max_prospects', maxProspects.toString())
-  if (onlyMissingEmails) params.append('only_missing_emails', 'true')
-  
-  const res = await authenticatedFetch(`${API_BASE}/prospects/enrich-and-deduplicate?${params}`, {
-    method: 'POST',
-  })
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to enrich and deduplicate' }))
-    throw new Error(error.detail || 'Failed to enrich and deduplicate')
   }
   return res.json()
 }
@@ -488,42 +412,15 @@ export async function enrichEmail(domain: string, name?: string): Promise<Enrich
     
     if (!res.ok) {
       const error = await res.json().catch(() => ({ detail: 'Failed to enrich email' }))
-      
-      // Handle rate limit errors specifically (429)
-      if (res.status === 429) {
-        const rateLimitError = new Error('Rate limit exceeded: Hunter.io API quota reached. Please try again later or upgrade your plan.')
-        rateLimitError.name = 'RateLimitError'
-        console.warn('⚠️ [ENRICHMENT] Hunter.io rate limit reached (429)')
-        throw rateLimitError
-      }
-      
       throw new Error(error.detail || error.error || 'Failed to enrich email')
     }
     
-    const data = await res.json() as EnrichmentResult
+    const data = await res.json()
     return data
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('❌ Error enriching email:', errorMessage)
-    
-    // Preserve rate limit error messages
-    if (error instanceof Error && error.name === 'RateLimitError') {
-      throw error
-    }
-    
-    throw new Error(`Enrichment failed: ${errorMessage}`)
+  } catch (error: any) {
+    console.error('❌ Error enriching email:', error)
+    throw new Error(`Enrichment failed: ${error.message}`)
   }
-}
-
-export async function enrichProspectById(prospectId: string, domain: string): Promise<EnrichmentResult & { message?: string }> {
-  const res = await authenticatedFetch(`${API_BASE}/prospects/enrich/${prospectId}`, {
-    method: 'POST',
-  })
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to enrich prospect' }))
-    throw new Error(error.detail || 'Failed to enrich prospect')
-  }
-  return res.json()
 }
 
 export async function cancelJob(jobId: string): Promise<{ success: boolean; message?: string; error?: string }> {
@@ -545,34 +442,11 @@ export async function cancelJob(jobId: string): Promise<{ success: boolean; mess
       throw new Error(error.detail || error.error || 'Failed to cancel job')
     }
     
-    const data = await res.json() as { success: boolean; message?: string; error?: string }
+    const data = await res.json()
     return data
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error('❌ Error cancelling job:', error)
     throw error
-  }
-}
-
-export async function getLatestDiscoveryJob(): Promise<Job | null> {
-  try {
-    const jobs = await listJobs(0, 100)
-    // Find the latest completed discovery job
-    const discoveryJobs = jobs.filter(
-      (job) => job.job_type === 'discover' && job.status === 'completed'
-    )
-    if (discoveryJobs.length === 0) {
-      return null
-    }
-    // Sort by created_at (most recent first) and return the latest
-    discoveryJobs.sort((a, b) => {
-      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0
-      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0
-      return bTime - aTime
-    })
-    return discoveryJobs[0] || null
-  } catch (error) {
-    console.error('Failed to get latest discovery job:', error)
-    return null
   }
 }
 
@@ -583,49 +457,24 @@ export async function listJobs(skip = 0, limit = 50): Promise<Job[]> {
       const error = await res.json().catch(() => ({ detail: 'Failed to list jobs' }))
       throw new Error(error.detail || 'Failed to list jobs')
     }
-    const data: unknown = await res.json()
-    
-    // Type guard for Job array
-    const isJobArray = (value: unknown): value is Job[] => {
-      return Array.isArray(value) && value.every(
-        (item): item is Job =>
-          typeof item === 'object' &&
-          item !== null &&
-          'id' in item &&
-          'job_type' in item &&
-          'status' in item &&
-          typeof item.id === 'string' &&
-          typeof item.job_type === 'string' &&
-          typeof item.status === 'string'
-      )
-    }
+    const data = await res.json()
     
     // Validate response is an array
-    if (isJobArray(data)) {
-      return data
-    }
-    
-    // Try to extract array from wrapped response
-    if (data && typeof data === 'object' && 'data' in data) {
-      const wrappedData = (data as { data: unknown }).data
-      if (isJobArray(wrappedData)) {
-        return wrappedData
-      }
-    }
-    
-    // Try other common response formats
+    if (!Array.isArray(data)) {
+      console.warn('⚠️ listJobs: Response is not an array. Got:', typeof data, data)
+      // Try to extract array from response
       if (data && typeof data === 'object') {
-      const jobs = (data as Record<string, unknown>).jobs || (data as Record<string, unknown>).items
-      if (isJobArray(jobs)) {
+        const jobs = data.jobs || data.data || data.items || []
+        if (Array.isArray(jobs)) {
           return jobs
         }
       }
-    
-    console.warn('⚠️ listJobs: Response is not a valid Job array. Got:', typeof data, data)
       return [] // Return empty array instead of crashing
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('❌ Error in listJobs:', errorMessage)
+    }
+    
+    return data
+  } catch (error: any) {
+    console.error('❌ Error in listJobs:', error)
     // Return empty array to prevent app crash
     return []
   }
@@ -654,47 +503,12 @@ export async function listProspects(
     const error = await res.json().catch(() => ({ detail: 'Failed to list prospects' }))
     throw new Error(error.detail || 'Failed to list prospects')
   }
-  const result: unknown = await res.json()
-
-  // Backend returns: {success: true, data: {data: [...], prospects: [...], total: ...}, error: null}
-  // Extract the nested data structure
-  let prospectsArray: Prospect[] = []
-  let totalCount = 0
+  const result: any = await res.json()
   
-  if (result && typeof result === 'object' && result !== null) {
-    const resultObj = result as Record<string, unknown>
-    
-    // Check if response has the nested structure (backend format)
-    if (resultObj.data && typeof resultObj.data === 'object' && resultObj.data !== null) {
-      const dataObj = resultObj.data as Record<string, unknown>
-      // Extract from data.data or data.prospects
-      if (Array.isArray(dataObj.data)) {
-        prospectsArray = dataObj.data as Prospect[]
-      } else if (Array.isArray(dataObj.prospects)) {
-        prospectsArray = dataObj.prospects as Prospect[]
-      }
-      // Extract total from nested data
-      if (typeof dataObj.total === 'number') {
-        totalCount = dataObj.total
-      }
-    } else if (Array.isArray(resultObj.prospects)) {
-      // Fallback: direct prospects array (legacy format)
-      prospectsArray = resultObj.prospects as Prospect[]
-    } else if (Array.isArray(resultObj.data)) {
-      // Fallback: direct data array (alternative format)
-      prospectsArray = resultObj.data as Prospect[]
-    }
-    
-    // Extract total from top level if not found in nested structure
-    if (totalCount === 0 && typeof resultObj.total === 'number') {
-      totalCount = resultObj.total
-    }
-  }
-
   // Normalize to PaginatedResponse<Prospect>
   return {
-    data: prospectsArray,
-    total: totalCount,
+    data: (result.prospects || result.data || []) as Prospect[],
+    total: (result.total ?? 0) as number,
     skip,
     limit,
   }
@@ -766,10 +580,9 @@ export interface Stats {
 export async function getStats(): Promise<Stats | null> {
   try {
     // Fetch all data in parallel with defensive error handling
-    // listJobs ALWAYS returns Job[], so we can type it strictly
     const [allProspects, jobs, prospectsWithEmail] = await Promise.all([
       listProspects(0, 1000).catch(() => ({ data: [], total: 0, skip: 0, limit: 0 })),
-      listJobs(0, 100).catch(() => [] as Job[]),
+      listJobs(0, 100).catch(() => []),
       listProspects(0, 1000, undefined, undefined, true).catch(() => ({ data: [], total: 0, skip: 0, limit: 0 })),
     ])
     
@@ -787,38 +600,8 @@ export async function getStats(): Promise<Stats | null> {
     }
     
     // Extract prospects array from PaginatedResponse<Prospect> format
-    // Handle both direct array and nested object formats safely
-    let allProspectsList: Prospect[] = []
-    if (allProspects && allProspects.data) {
-      const dataValue = allProspects.data
-      if (Array.isArray(dataValue)) {
-        allProspectsList = dataValue
-      } else if (typeof dataValue === 'object' && dataValue !== null) {
-        // Handle nested object formats
-        const nestedObj = dataValue as Record<string, unknown>
-        if ('data' in nestedObj && Array.isArray(nestedObj.data)) {
-          allProspectsList = nestedObj.data as Prospect[]
-        } else if ('prospects' in nestedObj && Array.isArray(nestedObj.prospects)) {
-          allProspectsList = nestedObj.prospects as Prospect[]
-        }
-      }
-    }
-    
-    let prospectsWithEmailList: Prospect[] = []
-    if (prospectsWithEmail && prospectsWithEmail.data) {
-      const dataValue = prospectsWithEmail.data
-      if (Array.isArray(dataValue)) {
-        prospectsWithEmailList = dataValue
-      } else if (typeof dataValue === 'object' && dataValue !== null) {
-        // Handle nested object formats
-        const nestedObj = dataValue as Record<string, unknown>
-        if ('data' in nestedObj && Array.isArray(nestedObj.data)) {
-          prospectsWithEmailList = nestedObj.data as Prospect[]
-        } else if ('prospects' in nestedObj && Array.isArray(nestedObj.prospects)) {
-          prospectsWithEmailList = nestedObj.prospects as Prospect[]
-        }
-      }
-    }
+    const allProspectsList: Prospect[] = allProspects?.data || []
+    const prospectsWithEmailList: Prospect[] = prospectsWithEmail?.data || []
     
     // Extract totals from PaginatedResponse<Prospect> format
     const allProspectsTotal = allProspects?.total ?? 0
@@ -833,9 +616,9 @@ export async function getStats(): Promise<Stats | null> {
     // Use safe array check and try-catch for maximum safety
     if (Array.isArray(allProspectsList) && allProspectsList.length > 0) {
       try {
-        allProspectsList.forEach((p: Prospect) => {
+        allProspectsList.forEach((p: any) => {
           // Additional safety check for each item
-          if (p && typeof p === 'object' && 'outreach_status' in p && typeof p.outreach_status === 'string') {
+          if (p && typeof p === 'object' && p.outreach_status) {
             if (p.outreach_status === 'pending') prospects_pending++
             if (p.outreach_status === 'sent') prospects_sent++
             if (p.outreach_status === 'replied') prospects_replied++
@@ -850,19 +633,26 @@ export async function getStats(): Promise<Stats | null> {
       console.warn('⚠️ getStats: allProspectsList is not a valid array:', typeof allProspectsList, allProspectsList)
     }
     
-    // jobs is ALWAYS Job[] from listJobs - no need for runtime checking
-    const jobsArray: Job[] = Array.isArray(jobs) ? jobs : []
+    // Safely handle jobs array - defensive guard
+    let jobsArray: any[] = []
+    if (jobs) {
+      if (Array.isArray(jobs)) {
+        jobsArray = jobs
+      } else if (jobs.data && Array.isArray(jobs.data)) {
+        jobsArray = jobs.data
+      }
+    }
     
     // Defensive filter operations with safe array checks
     let jobs_running = 0
     let jobs_completed = 0
     let jobs_failed = 0
     
-    if (jobsArray.length > 0) {
+    if (Array.isArray(jobsArray) && jobsArray.length > 0) {
       try {
-        jobs_running = jobsArray.filter((j: Job) => j && typeof j === 'object' && 'status' in j && j.status === 'running').length
-        jobs_completed = jobsArray.filter((j: Job) => j && typeof j === 'object' && 'status' in j && j.status === 'completed').length
-        jobs_failed = jobsArray.filter((j: Job) => j && typeof j === 'object' && 'status' in j && j.status === 'failed').length
+        jobs_running = jobsArray.filter((j: any) => j && typeof j === 'object' && j.status === 'running').length
+        jobs_completed = jobsArray.filter((j: any) => j && typeof j === 'object' && j.status === 'completed').length
+        jobs_failed = jobsArray.filter((j: any) => j && typeof j === 'object' && j.status === 'failed').length
       } catch (filterError) {
         console.error('⚠️ Error in filter operations:', filterError)
         // Continue with zero counts - app stays running
@@ -875,16 +665,15 @@ export async function getStats(): Promise<Stats | null> {
       prospects_pending,
       prospects_sent,
       prospects_replied,
-      total_jobs: jobsArray.length,
+      total_jobs: jobsArray.length || 0,
       jobs_running,
       jobs_completed,
       jobs_failed,
     }
     
     return stats
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error('Failed to get stats:', errorMessage)
+  } catch (error) {
+    console.error('Failed to get stats:', error)
     // Return null instead of throwing to prevent crashes from devtools hooks
     return null
   }
@@ -936,7 +725,7 @@ export async function testService(serviceName: string): Promise<{
   success: boolean
   status: string
   message: string
-  test_result?: Record<string, unknown>
+  test_result?: any
 }> {
   const res = await authenticatedFetch(`${API_BASE}/settings/services/${encodeURIComponent(serviceName)}/test`, {
     method: 'POST',
@@ -955,104 +744,4 @@ export async function getAPIKeysStatus(): Promise<Record<string, boolean>> {
     throw new Error(error.detail || 'Failed to get API keys status')
   }
   return res.json()
-}
-
-// Scraper Automation API
-export interface ScraperStatus {
-  master_enabled: boolean
-  auto_enabled: boolean
-  locations: string[]
-  categories: string[]
-  interval: string
-  next_run_at: string | null
-  status: 'idle' | 'running' | 'disabled'
-  can_enable_auto: boolean
-  missing_fields: string[]
-}
-
-export async function getScraperStatus(): Promise<ScraperStatus> {
-  const res = await authenticatedFetch(`${API_BASE}/scraper/status`)
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to get scraper status' }))
-    throw new Error(error.detail || 'Failed to get scraper status')
-  }
-  return res.json()
-}
-
-export async function setMasterSwitch(enabled: boolean): Promise<{ enabled: boolean; message: string }> {
-  const res = await authenticatedFetch(`${API_BASE}/scraper/master`, {
-    method: 'POST',
-    body: JSON.stringify({ enabled }),
-  })
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to set master switch' }))
-    throw new Error(error.detail || 'Failed to set master switch')
-  }
-  return res.json()
-}
-
-export async function setAutoSwitch(enabled: boolean): Promise<{ enabled: boolean; message: string; can_enable: boolean; missing_fields: string[] }> {
-  const res = await authenticatedFetch(`${API_BASE}/scraper/automatic`, {
-    method: 'POST',
-    body: JSON.stringify({ enabled }),
-  })
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to set auto switch' }))
-    throw new Error(error.detail || 'Failed to set auto switch')
-  }
-  return res.json()
-}
-
-export async function setScraperConfig(
-  locations: string[],
-  categories: string[],
-  interval: string
-): Promise<{ locations: string[]; categories: string[]; interval: string; next_run_at: string | null }> {
-  const res = await authenticatedFetch(`${API_BASE}/scraper/config`, {
-    method: 'POST',
-    body: JSON.stringify({ locations, categories, interval }),
-  })
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to set scraper config' }))
-    throw new Error(error.detail || 'Failed to set scraper config')
-  }
-  return res.json()
-}
-
-// Scraper History API
-export interface ScraperHistoryItem {
-  id: string
-  triggered_at: string
-  completed_at: string | null
-  success_count: number
-  failed_count: number
-  duration_seconds: number | null
-  status: string
-  error_message: string | null
-}
-
-export async function getScraperHistory(
-  page: number = 1,
-  limit: number = 10
-): Promise<{ data: ScraperHistoryItem[]; page: number; limit: number; total: number; totalPages: number }> {
-  const params = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-  })
-  
-  const res = await authenticatedFetch(`${API_BASE}/scraper/history?${params}`)
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to get scraper history' }))
-    throw new Error(error.detail || 'Failed to get scraper history')
-  }
-  const result = await res.json()
-  
-  // Backend returns data, page, limit, total, totalPages
-  return {
-    data: result.data || [],
-    page: result.page || page,
-    limit: result.limit || limit,
-    total: result.total || 0,
-    totalPages: result.totalPages || result.total_pages || 0,
-  }
 }

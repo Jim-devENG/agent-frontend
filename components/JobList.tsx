@@ -24,13 +24,17 @@ export default function JobList({ jobs, onRefresh }: JobListProps) {
   }
 
   const handleCancelJob = async (jobId: string) => {
-    // Skip confirmation since browser popups are disabled
+    if (!confirm('Are you sure you want to cancel this job?')) {
+      return
+    }
+    
     setCancellingJobs(prev => new Set(prev).add(jobId))
     try {
       await cancelJob(jobId)
       onRefresh() // Refresh the job list
     } catch (error: any) {
-      console.error(`Failed to cancel job: ${error.message}`)
+      alert(`Failed to cancel job: ${error.message}`)
+    } finally {
       setCancellingJobs(prev => {
         const newSet = new Set(prev)
         newSet.delete(jobId)
@@ -96,7 +100,7 @@ export default function JobList({ jobs, onRefresh }: JobListProps) {
         </div>
       </div>
       <div className="divide-y divide-gray-200">
-        {Array.isArray(jobs) ? jobs.map((job) => (
+        {jobs.map((job) => (
           <div key={job.id} className="p-4 hover:bg-gray-50">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -151,7 +155,7 @@ export default function JobList({ jobs, onRefresh }: JobListProps) {
               </div>
             )}
           </div>
-        )) : null}
+        ))}
       </div>
     </div>
   )
