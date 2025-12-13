@@ -101,6 +101,57 @@ export default function Dashboard() {
     }
   }, [previousJobStatuses])
 
+  useEffect(() => {
+    // Check if user is authenticated
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
+    loadData()
+    
+    // Dynamic polling: faster when jobs are running, slower when idle
+    let interval: NodeJS.Timeout | null = null
+    
+    const setupPolling = () => {
+      // Clear existing interval
+      if (interval) {
+        clearInterval(interval)
+      }
+      
+      // Check current jobs state from the state variable
+      const checkAndPoll = () => {
+        loadData()
+      }
+      
+      // Start with faster polling, will adjust based on jobs state
+      interval = setInterval(checkAndPoll, 5000) // Start with 5s, will adjust
+    }
+    
+    setupPolling()
+    
+    // Re-check and adjust interval periodically based on jobs state
+    const jobsCheckInterval = setInterval(() => {
+      // Check if we have running jobs by looking at the current jobs state
+      const hasRunningJobs = jobs.some(job => job.status === 'running' || job.status === 'pending')
+      const pollInterval = hasRunningJobs ? 5000 : 30000
+      
+      // Clear and recreate with new interval
+      if (interval) {
+        clearInterval(interval)
+      }
+      interval = setInterval(() => {
+        loadData()
+      }, pollInterval)
+    }, 10000) // Check every 10 seconds
+    
+    return () => {
+      if (interval) clearInterval(interval)
+      clearInterval(jobsCheckInterval)
+    }
+  }, [router, jobs, loadData]) // Include loadData and jobs in dependencies
+
   const refreshData = () => {
     loadData()
   }
