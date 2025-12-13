@@ -43,37 +43,88 @@ class SnovIOClient:
         """
         Get access token using OAuth2 client credentials flow
         
+        Snov.io API uses OAuth2 with client_id and client_secret as form data.
+        Alternative: Some Snov.io endpoints may accept credentials directly.
+        
         Returns:
             Access token string
         """
         url = f"{self.BASE_URL}/oauth/access_token"
         
-        # Snov.io uses basic auth with user_id:secret
-        credentials = f"{self.user_id}:{self.secret}"
-        encoded_credentials = base64.b64encode(credentials.encode()).decode()
+        # Try method 1: OAuth2 with form data (client_id/client_secret)
+        data_method1 = {
+            "grant_type": "client_credentials",
+            "client_id": self.user_id,
+            "client_secret": self.secret
+        }
+        
+        # Try method 2: OAuth2 with user_id/secret as form data (alternative format)
+        data_method2 = {
+            "grant_type": "client_credentials",
+            "user_id": self.user_id,
+            "secret": self.secret
+        }
         
         headers = {
-            "Authorization": f"Basic {encoded_credentials}",
             "Content-Type": "application/x-www-form-urlencoded"
         }
         
-        data = {
-            "grant_type": "client_credentials"
-        }
-        
+        # Try method 1 first
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(url, headers=headers, data=data)
+                logger.debug(f"Requesting Snov.io access token (method 1) with user_id: {self.user_id[:10] if self.user_id else 'None'}...")
+                response = await client.post(url, headers=headers, data=data_method1)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    access_token = result.get("access_token")
+                    if access_token:
+                        logger.debug("✅ Snov.io access token obtained successfully (method 1)")
+                        return access_token
+                
+                # If method 1 failed, try method 2
+                logger.debug(f"Method 1 failed ({response.status_code}), trying method 2...")
+                if response.status_code != 200:
+                    error_body = response.text
+                    logger.debug(f"Method 1 error response: {error_body}")
+                
+                response = await client.post(url, headers=headers, data=data_method2)
+                
+                # Log response details for debugging
+                if response.status_code != 200:
+                    try:
+                        error_body = response.text
+                        logger.error(f"Snov.io token request failed ({response.status_code}): {error_body}")
+                    except:
+                        logger.error(f"Snov.io token request failed ({response.status_code}): {response.text}")
+                else:
+                    result = response.json()
+                    access_token = result.get("access_token")
+                    if access_token:
+                        logger.debug("✅ Snov.io access token obtained successfully (method 2)")
+                        return access_token
+                
                 response.raise_for_status()
                 result = response.json()
                 
                 access_token = result.get("access_token")
                 if not access_token:
+                    logger.error(f"No access_token in Snov.io response: {result}")
                     raise ValueError("No access token in response")
                 
                 return access_token
+                
+        except httpx.HTTPStatusError as e:
+            error_msg = f"HTTP {e.response.status_code}"
+            try:
+                error_body = e.response.json()
+                error_msg += f": {error_body}"
+            except:
+                error_msg += f": {e.response.text[:500]}"  # Limit error message length
+            logger.error(f"Snov.io token request failed: {error_msg}")
+            raise Exception(f"Failed to get Snov.io access token: {error_msg}")
         except Exception as e:
-            logger.error(f"Snov.io token request failed: {str(e)}")
+            logger.error(f"Snov.io token request failed: {str(e)}", exc_info=True)
             raise Exception(f"Failed to get Snov.io access token: {str(e)}")
     
     async def domain_search(
