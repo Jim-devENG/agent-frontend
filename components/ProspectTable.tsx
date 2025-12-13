@@ -19,17 +19,22 @@ export default function ProspectTable() {
   const loadProspects = async () => {
     setLoading(true)
     try {
-      const data = await listProspects(
+      const response = await listProspects(
         skip,
         limit,
         statusFilter || undefined,
         undefined,
         hasEmailFilter === 'true' ? true : hasEmailFilter === 'false' ? false : undefined
       )
-      setProspects(data.data)
-      setTotal(data.total)
+      // Defensive check: ensure data is always an array
+      const data = Array.isArray(response?.data) ? response.data : 
+                   Array.isArray(response) ? response : []
+      setProspects(data)
+      setTotal(response?.total ?? data.length)
     } catch (error) {
       console.error('Error loading prospects:', error)
+      setProspects([]) // Ensure prospects is always an array
+      setTotal(0)
     } finally {
       setLoading(false)
     }

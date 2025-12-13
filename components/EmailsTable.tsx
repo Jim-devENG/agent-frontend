@@ -15,10 +15,15 @@ export default function EmailsTable() {
     try {
       setLoading(true)
       const response = await listProspects(skip, limit, 'sent')
-      setProspects(response.data)
-      setTotal(response.total)
+      // Defensive check: ensure data is always an array
+      const data = Array.isArray(response?.data) ? response.data : 
+                   Array.isArray(response) ? response : []
+      setProspects(data)
+      setTotal(response?.total ?? data.length)
     } catch (error) {
       console.error('Failed to load sent emails:', error)
+      setProspects([]) // Ensure prospects is always an array
+      setTotal(0)
     } finally {
       setLoading(false)
     }

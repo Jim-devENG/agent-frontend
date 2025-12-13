@@ -512,9 +512,28 @@ export async function listProspects(
   const result: any = await res.json()
   
   // Normalize to PaginatedResponse<Prospect>
+  // Handle various response formats from the API
+  let dataArray: Prospect[] = []
+  if (Array.isArray(result)) {
+    // Direct array response
+    dataArray = result
+  } else if (Array.isArray(result.prospects)) {
+    // Response with 'prospects' field
+    dataArray = result.prospects
+  } else if (Array.isArray(result.data)) {
+    // Response with 'data' field
+    dataArray = result.data
+  } else if (result && typeof result === 'object') {
+    // Try to find any array field
+    const arrayFields = Object.values(result).filter(Array.isArray)
+    if (arrayFields.length > 0) {
+      dataArray = arrayFields[0] as Prospect[]
+    }
+  }
+  
   return {
-    data: (result.prospects || result.data || []) as Prospect[],
-    total: (result.total ?? 0) as number,
+    data: dataArray,
+    total: (result.total ?? result.count ?? dataArray.length) as number,
     skip,
     limit,
   }
@@ -606,12 +625,30 @@ export async function getStats(): Promise<Stats | null> {
     }
     
     // Extract prospects array from PaginatedResponse<Prospect> format
-    const allProspectsList: Prospect[] = allProspects?.data || []
-    const prospectsWithEmailList: Prospect[] = prospectsWithEmail?.data || []
+    // Handle both normalized response and raw API response
+    let allProspectsList: Prospect[] = []
+    if (Array.isArray(allProspects)) {
+      allProspectsList = allProspects
+    } else if (allProspects && typeof allProspects === 'object') {
+      allProspectsList = Array.isArray(allProspects.data) ? allProspects.data : 
+                        Array.isArray(allProspects.prospects) ? allProspects.prospects : []
+    }
+    
+    let prospectsWithEmailList: Prospect[] = []
+    if (Array.isArray(prospectsWithEmail)) {
+      prospectsWithEmailList = prospectsWithEmail
+    } else if (prospectsWithEmail && typeof prospectsWithEmail === 'object') {
+      prospectsWithEmailList = Array.isArray(prospectsWithEmail.data) ? prospectsWithEmail.data : 
+                               Array.isArray(prospectsWithEmail.prospects) ? prospectsWithEmail.prospects : []
+    }
     
     // Extract totals from PaginatedResponse<Prospect> format
-    const allProspectsTotal = allProspects?.total ?? 0
-    const prospectsWithEmailTotal = prospectsWithEmail?.total ?? 0
+    const allProspectsTotal = (allProspects && typeof allProspects === 'object' && 'total' in allProspects) 
+      ? (allProspects.total ?? 0) 
+      : (Array.isArray(allProspects) ? allProspects.length : 0)
+    const prospectsWithEmailTotal = (prospectsWithEmail && typeof prospectsWithEmail === 'object' && 'total' in prospectsWithEmail)
+      ? (prospectsWithEmail.total ?? 0)
+      : (Array.isArray(prospectsWithEmail) ? prospectsWithEmail.length : 0)
     
     // Count prospects by status - defensive forEach guard
     let prospects_pending = 0
