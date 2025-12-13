@@ -51,32 +51,35 @@ export default function Dashboard() {
     loadData()
     
     // Dynamic polling: faster when jobs are running, slower when idle
-    const checkJobsAndPoll = () => {
+    let interval: NodeJS.Timeout | null = null
+    
+    const setupPolling = () => {
+      // Clear existing interval
+      if (interval) {
+        clearInterval(interval)
+      }
+      
+      // Check current jobs state
       const hasRunningJobs = jobs.some(job => job.status === 'running' || job.status === 'pending')
       const pollInterval = hasRunningJobs ? 5000 : 30000 // 5s when running, 30s when idle
       
-      return setInterval(() => {
+      interval = setInterval(() => {
         loadData()
       }, pollInterval)
     }
     
-    let interval = checkJobsAndPoll()
+    setupPolling()
     
-    // Re-check and adjust interval when jobs change
+    // Re-check and adjust interval periodically
     const jobsCheckInterval = setInterval(() => {
-      const hasRunningJobs = jobs.some(job => job.status === 'running' || job.status === 'pending')
-      const currentInterval = hasRunningJobs ? 5000 : 30000
-      clearInterval(interval)
-      interval = setInterval(() => {
-        loadData()
-      }, currentInterval)
+      setupPolling()
     }, 10000) // Check every 10 seconds
     
     return () => {
-      clearInterval(interval)
+      if (interval) clearInterval(interval)
       clearInterval(jobsCheckInterval)
     }
-  }, [router, jobs])
+  }, [router]) // Only depend on router, jobs will be checked inside the effect
 
   const loadData = async () => {
     try {
@@ -92,7 +95,7 @@ export default function Dashboard() {
       ])
       
       // Check for job status changes (especially completion)
-      if (jobsData && jobsData.length > 0) {
+      if (jobsData && jobsData.length > 0 && previousJobStatuses.size > 0) {
         const currentStatuses = new Map(jobsData.map(job => [job.id, job.status]))
         let jobCompleted = false
         
@@ -114,6 +117,9 @@ export default function Dashboard() {
         }
         
         setPreviousJobStatuses(currentStatuses)
+      } else if (jobsData && jobsData.length > 0) {
+        // First load - initialize previous statuses
+        setPreviousJobStatuses(new Map(jobsData.map(job => [job.id, job.status])))
       }
       
       if (statsData) setStats(statsData)
