@@ -512,28 +512,44 @@ export async function listProspects(
   const result: any = await res.json()
   
   // Normalize to PaginatedResponse<Prospect>
-  // Handle various response formats from the API
+  // Backend returns: {success: bool, data: {data: [...], prospects: [...], total: number, ...}}
   let dataArray: Prospect[] = []
-  if (Array.isArray(result)) {
-    // Direct array response
+  let totalCount = 0
+  
+  // Handle backend response format: {success: true, data: {data: [...], prospects: [...], total: ...}}
+  if (result && result.success && result.data) {
+    const dataObj = result.data
+    // Try data.data first (main field), then data.prospects (backward compatibility)
+    if (Array.isArray(dataObj.data)) {
+      dataArray = dataObj.data
+    } else if (Array.isArray(dataObj.prospects)) {
+      dataArray = dataObj.prospects
+    }
+    totalCount = dataObj.total ?? dataArray.length
+  } else if (Array.isArray(result)) {
+    // Direct array response (fallback)
     dataArray = result
+    totalCount = result.length
   } else if (Array.isArray(result.prospects)) {
-    // Response with 'prospects' field
+    // Response with 'prospects' field (fallback)
     dataArray = result.prospects
+    totalCount = result.total ?? result.count ?? dataArray.length
   } else if (Array.isArray(result.data)) {
-    // Response with 'data' field
+    // Response with 'data' field as array (fallback)
     dataArray = result.data
+    totalCount = result.total ?? result.count ?? dataArray.length
   } else if (result && typeof result === 'object') {
-    // Try to find any array field
+    // Try to find any array field (last resort)
     const arrayFields = Object.values(result).filter(Array.isArray)
     if (arrayFields.length > 0) {
       dataArray = arrayFields[0] as Prospect[]
+      totalCount = result.total ?? result.count ?? dataArray.length
     }
   }
   
   return {
     data: dataArray,
-    total: (result.total ?? result.count ?? dataArray.length) as number,
+    total: totalCount,
     skip,
     limit,
   }
