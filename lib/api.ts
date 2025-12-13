@@ -633,6 +633,9 @@ export async function getStats(): Promise<Stats | null> {
     const allProspectsTotal = allProspects?.total ?? 0
     const prospectsWithEmailTotal = prospectsWithEmail?.total ?? 0
     
+    // Remove the warning - empty arrays are valid
+    // The previous check was incorrectly flagging empty arrays as invalid
+    
     // Count prospects by status - defensive forEach guard
     let prospects_pending = 0
     let prospects_sent = 0
@@ -654,10 +657,11 @@ export async function getStats(): Promise<Stats | null> {
         console.error('⚠️ Error in forEach loop (likely from devtools hook or invalid data):', forEachError)
         // Continue with zero counts rather than failing - app stays running
       }
-    } else if (allProspectsList !== null && allProspectsList !== undefined) {
-      // Log warning if we expected an array but got something else
+    } else if (allProspectsList !== null && allProspectsList !== undefined && !Array.isArray(allProspectsList)) {
+      // Log warning only if we expected an array but got something else (not an empty array)
       console.warn('⚠️ getStats: allProspectsList is not a valid array:', typeof allProspectsList, allProspectsList)
     }
+    // Note: Empty arrays are valid and don't need a warning
     
     // Safely handle jobs array - defensive guard
     let jobsArray: any[] = []
