@@ -146,27 +146,57 @@ class SnovIOClient:
             # Get access token
             access_token = await self._get_access_token()
             
-            # Try multiple endpoint variations
-            endpoints_to_try = [
-                "/get-domain-emails-with-info",
-                "/get-domain-emails",
-                "/domain-emails"
-            ]
-            
-            params = {
-                "domain": domain,
-                "access_token": access_token,
-                "type": "all",  # all, personal, generic
-                "limit": min(limit, 100)  # Snov.io max is 100
+            # Snov.io API endpoint - try different formats
+            # Method 1: Use access_token in Authorization header (OAuth2 standard)
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
             }
+            
+            # Try multiple endpoint variations with different parameter formats
+            endpoints_to_try = [
+                {
+                    "endpoint": "/get-domain-emails-with-info",
+                    "params": {"domain": domain, "type": "all", "limit": min(limit, 100)},
+                    "headers": headers
+                },
+                {
+                    "endpoint": "/get-domain-emails-with-info",
+                    "params": {"domain": domain, "access_token": access_token, "type": "all", "limit": min(limit, 100)},
+                    "headers": {"Content-Type": "application/json"}
+                },
+                {
+                    "endpoint": "/get-domain-emails",
+                    "params": {"domain": domain, "type": "all", "limit": min(limit, 100)},
+                    "headers": headers
+                },
+                {
+                    "endpoint": "/get-domain-emails",
+                    "params": {"domain": domain, "access_token": access_token, "type": "all", "limit": min(limit, 100)},
+                    "headers": {"Content-Type": "application/json"}
+                },
+                {
+                    "endpoint": "/domain-emails",
+                    "params": {"domain": domain, "type": "all", "limit": min(limit, 100)},
+                    "headers": headers
+                },
+                {
+                    "endpoint": "/domain-emails",
+                    "params": {"domain": domain, "access_token": access_token, "type": "all", "limit": min(limit, 100)},
+                    "headers": {"Content-Type": "application/json"}
+                },
+            ]
             
             last_error = None
             async with httpx.AsyncClient(timeout=30.0) as client:
-                for endpoint in endpoints_to_try:
+                for endpoint_config in endpoints_to_try:
+                    endpoint = endpoint_config["endpoint"]
+                    params = endpoint_config["params"]
+                    req_headers = endpoint_config["headers"]
                     url = f"{self.BASE_URL}{endpoint}"
                     try:
-                        logger.info(f"Calling Snov.io API for domain: {domain} using endpoint: {endpoint} (limit={params['limit']})")
-                        response = await client.get(url, params=params)
+                        logger.info(f"Calling Snov.io API for domain: {domain} using endpoint: {endpoint} with {'Bearer token' if 'Authorization' in req_headers else 'access_token param'}")
+                        response = await client.get(url, params=params, headers=req_headers)
                         
                         # If 404, try next endpoint
                         if response.status_code == 404:
