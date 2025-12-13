@@ -1,7 +1,7 @@
 'use client'
 // Version: 3.1 - Discovery feature removed - FORCE REDEPLOY
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import StatsCards from '@/components/StatsCards'
@@ -93,9 +93,9 @@ export default function Dashboard() {
       if (interval) clearInterval(interval)
       clearInterval(jobsCheckInterval)
     }
-  }, [router, jobs]) // Include jobs in dependencies to react to job state changes
+  }, [router, jobs, loadData]) // Include loadData and jobs in dependencies
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [statsData, jobsData] = await Promise.all([
         getStats().catch(err => {
@@ -154,7 +154,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [previousJobStatuses])
 
   const refreshData = () => {
     loadData()
