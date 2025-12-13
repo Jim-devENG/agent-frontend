@@ -402,6 +402,33 @@ export type EnrichmentResult = {
   [key: string]: any
 }
 
+export async function enrichProspectById(prospectId: string): Promise<{ success: boolean; email?: string; message?: string; error?: string }> {
+  try {
+    const res = await authenticatedFetch(`${API_BASE}/prospects/${prospectId}/enrich`, {
+      method: 'POST',
+    })
+    
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Failed to enrich prospect' }))
+      throw new Error(error.detail || error.error || 'Failed to enrich prospect')
+    }
+    
+    const result = await res.json()
+    return {
+      success: result.success || false,
+      email: result.email || undefined,
+      message: result.message || undefined,
+      error: result.error || undefined,
+    }
+  } catch (error: any) {
+    console.error('❌ Error enriching prospect:', error)
+    return {
+      success: false,
+      error: error.message || 'Failed to enrich prospect',
+    }
+  }
+}
+
 export async function enrichEmail(domain: string, name?: string): Promise<EnrichmentResult> {
   const token = getAuthToken()
   if (!token) {
