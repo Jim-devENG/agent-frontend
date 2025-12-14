@@ -21,9 +21,8 @@ export default function EmailsTable() {
       const prospectsData = Array.isArray(response?.data) ? response.data : []
       setProspects(prospectsData)
       setTotal(response?.total ?? 0)
-      if (prospectsData.length === 0 && (response?.total ?? 0) === 0) {
-        setError('No sent emails found. Send emails to prospects to see them here.')
-      }
+      // Clear error if we successfully got data (even if empty)
+      // Empty data is not an error, it's a valid state
     } catch (error: any) {
       console.error('Failed to load sent emails:', error)
       const errorMessage = error?.message || 'Failed to load sent emails. Check if backend is running.'
@@ -38,7 +37,22 @@ export default function EmailsTable() {
   useEffect(() => {
     loadSentEmails()
     const interval = setInterval(loadSentEmails, 15000)
-    return () => clearInterval(interval)
+    
+    const handleJobCompleted = () => {
+      console.log('🔄 Job completed event received, refreshing emails table...')
+      loadSentEmails()
+    }
+    
+    if (typeof window !== 'undefined') {
+      window.addEventListener('jobsCompleted', handleJobCompleted)
+    }
+    
+    return () => {
+      clearInterval(interval)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('jobsCompleted', handleJobCompleted)
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skip])
 
@@ -76,7 +90,7 @@ export default function EmailsTable() {
             Retry
           </button>
         </div>
-      ) : prospects.length === 0 ? (
+      ) : prospects.length === 0 && !loading ? (
         <div className="text-center py-8">
           <p className="text-gray-500 mb-2">No sent emails found</p>
           <p className="text-gray-400 text-sm">Send emails to prospects from the Leads tab to see them here.</p>

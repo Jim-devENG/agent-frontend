@@ -531,29 +531,35 @@ export async function listProspects(
   // Cache busting
   params.append('_t', Date.now().toString())
   
-  const res = await authenticatedFetch(`${API_BASE}/prospects?${params}`)
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Failed to list prospects' }))
-    throw new Error(error.detail || 'Failed to list prospects')
-  }
-  const result: any = await res.json()
-  
-  // Normalize to PaginatedResponse<Prospect>
-  // Ensure data is always an array
-  let prospectsData: Prospect[] = []
-  if (result.prospects && Array.isArray(result.prospects)) {
-    prospectsData = result.prospects
-  } else if (result.data && Array.isArray(result.data)) {
-    prospectsData = result.data
-  } else if (Array.isArray(result)) {
-    prospectsData = result
-  }
-  
-  return {
-    data: prospectsData,
-    total: (result.total ?? prospectsData.length) as number,
-    skip,
-    limit,
+  try {
+    const res = await authenticatedFetch(`${API_BASE}/prospects?${params}`)
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Failed to list prospects' }))
+      throw new Error(error.detail || `Failed to list prospects: ${res.status} ${res.statusText}`)
+    }
+    const result: any = await res.json()
+    
+    // Normalize to PaginatedResponse<Prospect>
+    // Ensure data is always an array
+    let prospectsData: Prospect[] = []
+    if (result.prospects && Array.isArray(result.prospects)) {
+      prospectsData = result.prospects
+    } else if (result.data && Array.isArray(result.data)) {
+      prospectsData = result.data
+    } else if (Array.isArray(result)) {
+      prospectsData = result
+    }
+    
+    return {
+      data: prospectsData,
+      total: (result.total ?? prospectsData.length) as number,
+      skip,
+      limit,
+    }
+  } catch (error: any) {
+    console.error('listProspects API error:', error)
+    // Re-throw with more context
+    throw new Error(error.message || 'Failed to list prospects. Check if backend is running.')
   }
 }
 

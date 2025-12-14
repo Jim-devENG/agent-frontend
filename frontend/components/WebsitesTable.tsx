@@ -24,9 +24,8 @@ export default function WebsitesTable() {
                    Array.isArray(response) ? response : []
       setProspects(data)
       setTotal(response?.total ?? data.length)
-      if (data.length === 0 && response?.total === 0) {
-        setError('No websites found. Run a discovery job to find websites.')
-      }
+      // Clear error if we successfully got data (even if empty)
+      // Empty data is not an error, it's a valid state
     } catch (error: any) {
       console.error('Failed to load websites:', error)
       const errorMessage = error?.message || 'Failed to load websites. Check if backend is running.'
@@ -117,7 +116,7 @@ export default function WebsitesTable() {
             Retry
           </button>
         </div>
-      ) : prospects.length === 0 ? (
+      ) : prospects.length === 0 && !loading ? (
         <div className="text-center py-8">
           <p className="text-gray-500 mb-2">No websites found</p>
           <p className="text-gray-400 text-sm">Run a discovery job from the Overview tab to find websites.</p>
@@ -143,31 +142,31 @@ export default function WebsitesTable() {
                   const isEnriching = enrichingIds.has(prospect.id)
                   const hasEmail: boolean = Boolean(prospect.contact_email && prospect.contact_email.trim() !== '')
                   return (
-                    <tr key={prospect.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-medium text-gray-900">{prospect.domain}</span>
-                          {prospect.page_url && (
-                            <a
-                              href={prospect.page_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-olive-600 hover:text-olive-700"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-gray-900">{prospect.page_title || 'N/A'}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-gray-900">{safeToFixed(prospect.da_est, 1)}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-gray-900">{safeToFixed(prospect.score, 2)}</span>
-                      </td>
+                  <tr key={prospect.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium text-gray-900">{prospect.domain}</span>
+                        {prospect.page_url && (
+                          <a
+                            href={prospect.page_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-olive-600 hover:text-olive-700"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-gray-900">{prospect.page_title || 'N/A'}</span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-gray-900">{safeToFixed(prospect.da_est, 1)}</span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-gray-900">{safeToFixed(prospect.score, 2)}</span>
+                    </td>
                       <td className="py-3 px-4">
                         {hasEmail ? (
                           <span className="text-green-700 font-medium">{prospect.contact_email}</span>
@@ -175,19 +174,19 @@ export default function WebsitesTable() {
                           <span className="text-gray-500">No Email</span>
                         )}
                       </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          prospect.outreach_status === 'sent' ? 'bg-green-100 text-green-800' :
-                          prospect.outreach_status === 'replied' ? 'bg-blue-100 text-blue-800' :
-                          prospect.outreach_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {prospect.outreach_status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-gray-600">
-                        {formatDate(prospect.created_at)}
-                      </td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        prospect.outreach_status === 'sent' ? 'bg-green-100 text-green-800' :
+                        prospect.outreach_status === 'replied' ? 'bg-blue-100 text-blue-800' :
+                        prospect.outreach_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {prospect.outreach_status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      {formatDate(prospect.created_at)}
+                    </td>
                       <td className="py-3 px-4">
                         <button
                           onClick={() => handleEnrichEmail(prospect.id, prospect.domain)}
@@ -209,7 +208,7 @@ export default function WebsitesTable() {
                           <span>{hasEmail ? 'Has Email' : (isEnriching ? 'Enriching...' : 'Enrich')}</span>
                         </button>
                       </td>
-                    </tr>
+                  </tr>
                   )
                 })}
               </tbody>

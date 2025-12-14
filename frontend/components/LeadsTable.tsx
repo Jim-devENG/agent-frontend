@@ -39,11 +39,8 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
       const prospectsData = Array.isArray(response?.data) ? response.data : []
       setProspects(prospectsData)
       setTotal(response?.total ?? 0)
-      if (prospectsData.length === 0 && (response?.total ?? 0) === 0) {
-        setError(emailsOnly 
-          ? 'No leads with emails found. Enrich prospects to get email addresses.'
-          : 'No leads found. Run a discovery job to find prospects.')
-      }
+      // Clear error if we successfully got data (even if empty)
+      // Empty data is not an error, it's a valid state
     } catch (error: any) {
       console.error('Failed to load prospects:', error)
       const errorMessage = error?.message || 'Failed to load leads. Check if backend is running.'
@@ -61,7 +58,22 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     const interval = setInterval(() => {
       loadProspects()
     }, 30000)
-    return () => clearInterval(interval)
+    
+    const handleJobCompleted = () => {
+      console.log('🔄 Job completed event received, refreshing leads table...')
+      loadProspects()
+    }
+    
+    if (typeof window !== 'undefined') {
+      window.addEventListener('jobsCompleted', handleJobCompleted)
+    }
+    
+    return () => {
+      clearInterval(interval)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('jobsCompleted', handleJobCompleted)
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skip, emailsOnly])
 
@@ -156,7 +168,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
             Retry
           </button>
         </div>
-      ) : prospects.length === 0 ? (
+      ) : prospects.length === 0 && !loading ? (
         <div className="text-center py-8">
           <p className="text-gray-500 mb-2">No {emailsOnly ? 'emails' : 'leads'} found</p>
           <p className="text-gray-400 text-sm">
