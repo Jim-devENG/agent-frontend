@@ -633,12 +633,36 @@ export async function getStats(): Promise<Stats | null> {
     }
     
     // Extract prospects array from PaginatedResponse<Prospect> format
-    const allProspectsList: Prospect[] = allProspects?.data || []
-    const prospectsWithEmailList: Prospect[] = prospectsWithEmail?.data || []
+    // Handle both normalized response and raw backend response
+    let allProspectsList: Prospect[] = []
+    if (allProspects) {
+      if (Array.isArray(allProspects)) {
+        allProspectsList = allProspects
+      } else if (allProspects.data && Array.isArray(allProspects.data)) {
+        allProspectsList = allProspects.data
+      } else if (allProspects.prospects && Array.isArray(allProspects.prospects)) {
+        allProspectsList = allProspects.prospects
+      }
+    }
+    
+    let prospectsWithEmailList: Prospect[] = []
+    if (prospectsWithEmail) {
+      if (Array.isArray(prospectsWithEmail)) {
+        prospectsWithEmailList = prospectsWithEmail
+      } else if (prospectsWithEmail.data && Array.isArray(prospectsWithEmail.data)) {
+        prospectsWithEmailList = prospectsWithEmail.data
+      } else if (prospectsWithEmail.prospects && Array.isArray(prospectsWithEmail.prospects)) {
+        prospectsWithEmailList = prospectsWithEmail.prospects
+      }
+    }
     
     // Extract totals from PaginatedResponse<Prospect> format
-    const allProspectsTotal = allProspects?.total ?? 0
-    const prospectsWithEmailTotal = prospectsWithEmail?.total ?? 0
+    const allProspectsTotal = (allProspects && typeof allProspects === 'object' && 'total' in allProspects) 
+      ? (allProspects.total ?? 0) 
+      : allProspectsList.length
+    const prospectsWithEmailTotal = (prospectsWithEmail && typeof prospectsWithEmail === 'object' && 'total' in prospectsWithEmail)
+      ? (prospectsWithEmail.total ?? 0)
+      : prospectsWithEmailList.length
     
     // Count prospects by status - defensive forEach guard
     let prospects_pending = 0
@@ -661,9 +685,6 @@ export async function getStats(): Promise<Stats | null> {
         console.error('⚠️ Error in forEach loop (likely from devtools hook or invalid data):', forEachError)
         // Continue with zero counts rather than failing - app stays running
       }
-    } else if (allProspectsList !== null && allProspectsList !== undefined) {
-      // Log warning if we expected an array but got something else
-      console.warn('⚠️ getStats: allProspectsList is not a valid array:', typeof allProspectsList, allProspectsList)
     }
     
     // Safely handle jobs array - defensive guard
