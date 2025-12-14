@@ -26,8 +26,10 @@ export default function ProspectTable() {
         undefined,
         hasEmailFilter === 'true' ? true : hasEmailFilter === 'false' ? false : undefined
       )
-      setProspects(data.data)
-      setTotal(data.total)
+      // Ensure data is always an array
+      const prospectsData = Array.isArray(data?.data) ? data.data : []
+      setProspects(prospectsData)
+      setTotal(data?.total ?? 0)
     } catch (error) {
       console.error('Error loading prospects:', error)
     } finally {

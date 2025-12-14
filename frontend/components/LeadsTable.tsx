@@ -35,9 +35,11 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
         undefined,
         emailsOnly ? true : undefined
       )
-      setProspects(response.data)
-      setTotal(response.total)
-      if (response.data.length === 0 && response.total === 0) {
+      // Ensure data is always an array
+      const prospectsData = Array.isArray(response?.data) ? response.data : []
+      setProspects(prospectsData)
+      setTotal(response?.total ?? 0)
+      if (prospectsData.length === 0 && (response?.total ?? 0) === 0) {
         setError(emailsOnly 
           ? 'No leads with emails found. Enrich prospects to get email addresses.'
           : 'No leads found. Run a discovery job to find prospects.')

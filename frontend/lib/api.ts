@@ -539,9 +539,19 @@ export async function listProspects(
   const result: any = await res.json()
   
   // Normalize to PaginatedResponse<Prospect>
+  // Ensure data is always an array
+  let prospectsData: Prospect[] = []
+  if (result.prospects && Array.isArray(result.prospects)) {
+    prospectsData = result.prospects
+  } else if (result.data && Array.isArray(result.data)) {
+    prospectsData = result.data
+  } else if (Array.isArray(result)) {
+    prospectsData = result
+  }
+  
   return {
-    data: (result.prospects || result.data || []) as Prospect[],
-    total: (result.total ?? 0) as number,
+    data: prospectsData,
+    total: (result.total ?? prospectsData.length) as number,
     skip,
     limit,
   }
