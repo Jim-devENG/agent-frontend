@@ -17,9 +17,11 @@ export default function EmailsTable() {
       setLoading(true)
       setError(null)
       const response = await listProspects(skip, limit, 'sent')
-      setProspects(response.data)
-      setTotal(response.total)
-      if (response.data.length === 0 && response.total === 0) {
+      // Ensure data is always an array
+      const prospectsData = Array.isArray(response?.data) ? response.data : []
+      setProspects(prospectsData)
+      setTotal(response?.total ?? 0)
+      if (prospectsData.length === 0 && (response?.total ?? 0) === 0) {
         setError('No sent emails found. Send emails to prospects to see them here.')
       }
     } catch (error: any) {
