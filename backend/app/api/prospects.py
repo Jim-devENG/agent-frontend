@@ -593,7 +593,7 @@ async def list_prospects(
         
         # Parse pagination (support both page-based and skip-based)
         try:
-            # Default: page=1, limit=10, max limit=10
+            # Default: page=1, limit=50, max limit=1000
             if page is not None:
                 # Page-based pagination (1-based)
                 page = max(1, int(page))
@@ -601,9 +601,9 @@ async def list_prospects(
                 # Default: page 1
                 page = 1
             
-            # Enforce max limit of 10
-            limit = int(limit) if limit is not None else 10
-            limit = max(1, min(limit, 10))  # Enforce 1-10 range
+            # Enforce max limit of 1000 (for stats queries), default 50
+            limit = int(limit) if limit is not None else 50
+            limit = max(1, min(limit, 1000))  # Enforce 1-1000 range
             
             # Calculate skip from page
             skip = (page - 1) * limit
