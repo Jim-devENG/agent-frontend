@@ -1,7 +1,7 @@
 'use client'
 // Version: 3.1 - Discovery feature removed - FORCE REDEPLOY
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import StatsCards from '@/components/StatsCards'
@@ -38,24 +38,11 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<
     'overview' | 'leads' | 'scraped_emails' | 'emails' | 'jobs' | 'websites' | 'settings' | 'guide'
   >('overview')
+  
+  // Track if we've already triggered refresh for completed jobs to prevent loops
+  const hasTriggeredRefresh = useRef(false)
 
-  useEffect(() => {
-    // Check if user is authenticated
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
-    if (!token) {
-      router.push('/login')
-      return
-    }
-
-    loadData()
-    // Refresh every 30 seconds (debounced to prevent loops) - increased from 10s
-    const interval = setInterval(() => {
-      loadData()
-    }, 30000)
-    return () => clearInterval(interval)
-  }, [router])
-
-  const loadData = async () => {
+  const loadData = useCallback(async (isInitialLoad = false) => {
     try {
       const [statsData, jobsData] = await Promise.all([
         getStats().catch(err => {
@@ -73,27 +60,31 @@ export default function Dashboard() {
       const jobsArray = Array.isArray(jobsData) ? jobsData : []
       setJobs(jobsArray)
       
-      // Check for completed discovery jobs and trigger refresh
-      const completedDiscoveryJobs = jobsArray.filter(
-        (job: any) => job.job_type === 'discover' && job.status === 'completed'
-      )
-      
-      if (completedDiscoveryJobs.length > 0) {
-        // Get the most recent completed discovery job
-        const latestJob = completedDiscoveryJobs.sort((a: any, b: any) => {
-          const dateA = new Date(a.updated_at || a.created_at || 0).getTime()
-          const dateB = new Date(b.updated_at || b.created_at || 0).getTime()
-          return dateB - dateA
-        })[0]
+      // Check for completed discovery jobs and trigger refresh (only once on initial load)
+      // This prevents infinite loops from repeated refreshes
+      if (isInitialLoad && !hasTriggeredRefresh.current) {
+        const completedDiscoveryJobs = jobsArray.filter(
+          (job: any) => job.job_type === 'discover' && job.status === 'completed'
+        )
         
-        console.log('🔄 Found completed discovery job, triggering refresh...', latestJob.id)
-        // Dispatch event to refresh all tables
-        // Use setTimeout to ensure tables are mounted
-        setTimeout(() => {
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('jobsCompleted'))
-          }
-        }, 500)
+        if (completedDiscoveryJobs.length > 0) {
+          // Get the most recent completed discovery job
+          const latestJob = completedDiscoveryJobs.sort((a: any, b: any) => {
+            const dateA = new Date(a.updated_at || a.created_at || 0).getTime()
+            const dateB = new Date(b.updated_at || b.created_at || 0).getTime()
+            return dateB - dateA
+          })[0]
+          
+          console.log('🔄 Found completed discovery job, triggering refresh...', latestJob.id)
+          hasTriggeredRefresh.current = true
+          // Dispatch event to refresh all tables
+          // Use setTimeout to ensure tables are mounted
+          setTimeout(() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('jobsCompleted'))
+            }
+          }, 500)
+        }
       }
       
       const backendResponding = statsData !== null || jobsArray.length > 0
@@ -109,12 +100,44 @@ export default function Dashboard() {
         setConnectionError(true)
       }
     } finally {
-      setLoading(false)
+      // Always set loading to false after initial load completes
+      if (isInitialLoad) {
+        setLoading(false)
+      }
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    // Check if user is authenticated
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
+    // Initial load with timeout to prevent infinite loading
+    const loadTimeout = setTimeout(() => {
+      console.warn('⚠️ Load data timeout - setting loading to false')
+      setLoading(false)
+    }, 10000) // 10 second timeout
+
+    loadData(true).finally(() => {
+      clearTimeout(loadTimeout)
+    })
+    
+    // Refresh every 30 seconds (debounced to prevent loops) - increased from 10s
+    const interval = setInterval(() => {
+      loadData(false) // Don't set loading state on periodic refreshes
+    }, 30000)
+    
+    return () => {
+      clearInterval(interval)
+      clearTimeout(loadTimeout)
+    }
+  }, [router, loadData])
 
   const refreshData = () => {
-    loadData()
+    loadData(false)
     // Also trigger the jobsCompleted event to refresh all tables
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('jobsCompleted'))
