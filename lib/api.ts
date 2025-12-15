@@ -540,19 +540,38 @@ export async function listProspects(
     const result: any = await res.json()
     
     // Normalize to PaginatedResponse<Prospect>
-    // Ensure data is always an array
+    // Backend returns: {success: true, data: {data: [...], prospects: [...], total: ...}}
+    // Handle nested structure
     let prospectsData: Prospect[] = []
-    if (result.prospects && Array.isArray(result.prospects)) {
+    let total = 0
+    
+    // Check for nested structure first (backend format)
+    if (result.success && result.data) {
+      if (Array.isArray(result.data.data)) {
+        prospectsData = result.data.data
+        total = result.data.total ?? prospectsData.length
+      } else if (Array.isArray(result.data.prospects)) {
+        prospectsData = result.data.prospects
+        total = result.data.total ?? prospectsData.length
+      }
+    }
+    // Fallback to direct array or flat structure
+    else if (result.prospects && Array.isArray(result.prospects)) {
       prospectsData = result.prospects
+      total = result.total ?? prospectsData.length
     } else if (result.data && Array.isArray(result.data)) {
       prospectsData = result.data
+      total = result.total ?? prospectsData.length
     } else if (Array.isArray(result)) {
       prospectsData = result
+      total = prospectsData.length
     }
+    
+    console.log(`📊 listProspects: Found ${prospectsData.length} prospects (total: ${total})`)
     
     return {
       data: prospectsData,
-      total: (result.total ?? prospectsData.length) as number,
+      total: total,
       skip,
       limit,
     }
