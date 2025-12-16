@@ -140,6 +140,10 @@ async def enrich_prospect_by_id(
         if not prospect:
             raise HTTPException(status_code=404, detail="Prospect not found")
         
+        # Check intent - warn if not partner-qualified (but allow manual enrichment)
+        if prospect.serp_intent and prospect.serp_intent not in ["service", "brand"]:
+            logger.warning(f"⚠️  [ENRICHMENT API] Enriching prospect {prospect_id} with non-partner intent: {prospect.serp_intent}")
+        
         # Enrich using domain and page_url (if available)
         from app.services.enrichment import enrich_prospect_email
         enrich_result = await enrich_prospect_email(prospect.domain, None, prospect.page_url)

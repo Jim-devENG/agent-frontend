@@ -205,7 +205,7 @@ async def create_discovery_job(
                 
                 async def task_wrapper():
                     """Wrapper to register/unregister task and handle cancellation"""
-                    task = asyncio.create_task(process_discovery_job(str(job.id)))
+                task = asyncio.create_task(process_discovery_job(str(job.id)))
                     register_task(str(job.id), task)
                     try:
                         await task

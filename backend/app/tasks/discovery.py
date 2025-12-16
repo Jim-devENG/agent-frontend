@@ -168,7 +168,20 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
             "results_skipped_existing": 0,
             "results_skipped_no_email": 0,  # Track prospects skipped due to no email
             "results_saved": 0,
-            "queries_detail": []
+            "queries_detail": [],
+            # Intent-based metrics
+            "intent_distribution": {
+                "service": 0,
+                "brand": 0,
+                "blog": 0,
+                "media": 0,
+                "marketplace": 0,
+                "platform": 0,
+                "unknown": 0
+            },
+            "snov_calls_made": 0,
+            "snov_calls_skipped": 0,
+            "partner_qualified": 0
         }
         
         logger.info(f"🚀 [DISCOVERY] Starting job {job_id}")
@@ -377,7 +390,35 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                             title = result_item.get("title") or ""
                             title = title[:500] if title else ""
                             
-                            # MANDATORY: Enrich email before saving prospect
+                            # Step 1: Infer SERP intent BEFORE enrichment
+                            from app.services.serp_intent import infer_serp_intent
+                            intent_result = infer_serp_intent(
+                                url=normalized_url,
+                                title=title,
+                                snippet=description,
+                                category=query_category or ""
+                            )
+                            serp_intent = intent_result.get("intent", "unknown")
+                            serp_confidence = float(intent_result.get("confidence", 0.0))
+                            serp_signals = intent_result.get("signals", [])
+                            
+                            logger.info(f"🎯 [DISCOVERY] Intent for {domain}: {serp_intent} (confidence: {serp_confidence:.2f}, signals: {len(serp_signals)})")
+                            
+                            # Track intent distribution
+                            if serp_intent in search_stats["intent_distribution"]:
+                                search_stats["intent_distribution"][serp_intent] += 1
+                            
+                            # Step 2: Gate enrichment - only enrich service/brand intent
+                            # Blogs, media, marketplaces, platforms are skipped early
+                            should_enrich = serp_intent in ["service", "brand"]
+                            
+                            if should_enrich:
+                                search_stats["partner_qualified"] += 1
+                            else:
+                                search_stats["snov_calls_skipped"] += 1
+                                logger.info(f"⏭️  [DISCOVERY] Skipping enrichment for {domain} (intent: {serp_intent} - not a business partner candidate)")
+                            
+                            # MANDATORY: Enrich email before saving prospect (only if partner-qualified)
                             # Discovery MUST NOT save prospects without emails
                             # DEFENSIVE: Enrichment failures should NOT break the entire discovery pipeline
                             from app.services.enrichment import enrich_prospect_email
@@ -386,10 +427,13 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                             contact_email = None
                             snov_payload = None
                             
-                            try:
-                                logger.info(f"🔍 [DISCOVERY] Enriching {domain} before saving...")
-                                # Pass page_url to enrichment so it can try that page first
-                                enrich_result = await enrich_prospect_email(domain, None, normalized_url)
+                            # Only enrich if intent qualifies as business partner
+                            if should_enrich:
+                                search_stats["snov_calls_made"] += 1
+                                try:
+                                    logger.info(f"🔍 [DISCOVERY] Enriching {domain} before saving (intent: {serp_intent})...")
+                                    # Pass page_url to enrichment so it can try that page first
+                                    enrich_result = await enrich_prospect_email(domain, None, normalized_url)
                                 
                                 if enrich_result:
                                     enrich_status = enrich_result.get("status")
@@ -433,41 +477,48 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                                         "retry_needed": True
                                     }
                                     
-                            except Exception as e:
-                                # DEFENSIVE: Log error but DO NOT skip - mark for retry instead
-                                logger.error(f"❌ [DISCOVERY] Enrichment failed for {domain}: {e}", exc_info=True)
-                                logger.warning(f"⚠️  [DISCOVERY] Marking {domain} for retry due to enrichment error")
+                                except Exception as e:
+                                    # DEFENSIVE: Log error but DO NOT skip - mark for retry instead
+                                    logger.error(f"❌ [DISCOVERY] Enrichment failed for {domain}: {e}", exc_info=True)
+                                    logger.warning(f"⚠️  [DISCOVERY] Marking {domain} for retry due to enrichment error")
+                                    contact_email = None
+                                    snov_payload = {
+                                        "status": "pending_retry",
+                                        "error": str(e),
+                                        "retry_needed": True
+                                    }
+                            else:
+                                # Intent doesn't qualify - skip enrichment, save without email
+                                logger.info(f"⏭️  [DISCOVERY] Skipping enrichment for {domain} (intent: {serp_intent})")
                                 contact_email = None
-                                hunter_payload = {
-                                    "status": "pending_retry",
-                                    "error": str(e),
-                                    "retry_needed": True
+                                snov_payload = {
+                                    "status": "skipped_intent",
+                                    "intent": serp_intent,
+                                    "reason": f"Intent '{serp_intent}' does not qualify as business partner"
                                 }
                             
-                            # NEW RULE: Save prospect even without email, mark for retry if needed
-                            # DO NOT skip domains because of Snov errors
-                            # ALWAYS save prospects - even without email, they can be enriched later
-                            if not contact_email:
-                                # Always save prospects, even without email
-                                # They will be marked for retry/enrichment later
-                                logger.info(f"💾 [DISCOVERY] Saving {domain} without email (will retry enrichment later)")
-                                # Continue to save logic below - don't skip
-                            
-                            # Save prospect (with or without email - retry will handle missing emails)
+                            # Save prospect (with or without email)
+                            # Non-partner intents are saved but marked as skipped
                             if contact_email:
-                                logger.info(f"💾 [DISCOVERY] Saving prospect {domain} with email {contact_email}")
+                                logger.info(f"💾 [DISCOVERY] Saving prospect {domain} with email {contact_email} (intent: {serp_intent})")
                             else:
-                                logger.info(f"💾 [DISCOVERY] Saving prospect {domain} without email (retry pending)")
+                                if should_enrich:
+                                    logger.info(f"💾 [DISCOVERY] Saving prospect {domain} without email (retry pending, intent: {serp_intent})")
+                                else:
+                                    logger.info(f"💾 [DISCOVERY] Saving prospect {domain} without email (intent: {serp_intent} - skipped)")
                             
                             prospect = Prospect(
                                 domain=domain,
                                 page_url=normalized_url,
                                 page_title=title,
-                                contact_email=contact_email,  # May be None if retry needed
-                                contact_method="snov_io" if contact_email else "pending_retry",
+                                contact_email=contact_email,  # May be None if skipped or retry needed
+                                contact_method="snov_io" if contact_email else ("pending_retry" if should_enrich else "skipped_intent"),
                                 outreach_status="pending",
                                 discovery_query_id=discovery_query.id,
                                 snov_payload=snov_payload,
+                                serp_intent=serp_intent,
+                                serp_confidence=serp_confidence,
+                                serp_signals=serp_signals,
                                 dataforseo_payload={
                                     "description": description,
                                     "location": loc,
@@ -538,7 +589,11 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                     "results_saved": search_stats["results_saved"],
                     "results_skipped_duplicate": search_stats["results_skipped_duplicate"],
                     "results_skipped_existing": search_stats["results_skipped_existing"],
-                    "results_skipped_no_email": search_stats.get("results_skipped_no_email", 0)
+                    "results_skipped_no_email": search_stats.get("results_skipped_no_email", 0),
+                    "intent_distribution": search_stats["intent_distribution"],
+                    "partner_qualified": search_stats["partner_qualified"],
+                    "snov_calls_made": search_stats["snov_calls_made"],
+                    "snov_calls_skipped": search_stats["snov_calls_skipped"]
                 },
                 "queries_detail": search_stats["queries_detail"][:20]  # Limit to first 20 for size
             }
@@ -553,6 +608,9 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
             logger.info(f"📊 [DISCOVERY] Output - Queries: {search_stats['queries_executed']} executed, {search_stats['queries_successful']} successful, {search_stats['queries_failed']} failed")
             logger.info(f"🔍 [DISCOVERY] Output - Results: {search_stats['total_results_found']} found, {search_stats['results_saved']} saved")
             logger.info(f"⏭️  [DISCOVERY] Output - Skipped: {search_stats['results_skipped_duplicate']} duplicates, {search_stats['results_skipped_existing']} existing, {search_stats.get('results_skipped_no_email', 0)} no email")
+            logger.info(f"🎯 [DISCOVERY] Intent Distribution: {search_stats['intent_distribution']}")
+            logger.info(f"📧 [DISCOVERY] Snov Calls: {search_stats['snov_calls_made']} made, {search_stats['snov_calls_skipped']} skipped (intent filtering)")
+            logger.info(f"✅ [DISCOVERY] Partner Qualified: {search_stats['partner_qualified']} domains")
             
             # NOTE: No need to auto-trigger enrichment since we enrich during discovery
             # All saved prospects already have emails

@@ -52,18 +52,23 @@ async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
             only_missing_emails = params.get("only_missing_emails", False)
             
             # Build query for prospects that are eligible for enrichment.
+            # GATE: Only enrich prospects with service or brand intent (partner-qualified)
             # PRIORITIZE prospects without emails, but also process ones with emails to improve them.
             # Order by: NULL emails first (highest priority), then by created_at (oldest first)
             from sqlalchemy import or_, nullslast
             
             query = select(Prospect).where(
-                Prospect.outreach_status == "pending"
+                Prospect.outreach_status == "pending",
+                # Only enrich service/brand intent (partner-qualified domains)
+                Prospect.serp_intent.in_(["service", "brand"])
             )
             
             # If only_missing_emails is True, filter to only prospects without emails
             if only_missing_emails:
                 query = query.where(Prospect.contact_email.is_(None))
                 logger.info(f"🔍 Filtering to only prospects without emails (only_missing_emails=True)")
+            
+            logger.info(f"🔍 Filtering to only partner-qualified prospects (intent: service or brand)")
             
             if prospect_ids:
                 query = query.where(Prospect.id.in_([UUID(pid) for pid in prospect_ids]))

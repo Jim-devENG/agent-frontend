@@ -29,6 +29,9 @@ class Prospect(Base):
     dataforseo_payload = Column(JSON)  # Raw DataForSEO response
     snov_payload = Column(JSON)  # Raw Snov.io response
     discovery_query_id = Column(UUID(as_uuid=True), ForeignKey("discovery_queries.id"), nullable=True, index=True)  # Link to discovery query
+    serp_intent = Column(String)  # SERP intent: service, brand, blog, media, marketplace, platform, unknown
+    serp_confidence = Column(Numeric(3, 2))  # Confidence score (0.0-1.0)
+    serp_signals = Column(JSON)  # List of signals that led to intent classification
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
