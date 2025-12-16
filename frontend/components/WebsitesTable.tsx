@@ -22,9 +22,11 @@ export default function WebsitesTable() {
         setLoading(true)
       }
       setError(null)
+      console.log(`📥 Loading websites: skip=${skip}, limit=${limit}, page=${Math.floor(skip / limit) + 1}`)
       const response = await listProspects(skip, limit)
       const data = Array.isArray(response?.data) ? response.data : 
                    Array.isArray(response) ? response : []
+      console.log(`📊 Loaded ${data.length} websites (total: ${response?.total ?? data.length})`)
       setProspects(data)
       setTotal(response?.total ?? data.length)
       // Clear error if we successfully got data (even if empty)
@@ -91,10 +93,16 @@ export default function WebsitesTable() {
         )
         
         // Show success message
-        alert(`✅ Email found: ${result.email}\n\nSource: ${result.source || 'Snov.io'}\nConfidence: ${result.confidence || 'N/A'}`)
+        alert(`✅ Email found: ${result.email}\n\nSource: ${result.source || 'Snov.io'}\nConfidence: ${result.confidence || 'N/A'}\n\nThe email has been saved and will appear in the Scraped Emails tab.`)
         
-        // Refresh the list to get the latest data (preserve current page, no loading spinner)
-        await loadWebsites(true)
+        // Trigger refresh of Scraped Emails tab so it shows the new email
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('jobsCompleted'))
+        }
+        
+        // DON'T refresh the websites list immediately - the optimistic update keeps it visible
+        // The periodic refresh (every 30s) will sync with backend later
+        // This prevents the prospect from disappearing due to pagination/sorting
       } else {
         const message = result.message || result.error || 'No email found'
         console.warn(`⚠️ No email found for ${domain}: ${message}`)
@@ -111,8 +119,8 @@ export default function WebsitesTable() {
         // Show info message
         alert(`⚠️ No email found for ${domain}.\n\n${message}\n\nThe website will remain in the list.`)
         
-        // Refresh to get latest state (preserve current page, no loading spinner)
-        await loadWebsites(true)
+        // DON'T refresh - the prospect stays in the list with the attempted status
+        // The periodic refresh will sync with backend later
       }
     } catch (error: any) {
       console.error(`❌ Error enriching ${domain}:`, error)
