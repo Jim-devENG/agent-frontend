@@ -12,6 +12,7 @@ export default function WebsitesTable() {
   const [total, setTotal] = useState(0)
   const limit = 50
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set())
+  const [bulkEnriching, setBulkEnriching] = useState(false)
 
   const [error, setError] = useState<string | null>(null)
 
@@ -135,17 +136,101 @@ export default function WebsitesTable() {
     }
   }
 
+  const handleBulkEnrich = async () => {
+    if (bulkEnriching) return
+    
+    const prospectsWithoutEmail = prospects.filter(p => !p.contact_email || p.contact_email.trim() === '')
+    const count = prospectsWithoutEmail.length
+    
+    if (count === 0) {
+      alert('✅ All prospects already have emails!')
+      return
+    }
+    
+    const maxProspects = prompt(
+      `Found ${count} prospects without emails.\n\nHow many would you like to enrich? (Max: ${count})`,
+      Math.min(count, 100).toString()
+    )
+    
+    if (!maxProspects || isNaN(parseInt(maxProspects))) {
+      return
+    }
+    
+    const max = Math.min(parseInt(maxProspects), count)
+    
+    if (!confirm(`Start enrichment job for ${max} prospects?\n\nThis will only enrich prospects with service or brand intent.`)) {
+      return
+    }
+    
+    setBulkEnriching(true)
+    try {
+      console.log(`🚀 Starting bulk enrichment job for ${max} prospects...`)
+      const result = await createEnrichmentJob(undefined, max)
+      console.log('✅ Enrichment job created:', result)
+      alert(`✅ Enrichment job started!\n\nJob ID: ${result.job_id}\nStatus: ${result.status}\n\nYou can track progress in the Jobs tab.`)
+      
+      // Refresh after a delay to see updated emails
+      setTimeout(() => {
+        loadWebsites(true)
+        // Trigger refresh of Scraped Emails tab
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('jobsCompleted'))
+        }
+      }, 2000)
+    } catch (error: any) {
+      console.error('❌ Failed to start enrichment job:', error)
+      alert(`❌ Failed to start enrichment job:\n\n${error.message || 'Unknown error'}`)
+    } finally {
+      setBulkEnriching(false)
+    }
+  }
+
+  const prospectsWithoutEmail = prospects.filter(p => !p.contact_email || p.contact_email.trim() === '').length
+
   return (
     <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold text-gray-900">Discovered Websites</h2>
-        <button
-          onClick={() => loadWebsites(false)}
-          className="flex items-center space-x-2 px-3 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>Refresh</span>
-        </button>
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Discovered Websites</h2>
+          {prospects.length > 0 && (
+            <p className="text-sm text-gray-600 mt-1">
+              {prospects.length} total • {prospectsWithoutEmail} without email
+            </p>
+          )}
+        </div>
+        <div className="flex items-center space-x-2">
+          {prospectsWithoutEmail > 0 && (
+            <button
+              onClick={handleBulkEnrich}
+              disabled={bulkEnriching}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                bulkEnriching
+                  ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                  : 'bg-olive-600 text-white hover:bg-olive-700'
+              }`}
+              title="Enrich all prospects without emails (service/brand intent only)"
+            >
+              {bulkEnriching ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Enriching...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" />
+                  <span>Bulk Enrich ({prospectsWithoutEmail})</span>
+                </>
+              )}
+            </button>
+          )}
+          <button
+            onClick={() => loadWebsites(false)}
+            className="flex items-center space-x-2 px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       {loading && prospects.length === 0 ? (
