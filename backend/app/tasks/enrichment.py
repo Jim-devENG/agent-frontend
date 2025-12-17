@@ -227,88 +227,10 @@ async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
                         await db.refresh(prospect)
                         continue
                     
-                    # Helper: compute previous best confidence from stored snov_payload
-                    previous_confidence: Optional[float] = None
-                    previous_email: Optional[str] = None
-                    if prospect.snov_payload and isinstance(prospect.snov_payload, dict):
-                        try:
-                            prev_emails = prospect.snov_payload.get("emails", [])
-                            # Prefer confidence for the currently stored email if present
-                            if prev_emails and isinstance(prev_emails, list):
-                                for e_data in prev_emails:
-                                    if not isinstance(e_data, dict):
-                                        continue
-                                    if prospect.contact_email and e_data.get("value") == prospect.contact_email:
-                                        previous_email = e_data.get("value")
-                                        previous_confidence = float(e_data.get("confidence_score", 0) or 0)
-                                        break
-                                # Fallback: take max confidence across previous entries
-                                if previous_confidence is None:
-                                    for e_data in prev_emails:
-                                        if not isinstance(e_data, dict):
-                                            continue
-                                        c_val = float(e_data.get("confidence_score", 0) or 0)
-                                        if previous_confidence is None or c_val > previous_confidence:
-                                            previous_confidence = c_val
-                                            previous_email = e_data.get("value")
-                        except Exception as prev_err:
-                            logger.warning(
-                                f"⚠️  [ENRICHMENT] Failed to parse previous Snov payload for {domain}: {prev_err}",
-                                exc_info=True,
-                            )
-
-                    new_email: Optional[str] = None
-                    new_confidence: Optional[float] = None
-                    provider_source = "snov_io"
-                    fallback_used = False
-
-                    # Process Snov.io response
-                    if snov_result.get("success") and snov_result.get("emails"):
-                        emails = snov_result["emails"]
-                        if emails and len(emails) > 0:
-                            # Get best email (highest confidence) - filter out garbage
-                            best_email = None
-                            best_confidence: float = 0
-                            for email_data in emails:
-                                if not isinstance(email_data, dict):
-                                    continue
-                                email_value = email_data.get("value")
-                                if not email_value:
-                                    continue
-                                # Filter out garbage emails
-                                if not is_plausible_email(email_value):
-                                    logger.info(f"🚫 [ENRICHMENT] Discarding implausible email candidate from Snov.io: {email_value}")
-                                    continue
-                                confidence = float(email_data.get("confidence_score", 0) or 0)
-                                if confidence > best_confidence:
-                                    best_confidence = confidence
-                                    best_email = email_data
-                            
-                            if best_email and best_email.get("value"):
-                                new_email = best_email["value"]
-                                new_confidence = best_confidence
-                            else:
-                                logger.warning(
-                                    f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] Email object missing 'value' for {domain}"
-                                )
-                        else:
-                            logger.info(
-                                f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] No emails in response for {domain}"
-                            )
-                    else:
-                        error_msg = snov_result.get('error', 'Unknown error')
-                        logger.warning(
-                            f"❌ [ENRICHMENT] [{idx}/{len(prospects)}] Snov.io failed for {domain}: {error_msg}"
-                        )
-
-                    # If provider returned nothing usable, don't use generic guesser
-                    # The enrichment service already tried: Snov.io, local scraping, and pattern generation
-                    # If all of those failed, we should NOT save a generic "info@" email
-                    if not new_email:
-                        no_email_count += 1
-                        logger.info(
-                            f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] No email found for {domain} after all methods (Snov.io, scraping, pattern generation)"
-                        )
+                    # STRICT MODE: Use primary_email from enrichment result
+                    new_email = enrich_result.get("primary_email")
+                    new_confidence = 50.0  # Default confidence for website-found emails
+                    provider_source = enrich_result.get("source", "html_scraping")
 
                     # STRICT MODE: Save email if found, otherwise already handled above
                     if new_email:
