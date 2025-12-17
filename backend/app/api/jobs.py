@@ -115,7 +115,7 @@ async def cancel_job(
                 status_code=400,
                 detail=f"Cannot cancel job with status '{job.status}'. Only pending or running jobs can be cancelled."
             )
-    
+        
         # Cancel the background task if it exists
         try:
             from app.task_manager import unregister_task, get_task
