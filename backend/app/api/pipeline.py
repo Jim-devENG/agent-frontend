@@ -4,7 +4,7 @@ No auto-triggering, each step must be explicitly unlocked
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, func
 from typing import List, Optional, Dict
 from uuid import UUID
 import logging
