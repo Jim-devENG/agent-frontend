@@ -288,14 +288,20 @@ async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
                                 continue
                             
                             old_email_log = str(prospect.contact_email) if prospect.contact_email else None
+                            # Get email classification from enrichment result if available
+                            email_classification = enrich_result.get("email_classification") if enrich_result else None
                             logger.info(
                                 f"✅ [ENRICHMENT] [{idx}/{len(prospects)}] Updating email for {domain}: "
                                 f"{old_email_log or 'None'} (conf={old_conf_val}) "
-                                f"-> {new_email} (conf={new_conf_val}), source={provider_source}, reason={reason}"
+                                f"-> {new_email} (conf={new_conf_val}), source={provider_source}, classification={email_classification}, reason={reason}"
                             )
                             prospect.contact_email = new_email
                             prospect.contact_method = provider_source
                             prospect.snov_payload = snov_result
+                            # V1: Mark as enriched if we have at least one email
+                            # Store classification in snov_payload for future use
+                            if prospect.snov_payload and isinstance(prospect.snov_payload, dict):
+                                prospect.snov_payload["email_classification"] = email_classification
                             enriched_count += 1
                         else:
                             logger.info(
@@ -307,11 +313,17 @@ async def process_enrichment_job(job_id: str) -> Dict[str, Any]:
                             prospect.snov_payload = snov_result
                     else:
                         # Nothing usable, just persist payload for diagnostics
-                        logger.info(
-                            f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] No usable email or fallback for {domain}"
+                        logger.warning(
+                            f"⚠️  [ENRICHMENT] [{idx}/{len(prospects)}] No usable email found for {domain} - enrichment service returned no email"
                         )
+                        # Log what the enrichment service actually returned for debugging
+                        if enrich_result:
+                            logger.debug(f"   Enrichment result: {enrich_result}")
+                        else:
+                            logger.debug(f"   Enrichment service returned None")
                         # Store snov_result for diagnostics (no hunter_payload - Hunter.io removed)
                         prospect.snov_payload = snov_result
+                        no_email_count += 1
                     
                     await db.commit()
                     await db.refresh(prospect)

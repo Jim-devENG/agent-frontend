@@ -379,30 +379,33 @@ async def enrich_prospect_email(domain: str, name: Optional[str] = None, page_ur
     logger.info(f"📥 [ENRICHMENT] Input - domain: {domain} → normalized: {normalized_domain}, name: {name}")
     
     try:
-        # TEMP LOG: Before first Snov API call
-        logger.info(f"📞 [ENRICHMENT] About to initialize Snov.io client for {normalized_domain}...")
+        # Step 1: Initialize Snov.io client and call domain_search API
+        logger.info(f"📞 [ENRICHMENT] Step 1: Initializing Snov.io client for {normalized_domain}...")
         
         # Initialize Snov client
         try:
             snov_client = SnovIOClient()
-            logger.info(f"✅ [ENRICHMENT] Snov.io client initialized")
+            logger.info(f"✅ [ENRICHMENT] Snov.io client initialized successfully")
         except ValueError as e:
             error_msg = f"Snov.io not configured: {e}"
-            logger.error(f"❌ [ENRICHMENT] {error_msg}", exc_info=True)
+            logger.error(f"❌ [ENRICHMENT] API authentication failed: {error_msg}", exc_info=True)
             raise ValueError(error_msg) from e
         
-        # TEMP LOG: Before first Snov API call
-        logger.info(f"📞 [ENRICHMENT] About to call Snov.io domain_search API for {normalized_domain}...")
-        
         # Call Snov.io API - use ONLY domain-search endpoint
+        logger.info(f"📞 [ENRICHMENT] Calling Snov.io domain_search API for {normalized_domain}...")
         try:
             snov_result = await snov_client.domain_search(normalized_domain)
             api_time = (time.time() - start_time) * 1000
-            logger.info(f"⏱️  [ENRICHMENT] Snov.io domain-search API call completed in {api_time:.0f}ms")
+            logger.info(f"⏱️  [ENRICHMENT] Snov.io API call completed in {api_time:.0f}ms - success: {snov_result.get('success')}, emails found: {len(snov_result.get('emails', []))}")
         except Exception as api_err:
             api_time = (time.time() - start_time) * 1000
             error_msg = f"Snov.io API call failed after {api_time:.0f}ms: {str(api_err)}"
-            logger.error(f"❌ [ENRICHMENT] {error_msg}", exc_info=True)
+            logger.error(f"❌ [ENRICHMENT] API failure: {error_msg}", exc_info=True)
+            # Distinguish between API failure types
+            if "rate limit" in str(api_err).lower() or "429" in str(api_err):
+                logger.warning(f"⚠️  [ENRICHMENT] Rate limit detected for {normalized_domain}")
+            elif "401" in str(api_err) or "403" in str(api_err):
+                logger.error(f"❌ [ENRICHMENT] Authentication error for {normalized_domain}")
             raise Exception(error_msg) from api_err
         
         # Process response - handle rate limits specially
