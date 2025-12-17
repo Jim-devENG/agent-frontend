@@ -269,8 +269,71 @@ async def startup():
                     logger.info("✅ Added serp_intent, serp_confidence, and serp_signals columns")
                 else:
                     logger.info("✅ serp_intent columns already exist")
+                
+                # CRITICAL FIX: Check and add discovery_status column if missing
+                # This column is required for /api/pipeline/status to work
+                discovery_status_check = await conn.execute(
+                    text("""
+                        SELECT column_name, is_nullable, column_default
+                        FROM information_schema.columns 
+                        WHERE table_name = 'prospects' 
+                        AND column_name = 'discovery_status'
+                    """)
+                )
+                discovery_status_row = discovery_status_check.fetchone()
+                
+                if not discovery_status_row:
+                    logger.warning("⚠️  Missing discovery_status column - adding it now...")
+                    # Step 1: Add column as nullable first (safe for existing rows)
+                    await conn.execute(
+                        text("ALTER TABLE prospects ADD COLUMN discovery_status VARCHAR")
+                    )
+                    # Step 2: Backfill existing rows with 'NEW' (canonical default)
+                    await conn.execute(
+                        text("UPDATE prospects SET discovery_status = 'NEW' WHERE discovery_status IS NULL")
+                    )
+                    # Step 3: Set default to 'NEW'
+                    await conn.execute(
+                        text("ALTER TABLE prospects ALTER COLUMN discovery_status SET DEFAULT 'NEW'")
+                    )
+                    # Step 4: Make NOT NULL (safe now that all rows have values)
+                    await conn.execute(
+                        text("ALTER TABLE prospects ALTER COLUMN discovery_status SET NOT NULL")
+                    )
+                    # Step 5: Create index for performance
+                    await conn.execute(
+                        text("CREATE INDEX IF NOT EXISTS ix_prospects_discovery_status ON prospects(discovery_status)")
+                    )
+                    logger.info("✅ Added discovery_status column (NOT NULL, DEFAULT 'NEW') with index")
+                else:
+                    # Column exists - check if it needs to be fixed (nullable or wrong default)
+                    is_nullable = discovery_status_row[1] == 'YES'
+                    current_default = discovery_status_row[2]
+                    
+                    if is_nullable or (current_default and "'NEW'" not in str(current_default)):
+                        logger.warning(f"⚠️  discovery_status column exists but needs fixing (nullable={is_nullable}, default={current_default})")
+                        # Backfill NULL values
+                        await conn.execute(
+                            text("UPDATE prospects SET discovery_status = 'NEW' WHERE discovery_status IS NULL")
+                        )
+                        # Update default if needed
+                        if not current_default or "'NEW'" not in str(current_default):
+                            await conn.execute(
+                                text("ALTER TABLE prospects ALTER COLUMN discovery_status DROP DEFAULT")
+                            )
+                            await conn.execute(
+                                text("ALTER TABLE prospects ALTER COLUMN discovery_status SET DEFAULT 'NEW'")
+                            )
+                        # Make NOT NULL if currently nullable
+                        if is_nullable:
+                            await conn.execute(
+                                text("ALTER TABLE prospects ALTER COLUMN discovery_status SET NOT NULL")
+                            )
+                        logger.info("✅ Fixed discovery_status column (now NOT NULL with DEFAULT 'NEW')")
+                    else:
+                        logger.info("✅ discovery_status column already exists and is correct")
         except Exception as e:
-            logger.error(f"Failed to check/add discovery_query_id column: {e}", exc_info=True)
+            logger.error(f"Failed to check/add discovery_status column: {e}", exc_info=True)
     
     # Run database setup in background (non-blocking)
     asyncio.create_task(run_database_setup())
