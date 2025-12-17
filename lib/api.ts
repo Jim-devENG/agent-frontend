@@ -133,6 +133,18 @@ export interface Prospect {
   hunter_payload?: any
   created_at: string
   updated_at: string
+  // Pipeline status fields
+  discovery_status?: string
+  approval_status?: string
+  scrape_status?: string
+  verification_status?: string
+  draft_status?: string
+  send_status?: string
+  discovery_category?: string
+  discovery_location?: string
+  discovery_keywords?: string
+  scrape_source_url?: string
+  verification_confidence?: number
 }
 
 export interface Job {
@@ -848,6 +860,199 @@ export async function getAPIKeysStatus(): Promise<Record<string, boolean>> {
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to get API keys status' }))
     throw new Error(error.detail || 'Failed to get API keys status')
+  }
+  return res.json()
+}
+
+// ============================================
+// PIPELINE API - Strict Step-by-Step Pipeline
+// ============================================
+
+export interface PipelineDiscoveryRequest {
+  categories: string[]
+  locations: string[]
+  keywords?: string
+  max_results?: number
+}
+
+export interface PipelineDiscoveryResponse {
+  success: boolean
+  job_id: string
+  message: string
+  prospects_count: number
+}
+
+export async function pipelineDiscover(request: PipelineDiscoveryRequest): Promise<PipelineDiscoveryResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/discover`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to start discovery' }))
+    throw new Error(error.detail || 'Failed to start discovery')
+  }
+  return res.json()
+}
+
+export interface PipelineApprovalRequest {
+  prospect_ids: string[]
+  action: 'approve' | 'reject' | 'delete'
+}
+
+export interface PipelineApprovalResponse {
+  success: boolean
+  approved_count: number
+  rejected_count: number
+  deleted_count: number
+  message: string
+}
+
+export async function pipelineApprove(request: PipelineApprovalRequest): Promise<PipelineApprovalResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/approve`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to approve prospects' }))
+    throw new Error(error.detail || 'Failed to approve prospects')
+  }
+  return res.json()
+}
+
+export interface PipelineScrapeRequest {
+  prospect_ids?: string[]
+}
+
+export interface PipelineScrapeResponse {
+  success: boolean
+  job_id: string
+  message: string
+  prospects_count: number
+}
+
+export async function pipelineScrape(request?: PipelineScrapeRequest): Promise<PipelineScrapeResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/scrape`, {
+    method: 'POST',
+    body: JSON.stringify(request || {}),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to start scraping' }))
+    throw new Error(error.detail || 'Failed to start scraping')
+  }
+  return res.json()
+}
+
+export interface PipelineVerifyRequest {
+  prospect_ids?: string[]
+}
+
+export interface PipelineVerifyResponse {
+  success: boolean
+  job_id: string
+  message: string
+  prospects_count: number
+}
+
+export async function pipelineVerify(request?: PipelineVerifyRequest): Promise<PipelineVerifyResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/verify`, {
+    method: 'POST',
+    body: JSON.stringify(request || {}),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to start verification' }))
+    throw new Error(error.detail || 'Failed to start verification')
+  }
+  return res.json()
+}
+
+export interface PipelineReviewProspect {
+  id: string
+  domain: string
+  contact_email: string
+  scrape_source_url?: string
+  verification_status?: string
+  verification_confidence?: number
+  email_type?: string
+}
+
+export interface PipelineReviewResponse {
+  data: PipelineReviewProspect[]
+  total: number
+  skip: number
+  limit: number
+}
+
+export async function pipelineReview(): Promise<PipelineReviewResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/review`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to get review prospects' }))
+    throw new Error(error.detail || 'Failed to get review prospects')
+  }
+  return res.json()
+}
+
+export interface PipelineDraftRequest {
+  prospect_ids?: string[]
+  outreach_intent?: string
+}
+
+export interface PipelineDraftResponse {
+  success: boolean
+  job_id: string
+  message: string
+  prospects_count: number
+}
+
+export async function pipelineDraft(request?: PipelineDraftRequest): Promise<PipelineDraftResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/draft`, {
+    method: 'POST',
+    body: JSON.stringify(request || {}),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to start drafting' }))
+    throw new Error(error.detail || 'Failed to start drafting')
+  }
+  return res.json()
+}
+
+export interface PipelineSendRequest {
+  prospect_ids?: string[]
+}
+
+export interface PipelineSendResponse {
+  success: boolean
+  job_id: string
+  message: string
+  prospects_count: number
+}
+
+export async function pipelineSend(request?: PipelineSendRequest): Promise<PipelineSendResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/send`, {
+    method: 'POST',
+    body: JSON.stringify(request || {}),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to start sending' }))
+    throw new Error(error.detail || 'Failed to start sending')
+  }
+  return res.json()
+}
+
+export interface PipelineStatus {
+  discovered: number
+  approved: number
+  scraped: number
+  verified: number
+  reviewed: number
+  drafted: number
+  sent: number
+}
+
+export async function pipelineStatus(): Promise<PipelineStatus> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/status`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to get pipeline status' }))
+    throw new Error(error.detail || 'Failed to get pipeline status')
   }
   return res.json()
 }

@@ -14,6 +14,7 @@ import ManualScrape from '@/components/ManualScrape'
 import WebsitesTable from '@/components/WebsitesTable'
 import SystemStatus from '@/components/SystemStatus'
 import Sidebar from '@/components/Sidebar'
+import Pipeline from '@/components/Pipeline'
 import { getStats, listJobs } from '@/lib/api'
 import type { Stats, Job } from '@/lib/api'
 import { 
@@ -36,7 +37,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [connectionError, setConnectionError] = useState(false)
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'leads' | 'scraped_emails' | 'emails' | 'jobs' | 'websites' | 'settings' | 'guide'
+    'overview' | 'pipeline' | 'leads' | 'scraped_emails' | 'emails' | 'jobs' | 'websites' | 'settings' | 'guide'
   >('overview')
 
   // Track if we've already triggered refresh for completed jobs to prevent loops
@@ -146,6 +147,7 @@ export default function Dashboard() {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'pipeline', label: 'Pipeline', icon: Activity },
     { id: 'websites', label: 'Websites', icon: Globe },
     { id: 'leads', label: 'Leads', icon: Users },
     { id: 'scraped_emails', label: 'Scraped Emails', icon: AtSign },
@@ -258,6 +260,12 @@ export default function Dashboard() {
               )}
               <ActivityFeed limit={15} autoRefresh={true} />
             </div>
+          </div>
+        )}
+
+        {activeTab === 'pipeline' && (
+          <div className="max-w-7xl mx-auto">
+            <Pipeline />
           </div>
         )}
 
