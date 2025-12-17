@@ -1043,7 +1043,7 @@ export interface PipelineStatus {
   approved: number
   scraped: number
   verified: number
-  reviewed: number
+  reviewed: number  // Same as verified for review step
   drafted: number
   sent: number
 }
