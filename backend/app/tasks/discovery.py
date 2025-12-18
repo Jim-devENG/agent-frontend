@@ -111,14 +111,14 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
     This runs directly in the backend without needing a separate worker
     """
     from app.models.job import Job
-            from app.models.prospect import (
-                Prospect,
-                DiscoveryStatus,
-                ScrapeStatus,
-                VerificationStatus,
-                DraftStatus,
-                SendStatus,
-            )
+    from app.models.prospect import (
+        Prospect,
+        DiscoveryStatus,
+        ScrapeStatus,
+        VerificationStatus,
+        DraftStatus,
+        SendStatus,
+    )
     from app.models.discovery_query import DiscoveryQuery
     from uuid import UUID
     from datetime import datetime, timezone, timedelta
