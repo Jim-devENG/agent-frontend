@@ -26,6 +26,13 @@ class ProspectResponse(BaseModel):
     serp_intent: Optional[str] = None  # SERP intent: service, brand, blog, media, marketplace, platform, unknown
     serp_confidence: Optional[Decimal] = None  # Confidence score (0.0-1.0)
     serp_signals: Optional[list[str]] = None  # List of signals that led to intent classification
+    # Pipeline status fields - required for Leads tab filtering
+    discovery_status: Optional[str] = None
+    approval_status: Optional[str] = None
+    scrape_status: Optional[str] = None  # CRITICAL: Used by Leads tab to filter SCRAPED/ENRICHED prospects
+    verification_status: Optional[str] = None
+    draft_status: Optional[str] = None
+    send_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     

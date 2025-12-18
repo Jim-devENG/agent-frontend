@@ -142,9 +142,11 @@ async def scrape_prospects_async(job_id: str):
             await db.commit()
             
             # Summary log with state update counts
+            leads_created = scraped_count  # Leads are prospects with scrape_status=SCRAPED (have emails)
             logger.info(f"✅ [SCRAPING] Job {job_id} completed: {scraped_count} scraped (SCRAPED), {no_email_count} no email (NO_EMAIL_FOUND), {failed_count} failed (FAILED)")
             logger.info(f"📊 [SCRAPING] State updates: {scraped_count + no_email_count} prospects ready for verification (SCRAPED + NO_EMAIL_FOUND)")
             logger.info(f"📊 [SCRAPING] Total prospects processed: {len(prospects)}, Updated: {scraped_count + no_email_count + failed_count}")
+            logger.info(f"👥 [SCRAPING] {leads_created} leads created from scraping job (prospects with scrape_status=SCRAPED and contact_email)")
             
             return {
                 "job_id": job_id,
