@@ -11,7 +11,7 @@ from sqlalchemy import select
 from datetime import datetime, timezone
 
 from app.db.database import AsyncSessionLocal
-from app.models.prospect import Prospect, ScrapeStatus, VerificationStatus
+from app.models.prospect import Prospect, ScrapeStatus, VerificationStatus, ProspectStage
 from app.models.job import Job
 from app.clients.snov import SnovIOClient
 from app.services.enrichment import _is_snov_email_from_website
@@ -52,21 +52,17 @@ async def verify_prospects_async(job_id: str):
                 await db.commit()
                 return {"error": "No prospect IDs provided"}
             
+            # Get LEAD prospects ready for verification (canonical stage-based query)
             result = await db.execute(
                 select(Prospect).where(
                     Prospect.id.in_([UUID(pid) for pid in prospect_ids]),
-                    Prospect.scrape_status.in_(
-                        [
-                            ScrapeStatus.SCRAPED.value,
-                            ScrapeStatus.NO_EMAIL_FOUND.value,
-                        ]
-                    ),
+                    Prospect.stage == ProspectStage.LEAD.value,
                     Prospect.verification_status == VerificationStatus.PENDING.value,
                 )
             )
             prospects = result.scalars().all()
             
-            logger.info(f"✅ [VERIFICATION] Starting verification for {len(prospects)} scraped prospects")
+            logger.info(f"✅ [VERIFICATION] Starting verification for {len(prospects)} leads (stage=LEAD)")
             
             # Initialize Snov client
             try:
@@ -113,10 +109,12 @@ async def verify_prospects_async(job_id: str):
                                 prospect.verification_status = (
                                     VerificationStatus.VERIFIED.value
                                 )
+                                prospect.stage = ProspectStage.VERIFIED.value  # Promote to VERIFIED stage
                                 prospect.verification_confidence = confidence
                                 prospect.verification_payload = snov_result
                                 verified_count += 1
                                 logger.info(f"✅ [VERIFICATION] Verified scraped email for {prospect.domain}: {prospect.contact_email} (confidence: {confidence})")
+                                logger.info(f"📝 [VERIFICATION] Updated prospect {prospect.id} - stage=VERIFIED")
                             else:
                                 prospect.verification_status = (
                                     VerificationStatus.UNVERIFIED_LOWER.value
@@ -161,10 +159,12 @@ async def verify_prospects_async(job_id: str):
                                 prospect.verification_status = (
                                     VerificationStatus.VERIFIED.value
                                 )
+                                prospect.stage = ProspectStage.VERIFIED.value  # Promote to VERIFIED stage
                                 prospect.verification_confidence = confidence
                                 prospect.verification_payload = snov_result
                                 verified_count += 1
                                 logger.info(f"✅ [VERIFICATION] Found email via Snov for {prospect.domain}: {found_email} (confidence: {confidence})")
+                                logger.info(f"📝 [VERIFICATION] Updated prospect {prospect.id} - stage=VERIFIED")
                             else:
                                 prospect.verification_status = (
                                     VerificationStatus.UNVERIFIED_LOWER.value

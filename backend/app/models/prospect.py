@@ -55,6 +55,17 @@ class SendStatus(str, Enum):
     FAILED = "failed"
 
 
+class ProspectStage(str, Enum):
+    """Canonical pipeline stage - single source of truth for prospect progression."""
+    
+    DISCOVERED = "DISCOVERED"  # Step 1: Website discovered
+    SCRAPED = "SCRAPED"  # Step 3: Scraping completed (may or may not have email)
+    LEAD = "LEAD"  # Step 3.5: Scraped with email - ready to become a lead
+    VERIFIED = "VERIFIED"  # Step 4: Email verified
+    DRAFTED = "DRAFTED"  # Step 6: Email drafted
+    SENT = "SENT"  # Step 7: Email sent
+
+
 class Prospect(Base):
     """Prospect model for storing discovered websites and contacts"""
     __tablename__ = "prospects"
@@ -113,6 +124,14 @@ class Prospect(Base):
         server_default=SendStatus.PENDING.value,
         index=True,
     )  # pending, sent, failed
+    # Canonical pipeline stage - single source of truth for prospect progression
+    # Lifecycle: DISCOVERED → SCRAPED → LEAD → VERIFIED → DRAFTED → SENT
+    stage = Column(
+        String,
+        nullable=False,
+        server_default=ProspectStage.DISCOVERED.value,
+        index=True,
+    )  # DISCOVERED, SCRAPED, LEAD, VERIFIED, DRAFTED, SENT
     
     # Legacy outreach_status (kept for backward compatibility)
     outreach_status = Column(String, default="pending", index=True)  # pending/sent/replied/accepted/rejected

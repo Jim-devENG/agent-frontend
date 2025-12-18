@@ -118,6 +118,7 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
         VerificationStatus,
         DraftStatus,
         SendStatus,
+        ProspectStage,
     )
     from app.models.discovery_query import DiscoveryQuery
     from uuid import UUID
@@ -585,6 +586,8 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                                 send_status=SendStatus.PENDING.value
                                 if pipeline_mode
                                 else None,
+                                # Canonical pipeline stage - set to DISCOVERED on creation
+                                stage=ProspectStage.DISCOVERED.value,
                             )
                             
                             db.add(prospect)

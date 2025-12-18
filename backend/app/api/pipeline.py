@@ -19,6 +19,7 @@ from app.models.prospect import (
     VerificationStatus,
     DraftStatus,
     SendStatus,
+    ProspectStage,
 )
 from app.models.job import Job
 
@@ -366,11 +367,10 @@ async def verify_emails(
     - Sets verification_status = "verified" or "unverified"
     - Never overwrites scraped emails without confirmation
     """
-    # Get scraped prospects ready for verification
+    # Get LEAD prospects ready for verification (canonical stage-based query)
+    # LEAD stage = scraped prospects with emails, ready to be verified
     query = select(Prospect).where(
-        Prospect.scrape_status.in_(
-            [ScrapeStatus.SCRAPED.value, ScrapeStatus.NO_EMAIL_FOUND.value]
-        ),
+        Prospect.stage == ProspectStage.LEAD.value,
         Prospect.verification_status == VerificationStatus.PENDING.value,
     )
     
@@ -383,10 +383,10 @@ async def verify_emails(
     if len(prospects) == 0:
         raise HTTPException(
             status_code=400,
-            detail="No scraped prospects found ready for verification. Ensure prospects are scraped in Step 3."
+            detail="No leads found ready for verification. Ensure prospects are scraped and have emails (stage=LEAD) in Step 3."
         )
     
-    logger.info(f"✅ [PIPELINE STEP 4] Verifying {len(prospects)} scraped prospects")
+    logger.info(f"✅ [PIPELINE STEP 4] Verifying {len(prospects)} leads (stage=LEAD)")
     
     # Create verification job
     job = Job(
@@ -701,6 +701,15 @@ async def get_pipeline_status(
     )
     scrape_ready_count = scrape_ready.scalar() or 0
     
+    # Step 3.5: LEAD (stage = "LEAD" - scraped prospects with emails, ready for verification)
+    # This is the canonical count for verification readiness
+    leads = await db.execute(
+        select(func.count(Prospect.id)).where(
+            Prospect.stage == ProspectStage.LEAD.value
+        )
+    )
+    leads_count = leads.scalar() or 0
+    
     # Step 4: VERIFIED (verification_status = "verified")
     verified = await db.execute(
         select(func.count(Prospect.id)).where(
@@ -710,7 +719,7 @@ async def get_pipeline_status(
     verified_count = verified.scalar() or 0
     
     # Return pipeline status counts
-    # scrape_status lifecycle: DISCOVERED → SCRAPED → ENRICHED → EMAILED (send_status)
+    # Stage lifecycle: DISCOVERED → SCRAPED → LEAD → VERIFIED → DRAFTED → SENT
     # All queries are defensive and return 0 if no rows exist
     return {
         "discovered": discovered_count,
@@ -720,6 +729,7 @@ async def get_pipeline_status(
         "discovered_for_scraping": scrape_ready_count,
         # New explicit field used by the pipeline UI to unlock scraping
         "scrape_ready_count": scrape_ready_count,
+        "leads": leads_count,  # Canonical count: prospects with stage=LEAD (ready for verification)
         "verified": verified_count,
         "reviewed": verified_count,  # Same as verified for review step
     }

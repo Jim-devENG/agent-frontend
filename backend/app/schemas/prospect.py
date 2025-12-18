@@ -29,10 +29,11 @@ class ProspectResponse(BaseModel):
     # Pipeline status fields - required for Leads tab filtering
     discovery_status: Optional[str] = None
     approval_status: Optional[str] = None
-    scrape_status: Optional[str] = None  # CRITICAL: Used by Leads tab to filter SCRAPED/ENRICHED prospects
+    scrape_status: Optional[str] = None  # Legacy: scraping step status
     verification_status: Optional[str] = None
     draft_status: Optional[str] = None
     send_status: Optional[str] = None
+    stage: Optional[str] = None  # CRITICAL: Canonical pipeline stage - DISCOVERED, SCRAPED, LEAD, VERIFIED, DRAFTED, SENT
     created_at: datetime
     updated_at: datetime
     
