@@ -20,13 +20,14 @@ logger = logging.getLogger(__name__)
 
 async def scrape_prospects_async(job_id: str):
     """
-    Scrape approved prospects for emails
+    Scrape discovered prospects for emails
     
     STRICT MODE:
-    - Only scrapes approved prospects
+    - Scrapes discovered, non-rejected prospects (matches pipeline endpoint criteria)
     - Crawls homepage + contact/about pages
     - Extracts visible emails only
     - Sets scrape_status = "SCRAPED" or "NO_EMAIL_FOUND"
+    - Commits state updates immediately after each prospect
     """
     async with AsyncSessionLocal() as db:
         try:
@@ -50,16 +51,27 @@ async def scrape_prospects_async(job_id: str):
                 await db.commit()
                 return {"error": "No prospect IDs provided"}
             
+            # Match pipeline endpoint selection criteria:
+            # - discovery_status == DISCOVERED
+            # - approval_status is NOT "rejected" (NULL or any other value is allowed)
+            # - scrape_status == DISCOVERED (avoid re-scraping already processed prospects)
+            from sqlalchemy import or_
+            from app.models.prospect import DiscoveryStatus
+            
             result = await db.execute(
                 select(Prospect).where(
                     Prospect.id.in_([UUID(pid) for pid in prospect_ids]),
-                    Prospect.approval_status == "approved",
+                    Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value,
+                    or_(
+                        Prospect.approval_status.is_(None),
+                        Prospect.approval_status != "rejected",
+                    ),
                     Prospect.scrape_status == ScrapeStatus.DISCOVERED.value,
                 )
             )
             prospects = result.scalars().all()
             
-            logger.info(f"🔍 [SCRAPING] Starting scraping for {len(prospects)} approved prospects")
+            logger.info(f"🔍 [SCRAPING] Starting scraping for {len(prospects)} discovered prospects (job selected {len(prospect_ids)} IDs)")
             
             scraped_count = 0
             no_email_count = 0
@@ -81,22 +93,26 @@ async def scrape_prospects_async(job_id: str):
                             source_url = url
                     
                     if all_emails:
-                        # Emails found
+                        # Emails found - update prospect state
                         prospect.contact_email = all_emails[0]  # Primary email
                         prospect.scrape_source_url = source_url
                         prospect.scrape_payload = emails_by_page
                         prospect.scrape_status = ScrapeStatus.SCRAPED.value
                         scraped_count += 1
                         logger.info(f"✅ [SCRAPING] Found {len(all_emails)} email(s) for {prospect.domain}: {all_emails[0]}")
+                        logger.info(f"📝 [SCRAPING] Updated prospect {prospect.id} - scrape_status=SCRAPED, contact_email={all_emails[0]}")
                     else:
-                        # No emails found
+                        # No emails found - update prospect state
                         prospect.scrape_status = ScrapeStatus.NO_EMAIL_FOUND.value
                         prospect.scrape_payload = {}
                         no_email_count += 1
                         logger.warning(f"⚠️  [SCRAPING] No emails found for {prospect.domain}")
+                        logger.info(f"📝 [SCRAPING] Updated prospect {prospect.id} - scrape_status=NO_EMAIL_FOUND")
                     
+                    # CRITICAL: Commit state update immediately
                     await db.commit()
                     await db.refresh(prospect)
+                    logger.debug(f"💾 [SCRAPING] Committed state update for prospect {prospect.id} (scrape_status={prospect.scrape_status})")
                     
                     # Rate limiting
                     await asyncio.sleep(1)
@@ -106,9 +122,13 @@ async def scrape_prospects_async(job_id: str):
                         f"❌ [SCRAPING] Failed to scrape {prospect.domain}: {e}",
                         exc_info=True,
                     )
+                    # Update prospect state to FAILED
                     prospect.scrape_status = ScrapeStatus.FAILED.value
                     failed_count += 1
+                    logger.info(f"📝 [SCRAPING] Updated prospect {prospect.id} - scrape_status=FAILED")
+                    # CRITICAL: Commit failed state update
                     await db.commit()
+                    logger.debug(f"💾 [SCRAPING] Committed failed state for prospect {prospect.id}")
                     continue
             
             # Update job status
@@ -121,7 +141,10 @@ async def scrape_prospects_async(job_id: str):
             }
             await db.commit()
             
-            logger.info(f"✅ [SCRAPING] Job {job_id} completed: {scraped_count} scraped, {no_email_count} no email, {failed_count} failed")
+            # Summary log with state update counts
+            logger.info(f"✅ [SCRAPING] Job {job_id} completed: {scraped_count} scraped (SCRAPED), {no_email_count} no email (NO_EMAIL_FOUND), {failed_count} failed (FAILED)")
+            logger.info(f"📊 [SCRAPING] State updates: {scraped_count + no_email_count} prospects ready for verification (SCRAPED + NO_EMAIL_FOUND)")
+            logger.info(f"📊 [SCRAPING] Total prospects processed: {len(prospects)}, Updated: {scraped_count + no_email_count + failed_count}")
             
             return {
                 "job_id": job_id,
