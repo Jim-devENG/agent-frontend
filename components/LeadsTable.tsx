@@ -36,9 +36,16 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
         emailsOnly ? true : undefined
       )
       // Ensure data is always an array
-      const prospectsData = Array.isArray(response?.data) ? response.data : []
-      setProspects(prospectsData)
-      setTotal(response?.total ?? 0)
+      // FILTER: Only show prospects that have been scraped (scrape_status = SCRAPED or ENRICHED)
+      // This ensures we only show prospects, not discovery results
+      const allProspects = Array.isArray(response?.data) ? response.data : []
+      const scrapedProspects = allProspects.filter((p: Prospect) => 
+        p.scrape_status === 'SCRAPED' || p.scrape_status === 'ENRICHED'
+      )
+      setProspects(scrapedProspects)
+      // Note: total count is approximate since we're filtering client-side
+      // In production, this should be a backend filter
+      setTotal(scrapedProspects.length)
       // Clear error if we successfully got data (even if empty)
       // Empty data is not an error, it's a valid state
     } catch (error: any) {
@@ -176,13 +183,13 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
           </p>
           <p className="text-gray-500 text-sm mb-4">
             {emailsOnly 
-              ? 'Prospects appear here after scraping finds contact information. Complete the Pipeline steps to create prospects.'
-              : 'Prospects are created after scraping websites. Complete the Pipeline steps: Discover → Approve → Scrape → Prospects appear here.'}
+              ? 'No prospects with emails yet. Scrape discovered websites to extract contact information.'
+              : 'No prospects yet. Scrape discovered websites to create prospects.'}
           </p>
           <p className="text-gray-400 text-xs">
             {emailsOnly 
-              ? 'Use the Pipeline tab to scrape websites and extract emails.'
-              : 'Start with Step 1 (Discovery) in the Pipeline tab to find websites.'}
+              ? 'Prospects appear here after scraping finds emails. Go to the Websites tab to approve and scrape websites.'
+              : 'Prospects are created after scraping. Go to the Websites tab to approve websites, then use the Pipeline tab to scrape them.'}
           </p>
         </div>
       ) : (

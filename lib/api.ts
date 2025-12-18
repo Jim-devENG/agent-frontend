@@ -1049,6 +1049,31 @@ export interface PipelineStatus {
   discovered_for_scraping?: number  // DISCOVERED status (ready for scraping)
 }
 
+export async function listWebsites(skip: number = 0, limit: number = 50): Promise<{
+  data: Array<{
+    id: string
+    domain: string
+    url: string
+    title: string
+    category: string
+    location: string
+    discovery_job_id: string | null
+    discovered_at: string | null
+    scrape_status: string
+    approval_status: string
+  }>
+  total: number
+  skip: number
+  limit: number
+}> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/websites?skip=${skip}&limit=${limit}`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to fetch websites' }))
+    throw new Error(error.detail || 'Failed to fetch websites')
+  }
+  return res.json()
+}
+
 export async function pipelineStatus(): Promise<PipelineStatus> {
   const res = await authenticatedFetch(`${API_BASE}/pipeline/status`)
   if (!res.ok) {

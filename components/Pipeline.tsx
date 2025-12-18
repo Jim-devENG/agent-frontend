@@ -1,45 +1,40 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Circle, Lock, Loader2, Search, Users, Scissors, Shield, Eye, FileText, Send, RefreshCw } from 'lucide-react'
+import { CheckCircle2, Circle, Lock, Loader2, Search, Scissors, Shield, Eye, FileText, Send, RefreshCw, ArrowRight } from 'lucide-react'
 import { 
   pipelineDiscover, 
   pipelineApprove, 
   pipelineScrape, 
   pipelineVerify, 
-  pipelineReview, 
   pipelineDraft, 
-  pipelineSend, 
+  pipelineSend,
   pipelineStatus,
-  listProspects,
   listJobs,
-  type Prospect,
   type Job,
   type PipelineStatus as PipelineStatusType
 } from '@/lib/api'
-import DiscoveredWebsitesTable from './DiscoveredWebsitesTable'
 
-interface Step {
+interface StepCard {
   id: number
   name: string
   description: string
   icon: any
   status: 'pending' | 'active' | 'completed' | 'locked'
-  count?: number
+  count: number
+  ctaText: string
+  ctaAction: () => void
+  jobStatus?: string
 }
 
 export default function Pipeline() {
-  const [steps, setSteps] = useState<Step[]>([])
   const [status, setStatus] = useState<PipelineStatusType | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeStep, setActiveStep] = useState<number>(1)
-  const [prospects, setProspects] = useState<Prospect[]>([])
+  const [discoveryJobs, setDiscoveryJobs] = useState<Job[]>([])
 
   const loadStatus = async () => {
     try {
       const statusData = await pipelineStatus()
-      // Defensive: ensure all counts are numbers (handle zero/null/undefined safely)
-      // Backend returns: { discovered, approved, scraped, verified, reviewed, discovered_for_scraping }
       const safeStatus: PipelineStatusType = {
         discovered: typeof statusData.discovered === 'number' ? statusData.discovered : 0,
         approved: typeof statusData.approved === 'number' ? statusData.approved : 0,
@@ -51,85 +46,6 @@ export default function Pipeline() {
         discovered_for_scraping: typeof statusData.discovered_for_scraping === 'number' ? statusData.discovered_for_scraping : 0,
       }
       setStatus(safeStatus)
-      
-      // Update steps based on status (use safeStatus for all calculations)
-      const newSteps: Step[] = [
-        {
-          id: 1,
-          name: 'Website Discovery',
-          description: 'Find websites using DataForSEO',
-          icon: Search,
-          status: safeStatus.discovered > 0 ? 'completed' : 'active',
-          count: safeStatus.discovered
-        },
-        {
-          id: 2,
-          name: 'Human Selection',
-          description: 'Review and approve websites',
-          icon: Users,
-          status: safeStatus.discovered === 0 ? 'locked' : 
-                 safeStatus.approved > 0 ? 'completed' : 'active',
-          count: safeStatus.approved
-        },
-        {
-          id: 3,
-          name: 'Scraping',
-          description: 'Extract emails from websites',
-          icon: Scissors,
-          status: safeStatus.approved === 0 ? 'locked' :
-                 safeStatus.scraped > 0 ? 'completed' : 'active',
-          count: safeStatus.scraped
-        },
-        {
-          id: 4,
-          name: 'Verification',
-          description: 'Verify emails with Snov.io',
-          icon: Shield,
-          status: safeStatus.scraped === 0 ? 'locked' :
-                 safeStatus.verified > 0 ? 'completed' : 'active',
-          count: safeStatus.verified
-        },
-        {
-          id: 5,
-          name: 'Email Review',
-          description: 'Manually review verified emails',
-          icon: Eye,
-          status: safeStatus.verified === 0 ? 'locked' :
-                 safeStatus.reviewed > 0 ? 'completed' : 'active',
-          count: safeStatus.reviewed
-        },
-        {
-          id: 6,
-          name: 'Drafting',
-          description: 'Generate outreach emails with Gemini',
-          icon: FileText,
-          status: safeStatus.reviewed === 0 ? 'locked' :
-                 (safeStatus.drafted || 0) > 0 ? 'completed' : 'active',
-          count: safeStatus.drafted || 0
-        },
-        {
-          id: 7,
-          name: 'Sending',
-          description: 'Send emails via Gmail API',
-          icon: Send,
-          status: (safeStatus.drafted || 0) === 0 ? 'locked' :
-                 (safeStatus.sent || 0) > 0 ? 'completed' : 'active',
-          count: safeStatus.sent || 0
-        }
-      ]
-      
-      setSteps(newSteps)
-      
-      // Determine active step (defensive: handle zero counts safely)
-      if ((safeStatus.sent || 0) > 0) setActiveStep(7)
-      else if ((safeStatus.drafted || 0) > 0) setActiveStep(6)
-      else if (safeStatus.reviewed > 0) setActiveStep(5)
-      else if (safeStatus.verified > 0) setActiveStep(4)
-      else if (safeStatus.scraped > 0) setActiveStep(3)
-      else if (safeStatus.approved > 0) setActiveStep(2)
-      else if (safeStatus.discovered > 0) setActiveStep(1)
-      else setActiveStep(1)  // Default to Step 1 if no progress
-      
     } catch (error) {
       console.error('Failed to load pipeline status:', error)
     } finally {
@@ -137,86 +53,66 @@ export default function Pipeline() {
     }
   }
 
-  useEffect(() => {
-    loadStatus()
-    const interval = setInterval(loadStatus, 10000) // Refresh every 10 seconds
-    return () => clearInterval(interval)
-  }, [])
-
-  const loadProspects = async (step: number) => {
+  const loadDiscoveryJobs = async () => {
     try {
-      // Step 1: Discovery - show discovered websites (not prospects yet)
-      if (step === 1) {
-        // No prospects to load - discovered websites are shown separately
-        setProspects([])
-        return
-      } else if (step === 2) {
-        // Discovered websites ready for approval (discovery_status = DISCOVERED, approval_status = pending)
-        const all = await listProspects(0, 1000)
-        const discovered = all.data.filter((p: Prospect) => 
-          p.discovery_status === 'DISCOVERED' && 
-          (!p.approval_status || p.approval_status === 'pending' || p.approval_status === 'PENDING')
-        )
-        setProspects(discovered)
-        return
-      } else if (step === 3) {
-        // Approved websites ready for scraping (scrape_status = DISCOVERED)
-        const all = await listProspects(0, 1000)
-        const approved = all.data.filter((p: Prospect) => 
-          p.approval_status === 'approved' && 
-          (p.scrape_status === 'DISCOVERED' || !p.scrape_status)
-        )
-        setProspects(approved)
-        return
-      } else if (step === 4) {
-        // Scraped prospects ready for verification (scrape_status = SCRAPED or ENRICHED)
-        const all = await listProspects(0, 1000)
-        const scraped = all.data.filter((p: Prospect) => 
-          (p.scrape_status === 'SCRAPED' || p.scrape_status === 'ENRICHED') && 
-          (!p.verification_status || p.verification_status === 'pending' || p.verification_status === 'PENDING')
-        )
-        setProspects(scraped)
-        return
-      } else if (step === 5) {
-        // Verified prospects for review
-        const review = await pipelineReview()
-        setProspects(review.data as any)
-        return
-      } else if (step === 6) {
-        // Verified prospects ready for drafting
-        const all = await listProspects(0, 1000)
-        const verified = all.data.filter((p: Prospect) => 
-          p.verification_status && 
-          ['verified', 'unverified'].includes(p.verification_status) &&
-          p.contact_email &&
-          (!p.draft_status || p.draft_status === 'pending')
-        )
-        setProspects(verified)
-        return
-      } else if (step === 7) {
-        // Drafted prospects ready for sending
-        const all = await listProspects(0, 1000)
-        const drafted = all.data.filter((p: Prospect) => 
-          p.draft_status === 'drafted' &&
-          (!p.send_status || p.send_status === 'pending')
-        )
-        setProspects(drafted)
-        return
-      }
-      
-      const response = await listProspects(0, 1000)
-      setProspects(response.data)
-    } catch (error) {
-      console.error('Failed to load prospects:', error)
-      setProspects([])
+      const jobs = await listJobs(0, 50)
+      const discoveryJobsList = jobs.filter((j: Job) => j.job_type === 'discover')
+      setDiscoveryJobs(discoveryJobsList)
+    } catch (err) {
+      console.error('Failed to load discovery jobs:', err)
     }
   }
 
   useEffect(() => {
-    if (activeStep) {
-      loadProspects(activeStep)
+    loadStatus()
+    loadDiscoveryJobs()
+    const interval = setInterval(() => {
+      loadStatus()
+      loadDiscoveryJobs()
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleDiscover = async () => {
+    // Discovery form is handled in Step1Discovery component
+    // This is just a placeholder - actual discovery happens in the step card
+  }
+
+  const handleScrape = async () => {
+    try {
+      await pipelineScrape()
+      await loadStatus()
+    } catch (err: any) {
+      alert(err.message || 'Failed to start scraping')
     }
-  }, [activeStep])
+  }
+
+  const handleVerify = async () => {
+    try {
+      await pipelineVerify()
+      await loadStatus()
+    } catch (err: any) {
+      alert(err.message || 'Failed to start verification')
+    }
+  }
+
+  const handleDraft = async () => {
+    try {
+      await pipelineDraft()
+      await loadStatus()
+    } catch (err: any) {
+      alert(err.message || 'Failed to start drafting')
+    }
+  }
+
+  const handleSend = async () => {
+    try {
+      await pipelineSend()
+      await loadStatus()
+    } catch (err: any) {
+      alert(err.message || 'Failed to start sending')
+    }
+  }
 
   if (loading) {
     return (
@@ -229,11 +125,134 @@ export default function Pipeline() {
     )
   }
 
+  const safeStatus = status || {
+    discovered: 0,
+    approved: 0,
+    scraped: 0,
+    verified: 0,
+    reviewed: 0,
+    drafted: 0,
+    sent: 0,
+    discovered_for_scraping: 0,
+  }
+
+  const latestDiscoveryJob = discoveryJobs.length > 0
+    ? discoveryJobs.sort((a: Job, b: Job) => {
+        const dateA = new Date(a.created_at || 0).getTime()
+        const dateB = new Date(b.created_at || 0).getTime()
+        return dateB - dateA
+      })[0]
+    : null
+
+  const steps: StepCard[] = [
+    {
+      id: 1,
+      name: 'Website Discovery',
+      description: 'Find websites using DataForSEO',
+      icon: Search,
+      status: safeStatus.discovered > 0 ? 'completed' : 'active',
+      count: safeStatus.discovered,
+      ctaText: safeStatus.discovered > 0 ? 'View Websites' : 'Start Discovery',
+      ctaAction: () => {
+        // Navigate to Websites tab or show discovery form
+        if (safeStatus.discovered > 0) {
+          // Trigger tab change via custom event
+          const event = new CustomEvent('change-tab', { detail: 'websites' })
+          window.dispatchEvent(event)
+        } else {
+          // Show discovery form modal
+          const event = new CustomEvent('show-discovery-form')
+          window.dispatchEvent(event)
+        }
+      },
+      jobStatus: latestDiscoveryJob?.status
+    },
+    {
+      id: 2,
+      name: 'Scraping',
+      description: 'Extract emails from approved websites',
+      icon: Scissors,
+      status: safeStatus.approved === 0 ? 'locked' :
+              safeStatus.scraped > 0 ? 'completed' : 'active',
+      count: safeStatus.scraped,
+      ctaText: safeStatus.approved === 0 ? 'Approve Websites First' :
+               safeStatus.scraped > 0 ? 'View Prospects' : 'Start Scraping',
+      ctaAction: () => {
+        if (safeStatus.approved === 0) {
+          alert('Please approve websites in the Websites tab first')
+          const event = new CustomEvent('change-tab', { detail: 'websites' })
+          window.dispatchEvent(event)
+          return
+        }
+        if (safeStatus.scraped > 0) {
+          const event = new CustomEvent('change-tab', { detail: 'leads' })
+          window.dispatchEvent(event)
+        } else {
+          handleScrape()
+        }
+      }
+    },
+    {
+      id: 3,
+      name: 'Verification',
+      description: 'Verify emails with Snov.io',
+      icon: Shield,
+      status: safeStatus.scraped === 0 ? 'locked' :
+              safeStatus.verified > 0 ? 'completed' : 'active',
+      count: safeStatus.verified,
+      ctaText: safeStatus.scraped === 0 ? 'Scrape Websites First' :
+               safeStatus.verified > 0 ? 'View Verified' : 'Start Verification',
+      ctaAction: () => {
+        if (safeStatus.scraped === 0) {
+          alert('Please scrape websites first')
+          return
+        }
+        handleVerify()
+      }
+    },
+    {
+      id: 4,
+      name: 'Drafting',
+      description: 'Generate outreach emails with Gemini',
+      icon: FileText,
+      status: safeStatus.verified === 0 ? 'locked' :
+              safeStatus.drafted > 0 ? 'completed' : 'active',
+      count: safeStatus.drafted,
+      ctaText: safeStatus.verified === 0 ? 'Verify Emails First' :
+               safeStatus.drafted > 0 ? 'View Drafts' : 'Start Drafting',
+      ctaAction: () => {
+        if (safeStatus.verified === 0) {
+          alert('Please verify emails first')
+          return
+        }
+        handleDraft()
+      }
+    },
+    {
+      id: 5,
+      name: 'Sending',
+      description: 'Send emails via Gmail API',
+      icon: Send,
+      status: safeStatus.drafted === 0 ? 'locked' :
+              safeStatus.sent > 0 ? 'completed' : 'active',
+      count: safeStatus.sent,
+      ctaText: safeStatus.drafted === 0 ? 'Draft Emails First' :
+               safeStatus.sent > 0 ? 'View Sent' : 'Start Sending',
+      ctaAction: () => {
+        if (safeStatus.drafted === 0) {
+          alert('Please draft emails first')
+          return
+        }
+        handleSend()
+      }
+    }
+  ]
+
   return (
     <div className="space-y-6">
-      {/* Pipeline Steps Tracker */}
+      {/* Header */}
       <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-gray-900">Lead Acquisition Pipeline</h2>
           <button
             onClick={loadStatus}
@@ -243,102 +262,110 @@ export default function Pipeline() {
             <span>Refresh</span>
           </button>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
-          {steps.map((step, index) => {
-            const Icon = step.icon
-            const isActive = step.id === activeStep
-            const isCompleted = step.status === 'completed'
-            const isLocked = step.status === 'locked'
-            
-            return (
-              <button
-                key={step.id}
-                onClick={() => !isLocked && setActiveStep(step.id)}
-                disabled={isLocked}
-                className={`relative p-4 rounded-lg border-2 transition-all ${
-                  isActive
-                    ? 'border-olive-600 bg-olive-50 shadow-md'
-                    : isCompleted
-                    ? 'border-green-500 bg-green-50'
-                    : isLocked
-                    ? 'border-gray-300 bg-gray-100 opacity-50 cursor-not-allowed'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
-              >
-                <div className="flex flex-col items-center space-y-2">
-                  <div className={`p-3 rounded-full ${
-                    isActive
-                      ? 'bg-olive-600 text-white'
-                      : isCompleted
-                      ? 'bg-green-500 text-white'
-                      : isLocked
-                      ? 'bg-gray-300 text-gray-500'
-                      : 'bg-gray-200 text-gray-600'
-                  }`}>
-                    {isLocked ? (
-                      <Lock className="w-5 h-5" />
-                    ) : isCompleted ? (
-                      <CheckCircle2 className="w-5 h-5" />
-                    ) : (
-                      <Icon className="w-5 h-5" />
-                    )}
-                  </div>
-                  <div className="text-center">
-                    <p className={`text-sm font-semibold ${
-                      isActive ? 'text-olive-700' : 
-                      isCompleted ? 'text-green-700' : 
-                      isLocked ? 'text-gray-500' : 'text-gray-700'
-                    }`}>
-                      {step.name}
-                    </p>
-                    {step.count !== undefined && step.count > 0 && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {step.count} {step.count === 1 ? 'item' : 'items'}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {index < steps.length - 1 && (
-                  <div className={`absolute top-1/2 -right-2 w-4 h-0.5 ${
-                    isCompleted ? 'bg-green-500' : 'bg-gray-300'
-                  }`} />
-                )}
-              </button>
-            )
-          })}
-        </div>
+        <p className="text-gray-600 text-sm">
+          Orchestrate your lead acquisition process step by step. Each stage must be completed before the next can begin.
+        </p>
       </div>
 
-      {/* Active Step Content */}
-      <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
-        {activeStep === 1 && <Step1Discovery onComplete={loadStatus} />}
-        {activeStep === 2 && <Step2Selection prospects={prospects} onComplete={loadStatus} />}
-        {activeStep === 1 && (
-          <div className="mt-6">
-            <DiscoveredWebsitesTable />
-          </div>
-        )}
-        {activeStep === 3 && <Step3Scraping prospects={prospects} onComplete={loadStatus} />}
-        {activeStep === 4 && <Step4Verification prospects={prospects} onComplete={loadStatus} />}
-        {activeStep === 5 && <Step5Review prospects={prospects} onComplete={loadStatus} />}
-        {activeStep === 6 && <Step6Drafting prospects={prospects} onComplete={loadStatus} />}
-        {activeStep === 7 && <Step7Sending prospects={prospects} onComplete={loadStatus} />}
+      {/* Step Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {steps.map((step, index) => {
+          const Icon = step.icon
+          const isCompleted = step.status === 'completed'
+          const isLocked = step.status === 'locked'
+          const isActive = step.status === 'active'
+          
+          return (
+            <div
+              key={step.id}
+              className={`bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 p-6 ${
+                isCompleted
+                  ? 'border-green-500'
+                  : isLocked
+                  ? 'border-gray-300 opacity-60'
+                  : 'border-olive-600'
+              }`}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className={`p-3 rounded-full ${
+                  isCompleted
+                    ? 'bg-green-500 text-white'
+                    : isLocked
+                    ? 'bg-gray-300 text-gray-500'
+                    : 'bg-olive-600 text-white'
+                }`}>
+                  <Icon className="w-6 h-6" />
+                </div>
+                {isCompleted && (
+                  <CheckCircle2 className="w-6 h-6 text-green-500" />
+                )}
+                {isLocked && (
+                  <Lock className="w-6 h-6 text-gray-400" />
+                )}
+              </div>
+
+              <h3 className="text-lg font-bold text-gray-900 mb-2">{step.name}</h3>
+              <p className="text-sm text-gray-600 mb-4">{step.description}</p>
+
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">{step.count}</p>
+                  <p className="text-xs text-gray-500">
+                    {step.count === 1 ? 'item' : 'items'} {isCompleted ? 'completed' : 'ready'}
+                  </p>
+                </div>
+                {step.jobStatus && (
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    step.jobStatus === 'completed' ? 'bg-green-100 text-green-800' :
+                    step.jobStatus === 'running' ? 'bg-yellow-100 text-yellow-800' :
+                    step.jobStatus === 'failed' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {step.jobStatus}
+                  </span>
+                )}
+              </div>
+
+              <button
+                onClick={step.ctaAction}
+                disabled={isLocked}
+                className={`w-full px-4 py-2 rounded-md font-medium flex items-center justify-center space-x-2 ${
+                  isLocked
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    : isCompleted
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-olive-600 text-white hover:bg-olive-700'
+                }`}
+              >
+                <span>{step.ctaText}</span>
+                {!isLocked && <ArrowRight className="w-4 h-4" />}
+              </button>
+            </div>
+          )
+        })}
       </div>
+
+      {/* Discovery Form (shown when triggered) */}
+      <Step1Discovery onComplete={loadStatus} />
     </div>
   )
 }
 
-// Step Components
+// Step 1 Discovery Form Component
 function Step1Discovery({ onComplete }: { onComplete: () => void }) {
+  const [showForm, setShowForm] = useState(false)
   const [categories, setCategories] = useState<string[]>([])
   const [locations, setLocations] = useState<string[]>([])
   const [keywords, setKeywords] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const [discoveryJobs, setDiscoveryJobs] = useState<Job[]>([])
-  const [discoveryJobStatus, setDiscoveryJobStatus] = useState<string | null>(null)
+
+  useEffect(() => {
+    const handleShowForm = () => setShowForm(true)
+    window.addEventListener('show-discovery-form', handleShowForm)
+    return () => window.removeEventListener('show-discovery-form', handleShowForm)
+  }, [])
 
   const availableCategories = [
     'Art Gallery', 'Museum', 'Art Studio', 'Art School', 'Art Fair', 
@@ -349,33 +376,6 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
     'United States', 'United Kingdom', 'Canada', 'Australia', 'Germany',
     'France', 'Italy', 'Spain', 'Netherlands', 'Belgium'
   ]
-
-  // Load discovery job status
-  useEffect(() => {
-    const loadDiscoveryJobs = async () => {
-      try {
-        const jobs = await listJobs(0, 50)
-        const discoveryJobsList = jobs.filter((j: Job) => j.job_type === 'discover')
-        setDiscoveryJobs(discoveryJobsList)
-        
-        // Get most recent discovery job status
-        if (discoveryJobsList.length > 0) {
-          const latestJob = discoveryJobsList.sort((a: Job, b: Job) => {
-            const dateA = new Date(a.created_at || 0).getTime()
-            const dateB = new Date(b.created_at || 0).getTime()
-            return dateB - dateA
-          })[0]
-          setDiscoveryJobStatus(latestJob.status)
-        }
-      } catch (err) {
-        console.error('Failed to load discovery jobs:', err)
-      }
-    }
-    
-    loadDiscoveryJobs()
-    const interval = setInterval(loadDiscoveryJobs, 5000) // Poll every 5 seconds
-    return () => clearInterval(interval)
-  }, [])
 
   const handleDiscover = async () => {
     if (categories.length === 0) {
@@ -399,6 +399,7 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
         max_results: 100
       })
       setSuccess(true)
+      setShowForm(false)
       setTimeout(() => {
         onComplete()
         setSuccess(false)
@@ -410,10 +411,19 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
     }
   }
 
+  if (!showForm) return null
+
   return (
-    <div>
-      <h3 className="text-xl font-bold text-gray-900 mb-4">Step 1: Website Discovery</h3>
-      <p className="text-gray-600 mb-6">Find websites using DataForSEO. Select categories and locations to search.</p>
+    <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xl font-bold text-gray-900">Step 1: Website Discovery</h3>
+        <button
+          onClick={() => setShowForm(false)}
+          className="text-gray-500 hover:text-gray-700"
+        >
+          ×
+        </button>
+      </div>
       
       <div className="space-y-4">
         <div>
@@ -485,27 +495,7 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
 
         {success && (
           <div className="p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
-            ✅ Discovery job started! The table below will update as websites are discovered.
-          </div>
-        )}
-
-        {/* Discovery Job Status */}
-        {discoveryJobs.length > 0 && (
-          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
-            <p className="text-sm font-medium text-blue-900 mb-2">Latest Discovery Job</p>
-            <div className="flex items-center space-x-4 text-sm">
-              <span className={`px-2 py-1 rounded font-medium ${
-                discoveryJobStatus === 'completed' ? 'bg-green-100 text-green-800' :
-                discoveryJobStatus === 'running' ? 'bg-yellow-100 text-yellow-800' :
-                discoveryJobStatus === 'failed' ? 'bg-red-100 text-red-800' :
-                'bg-gray-100 text-gray-800'
-              }`}>
-                {discoveryJobStatus || 'Unknown'}
-              </span>
-              <span className="text-blue-700">
-                {discoveryJobs.length} job{discoveryJobs.length !== 1 ? 's' : ''} found
-              </span>
-            </div>
+            ✅ Discovery job started! Check the Websites tab to see results.
           </div>
         )}
 
@@ -530,557 +520,3 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
     </div>
   )
 }
-
-function Step2Selection({ prospects, onComplete }: { prospects: Prospect[], onComplete: () => void }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-
-  const handleApprove = async () => {
-    if (selected.size === 0) {
-      setError('Please select at least one website to approve')
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      const result = await pipelineApprove({
-        prospect_ids: Array.from(selected),
-        action: 'approve'
-      })
-      setSuccess(`Successfully approved ${result.approved_count} website(s)`)
-      setSelected(new Set())
-      setTimeout(() => {
-        onComplete()
-        setSuccess(null)
-      }, 2000)
-    } catch (err: any) {
-      setError(err.message || 'Failed to approve websites')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this website?')) return
-
-    setLoading(true)
-    try {
-      await pipelineApprove({
-        prospect_ids: [id],
-        action: 'delete'
-      })
-      onComplete()
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete website')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div>
-      <h3 className="text-xl font-bold text-gray-900 mb-4">Step 2: Human Selection</h3>
-      <p className="text-gray-600 mb-6">Review discovered websites. Select and approve the ones you want to proceed with.</p>
-      
-      {prospects.length === 0 ? (
-        <div className="text-center py-12">
-          <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 font-medium mb-2">No websites ready for approval</p>
-          <p className="text-gray-500 text-sm mb-4">
-            Complete Step 1 (Discovery) to find websites. Discovered websites will appear here for review.
-          </p>
-          <p className="text-gray-400 text-xs">
-            Websites become available for approval once discovery jobs complete.
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              {prospects.length} website(s) found • {selected.size} selected
-            </p>
-            <button
-              onClick={handleApprove}
-              disabled={loading || selected.size === 0}
-              className="px-4 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Approving...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Approve Selected ({selected.size})</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {prospects.map(prospect => (
-              <div
-                key={prospect.id}
-                className={`p-4 border rounded-lg flex items-center justify-between ${
-                  selected.has(prospect.id) ? 'bg-olive-50 border-olive-300' : 'bg-white border-gray-200'
-                }`}
-              >
-                <div className="flex items-center space-x-4 flex-1">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(prospect.id)}
-                    onChange={(e) => {
-                      const newSelected = new Set(selected)
-                      if (e.target.checked) {
-                        newSelected.add(prospect.id)
-                      } else {
-                        newSelected.delete(prospect.id)
-                      }
-                      setSelected(newSelected)
-                    }}
-                    className="w-4 h-4 text-olive-600"
-                  />
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{prospect.domain}</p>
-                    <p className="text-sm text-gray-600">{prospect.page_title || 'No title'}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleDelete(prospect.id)}
-                  className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
-                >
-                  Delete
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {error && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
-              {success}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-
-function Step3Scraping({ prospects, onComplete }: { prospects: Prospect[], onComplete: () => void }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-
-  const handleScrape = async () => {
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      const result = await pipelineScrape()
-      setSuccess(`Scraping job started for ${result.prospects_count} website(s)`)
-      setTimeout(() => {
-        onComplete()
-        setSuccess(null)
-      }, 2000)
-    } catch (err: any) {
-      setError(err.message || 'Failed to start scraping')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div>
-      <h3 className="text-xl font-bold text-gray-900 mb-4">Step 3: Scraping</h3>
-      <p className="text-gray-600 mb-6">Scrape approved websites to extract visible emails from homepage and contact pages.</p>
-      
-      {prospects.length === 0 ? (
-        <div className="text-center py-12">
-          <Scissors className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 font-medium mb-2">No approved websites ready for scraping</p>
-          <p className="text-gray-500 text-sm mb-4">
-            Complete Step 2 (Human Selection) to approve websites. Approved websites will appear here for scraping.
-          </p>
-          <p className="text-gray-400 text-xs">
-            After scraping, websites become prospects with contact information.
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="mb-4">
-            <p className="text-sm text-gray-600 mb-4">
-              {prospects.length} approved website(s) ready for scraping
-            </p>
-            <button
-              onClick={handleScrape}
-              disabled={loading}
-              className="w-full px-6 py-3 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Starting Scraping...</span>
-                </>
-              ) : (
-                <>
-                  <Scissors className="w-5 h-5" />
-                  <span>Scrape Selected Websites</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {error && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
-              {success}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-
-function Step4Verification({ prospects, onComplete }: { prospects: Prospect[], onComplete: () => void }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-
-  const handleVerify = async () => {
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      const result = await pipelineVerify()
-      setSuccess(`Verification job started for ${result.prospects_count} prospect(s)`)
-      setTimeout(() => {
-        onComplete()
-        setSuccess(null)
-      }, 2000)
-    } catch (err: any) {
-      setError(err.message || 'Failed to start verification')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div>
-      <h3 className="text-xl font-bold text-gray-900 mb-4">Step 4: Email Verification</h3>
-      <p className="text-gray-600 mb-6">Verify scraped emails using Snov.io. If no emails were scraped, Snov will attempt domain search.</p>
-      
-      {prospects.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          No scraped websites found. Complete Step 3 first.
-        </div>
-      ) : (
-        <>
-          <div className="mb-4">
-            <p className="text-sm text-gray-600 mb-4">
-              {prospects.length} scraped website(s) ready for verification
-            </p>
-            <button
-              onClick={handleVerify}
-              disabled={loading}
-              className="w-full px-6 py-3 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Starting Verification...</span>
-                </>
-              ) : (
-                <>
-                  <Shield className="w-5 h-5" />
-                  <span>Verify Emails</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {error && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
-              {success}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-
-function Step5Review({ prospects, onComplete }: { prospects: any[], onComplete: () => void }) {
-  const [confirmed, setConfirmed] = useState<Set<string>>(new Set())
-
-  return (
-    <div>
-      <h3 className="text-xl font-bold text-gray-900 mb-4">Step 5: Email Review</h3>
-      <p className="text-gray-600 mb-6">Review verified emails. Manually confirm each email before proceeding to drafting.</p>
-      
-      {prospects.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          No verified emails found. Complete Step 4 first.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {prospects.map((prospect: any) => (
-            <div
-              key={prospect.id}
-              className={`p-4 border rounded-lg ${
-                confirmed.has(prospect.id) ? 'bg-green-50 border-green-300' : 'bg-white border-gray-200'
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">{prospect.domain || prospect.email?.split('@')[1]}</p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    <span className="font-medium">Email:</span> {prospect.email || prospect.contact_email}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
-                      Source: {prospect.source || 'Unknown'}
-                    </span>
-                    <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
-                      Type: {prospect.type || 'generic'}
-                    </span>
-                    {prospect.confidence && (
-                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
-                        Confidence: {prospect.confidence}%
-                      </span>
-                    )}
-                    {prospect.verification_status && (
-                      <span className={`px-2 py-1 rounded ${
-                        prospect.verification_status === 'verified'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        Status: {prospect.verification_status}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    const newConfirmed = new Set(confirmed)
-                    if (confirmed.has(prospect.id)) {
-                      newConfirmed.delete(prospect.id)
-                    } else {
-                      newConfirmed.add(prospect.id)
-                    }
-                    setConfirmed(newConfirmed)
-                  }}
-                  className={`px-4 py-2 rounded-md text-sm font-medium ${
-                    confirmed.has(prospect.id)
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  {confirmed.has(prospect.id) ? 'Confirmed' : 'Confirm'}
-                </button>
-              </div>
-            </div>
-          ))}
-          
-          {confirmed.size > 0 && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
-              <p className="text-sm text-blue-700">
-                ✅ {confirmed.size} email(s) confirmed. You can proceed to Step 6: Drafting.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Step6Drafting({ prospects, onComplete }: { prospects: Prospect[], onComplete: () => void }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-
-  const handleDraft = async () => {
-    if (prospects.length === 0) {
-      setError('No prospects available for drafting')
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      const result = await pipelineDraft({
-        prospect_ids: prospects.map(p => p.id)
-      })
-      setSuccess(`Drafting job started for ${result.prospects_count} prospect(s)`)
-      setTimeout(() => {
-        onComplete()
-        setSuccess(null)
-      }, 2000)
-    } catch (err: any) {
-      setError(err.message || 'Failed to start drafting')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div>
-      <h3 className="text-xl font-bold text-gray-900 mb-4">Step 6: Outreach Drafting</h3>
-      <p className="text-gray-600 mb-6">Generate personalized outreach emails using Gemini AI based on website info, category, location, and email type.</p>
-      
-      {prospects.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          No verified prospects found. Complete Step 5 first.
-        </div>
-      ) : (
-        <>
-          <div className="mb-4">
-            <p className="text-sm text-gray-600 mb-4">
-              {prospects.length} verified prospect(s) ready for drafting
-            </p>
-            <button
-              onClick={handleDraft}
-              disabled={loading}
-              className="w-full px-6 py-3 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Starting Drafting...</span>
-                </>
-              ) : (
-                <>
-                  <FileText className="w-5 h-5" />
-                  <span>Generate Draft</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {error && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
-              {success}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-
-function Step7Sending({ prospects, onComplete }: { prospects: Prospect[], onComplete: () => void }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-
-  const handleSend = async () => {
-    if (prospects.length === 0) {
-      setError('No prospects available for sending')
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      const result = await pipelineSend({
-        prospect_ids: prospects.map(p => p.id)
-      })
-      setSuccess(`Sending job started for ${result.prospects_count} prospect(s)`)
-      setTimeout(() => {
-        onComplete()
-        setSuccess(null)
-      }, 2000)
-    } catch (err: any) {
-      setError(err.message || 'Failed to start sending')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div>
-      <h3 className="text-xl font-bold text-gray-900 mb-4">Step 7: Sending</h3>
-      <p className="text-gray-600 mb-6">Send drafted emails via Gmail API. Success and failure will be logged.</p>
-      
-      {prospects.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          No drafted prospects found. Complete Step 6 first.
-        </div>
-      ) : (
-        <>
-          <div className="mb-4">
-            <p className="text-sm text-gray-600 mb-4">
-              {prospects.length} drafted prospect(s) ready for sending
-            </p>
-            <button
-              onClick={handleSend}
-              disabled={loading}
-              className="w-full px-6 py-3 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Sending...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-5 h-5" />
-                  <span>Send Email</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {error && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
-              {success}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-

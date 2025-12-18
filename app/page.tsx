@@ -131,9 +131,20 @@ export default function Dashboard() {
       loadData(false) // Don't set loading state on periodic refreshes
     }, 30000)
     
+    // Listen for tab change events from Pipeline component
+    const handleTabChange = (e: CustomEvent) => {
+      const tabId = e.detail as string
+      if (tabId && ['overview', 'pipeline', 'leads', 'scraped_emails', 'emails', 'jobs', 'websites', 'settings', 'guide'].includes(tabId)) {
+        setActiveTab(tabId as any)
+      }
+    }
+    
+    window.addEventListener('change-tab', handleTabChange as EventListener)
+    
     return () => {
       clearInterval(interval)
       clearTimeout(loadTimeout)
+      window.removeEventListener('change-tab', handleTabChange as EventListener)
     }
   }, [router, loadData])
 
