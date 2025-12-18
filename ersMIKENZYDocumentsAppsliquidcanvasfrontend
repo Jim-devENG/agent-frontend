@@ -1,0 +1,3 @@
+[33ma8f6cad[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Fix pipeline status: Use verified_email_count for verification card, update drafting unlock logic
+[33m74008ae[m Fix drafting unlock logic: Use drafting_ready_count > 0 instead of verified count, show ready count in UI
+[33m78e76d3[m Implement explicit lead promotion model: EMAIL_FOUND stage, promote_to_lead endpoint, stage-based counts
