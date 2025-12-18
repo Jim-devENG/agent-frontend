@@ -1095,9 +1095,13 @@ export interface PipelineSendResponse {
 }
 
 export async function pipelineSend(request?: PipelineSendRequest): Promise<PipelineSendResponse> {
+  // If no prospect_ids provided, send empty object to trigger automatic selection of all send-ready prospects
+  const payload = request?.prospect_ids && request.prospect_ids.length > 0 
+    ? request 
+    : { prospect_ids: null }  // Send null to trigger automatic query
   const res = await authenticatedFetch(`${API_BASE}/pipeline/send`, {
     method: 'POST',
-    body: JSON.stringify(request || {}),
+    body: JSON.stringify(payload),
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to start sending' }))
@@ -1116,11 +1120,15 @@ export interface PipelineStatus {
   leads?: number  // Explicitly promoted leads (stage=LEAD) - ONLY these are shown in Leads page
   verified?: number  // Backwards-compatible: verification_status=verified AND email IS NOT NULL
   verified_email_count?: number  // Backwards-compatible alias
+  verified_count?: number  // Data-driven: contact_email IS NOT NULL AND verification_status = 'verified'
   emails_verified?: number  // Data-driven: verification_status=verified AND contact_email IS NOT NULL (matches Leads page)
   verified_stage?: number  // stage = VERIFIED
   reviewed?: number  // Same as emails_verified for review step
-  drafted?: number  // Optional - may not be in response
+  drafted?: number  // Data-driven: draft_subject IS NOT NULL AND draft_body IS NOT NULL
+  drafted_count?: number  // Explicit count of drafted prospects
   sent?: number  // Optional - may not be in response
+  send_ready?: number  // Data-driven: verified + drafted + not sent
+  send_ready_count?: number  // Explicit count of send-ready prospects
   discovered_for_scraping?: number  // Legacy field - aliased to scrape_ready_count
   scrape_ready_count?: number       // New canonical field for scraping unlock
   drafting_ready?: number  // Data-driven: stage=LEAD, email IS NOT NULL, verification_status=verified
@@ -1137,11 +1145,15 @@ export interface NormalizedPipelineStatus {
   leads: number  // Explicitly promoted leads (stage=LEAD) - ONLY these are shown in Leads page
   verified: number  // Backwards-compatible: verification_status=verified AND email IS NOT NULL
   verified_email_count: number  // Backwards-compatible alias
+  verified_count: number  // Data-driven: contact_email IS NOT NULL AND verification_status = 'verified'
   emails_verified: number  // Data-driven: verification_status=verified AND contact_email IS NOT NULL (matches Leads page)
   verified_stage: number  // stage = VERIFIED
   reviewed: number
-  drafted: number
+  drafted: number  // Data-driven: draft_subject IS NOT NULL AND draft_body IS NOT NULL
+  drafted_count: number  // Explicit count of drafted prospects
   sent: number
+  send_ready: number  // Data-driven: verified + drafted + not sent
+  send_ready_count: number  // Explicit count of send-ready prospects
   discovered_for_scraping: number
   scrape_ready_count: number
   drafting_ready: number  // Data-driven: stage=LEAD, email IS NOT NULL, verification_status=verified
@@ -1172,11 +1184,15 @@ export function normalizePipelineStatus(rawStatus: Partial<PipelineStatus> | nul
     leads: typeof rawStatus?.leads === 'number' ? rawStatus.leads : 0,  // Explicitly promoted leads (stage=LEAD)
     verified: typeof rawStatus?.emails_verified === 'number' ? rawStatus.emails_verified : (typeof rawStatus?.verified_email_count === 'number' ? rawStatus.verified_email_count : (typeof rawStatus?.verified === 'number' ? rawStatus.verified : 0)),  // Use emails_verified if available, fallback to verified_email_count or verified
     verified_email_count: typeof rawStatus?.emails_verified === 'number' ? rawStatus.emails_verified : (typeof rawStatus?.verified_email_count === 'number' ? rawStatus.verified_email_count : (typeof rawStatus?.verified === 'number' ? rawStatus.verified : 0)),  // Backwards-compatible alias
+    verified_count: typeof rawStatus?.verified_count === 'number' ? rawStatus.verified_count : (typeof rawStatus?.emails_verified === 'number' ? rawStatus.emails_verified : (typeof rawStatus?.verified_email_count === 'number' ? rawStatus.verified_email_count : (typeof rawStatus?.verified === 'number' ? rawStatus.verified : 0))),  // Data-driven: contact_email IS NOT NULL AND verification_status = 'verified'
     emails_verified: typeof rawStatus?.emails_verified === 'number' ? rawStatus.emails_verified : (typeof rawStatus?.verified_email_count === 'number' ? rawStatus.verified_email_count : (typeof rawStatus?.verified === 'number' ? rawStatus.verified : 0)),  // Data-driven: verification_status=verified AND contact_email IS NOT NULL (matches Leads page)
     verified_stage: typeof rawStatus?.verified_stage === 'number' ? rawStatus.verified_stage : 0,  // stage = VERIFIED
     reviewed: typeof rawStatus?.emails_verified === 'number' ? rawStatus.emails_verified : (typeof rawStatus?.reviewed === 'number' ? rawStatus.reviewed : 0),  // Same as emails_verified
-    drafted: typeof rawStatus?.drafted === 'number' ? rawStatus.drafted : 0,
+    drafted: typeof rawStatus?.drafted === 'number' ? rawStatus.drafted : (typeof rawStatus?.drafted_count === 'number' ? rawStatus.drafted_count : 0),  // Data-driven: draft_subject IS NOT NULL AND draft_body IS NOT NULL
+    drafted_count: typeof rawStatus?.drafted_count === 'number' ? rawStatus.drafted_count : (typeof rawStatus?.drafted === 'number' ? rawStatus.drafted : 0),  // Explicit count of drafted prospects
     sent: typeof rawStatus?.sent === 'number' ? rawStatus.sent : 0,
+    send_ready: typeof rawStatus?.send_ready === 'number' ? rawStatus.send_ready : (typeof rawStatus?.send_ready_count === 'number' ? rawStatus.send_ready_count : 0),  // Data-driven: verified + drafted + not sent
+    send_ready_count: typeof rawStatus?.send_ready_count === 'number' ? rawStatus.send_ready_count : (typeof rawStatus?.send_ready === 'number' ? rawStatus.send_ready : 0),  // Explicit count of send-ready prospects
     discovered_for_scraping: discoveredForScraping,
     scrape_ready_count: discoveredForScraping,
     drafting_ready: typeof rawStatus?.drafting_ready === 'number' ? rawStatus.drafting_ready : (typeof rawStatus?.drafting_ready_count === 'number' ? rawStatus.drafting_ready_count : 0),  // Data-driven: stage=LEAD, email IS NOT NULL, verification_status=verified

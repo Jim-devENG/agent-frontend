@@ -283,14 +283,14 @@ export default function Pipeline() {
       name: 'Sending',
       description: 'Send emails via Gmail API',
       icon: Send,
-      status: normalizedStatus.drafted === 0 ? 'locked' :
+      status: normalizedStatus.send_ready_count === 0 ? 'locked' :
               normalizedStatus.sent > 0 ? 'completed' : 'active',
       count: normalizedStatus.sent,
-      ctaText: normalizedStatus.drafted === 0 ? 'Draft Emails First' :
+      ctaText: normalizedStatus.send_ready_count === 0 ? 'No Emails Ready' :
                normalizedStatus.sent > 0 ? 'View Sent' : 'Start Sending',
       ctaAction: () => {
-        if (normalizedStatus.drafted === 0) {
-          alert('Please draft emails first')
+        if (normalizedStatus.send_ready_count === 0) {
+          alert('No emails ready for sending. Ensure prospects have verified email, draft subject, and draft body.')
           return
         }
         handleSend()
