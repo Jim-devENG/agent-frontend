@@ -235,10 +235,10 @@ export default function Pipeline() {
       description: 'Verify emails with Snov.io',
       icon: Shield,
       status: normalizedStatus.leads === 0 ? 'locked' :
-              normalizedStatus.verified_email_count > 0 ? 'completed' : 'active',
-      count: normalizedStatus.verified_email_count,
+              normalizedStatus.emails_verified > 0 ? 'completed' : 'active',
+      count: normalizedStatus.emails_verified,
       ctaText: normalizedStatus.leads === 0 ? 'Scrape Websites First' :
-               normalizedStatus.verified_email_count > 0 ? 'View Verified' : 'Start Verification',
+               normalizedStatus.emails_verified > 0 ? 'View Verified' : 'Start Verification',
       ctaAction: () => {
         if (normalizedStatus.leads === 0) {
           alert('Please scrape websites first to create leads')
@@ -252,13 +252,13 @@ export default function Pipeline() {
       name: 'Drafting',
       description: 'Generate outreach emails with Gemini',
       icon: FileText,
-      status: normalizedStatus.drafting_ready_count === 0 ? 'locked' :
+      status: normalizedStatus.drafting_ready === 0 ? 'locked' :
               normalizedStatus.drafted > 0 ? 'completed' : 'active',
       count: normalizedStatus.drafted,
-      ctaText: normalizedStatus.drafting_ready_count === 0 ? 'Verify Leads First' :
+      ctaText: normalizedStatus.drafting_ready === 0 ? 'Verify Leads First' :
                normalizedStatus.drafted > 0 ? 'View Drafts' : 'Start Drafting',
       ctaAction: () => {
-        if (normalizedStatus.drafting_ready_count === 0) {
+        if (normalizedStatus.drafting_ready === 0) {
           alert('Please verify leads first. Leads must be promoted, have emails, and be verified.')
           return
         }
@@ -350,8 +350,8 @@ export default function Pipeline() {
                   <p className="text-xs text-gray-500">
                     {step.id === 1 && `${normalizedStatus.discovered} discovered`}
                     {step.id === 2 && `${normalizedStatus.scraped} scraped • ${normalizedStatus.email_found || 0} with emails`}
-                    {step.id === 3 && `${normalizedStatus.leads} leads • ${normalizedStatus.verified_email_count} verified`}
-                    {step.id === 4 && `${normalizedStatus.drafting_ready_count || 0} ready • ${normalizedStatus.drafted} drafted`}
+                    {step.id === 3 && `${normalizedStatus.leads} leads • ${normalizedStatus.emails_verified} verified`}
+                    {step.id === 4 && `${normalizedStatus.drafting_ready || 0} ready • ${normalizedStatus.drafted} drafted`}
                     {step.id === 5 && `${normalizedStatus.sent} sent`}
                     {!step.id && `${step.count} ${step.count === 1 ? 'item' : 'items'} ${isCompleted ? 'completed' : 'ready'}`}
                   </p>

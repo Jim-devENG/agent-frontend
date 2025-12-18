@@ -878,20 +878,30 @@ async def get_pipeline_status(
             email_found_count = 0
             leads_count = 0
     
-    # Step 4: VERIFIED EMAILS (verification_status = "verified" AND contact_email IS NOT NULL)
+    # Step 3.5: EMAILS FOUND (contact_email IS NOT NULL)
+    # Count all prospects with emails (regardless of verification status)
+    emails_found = await db.execute(
+        select(func.count(Prospect.id)).where(
+            Prospect.contact_email.isnot(None)
+        )
+    )
+    emails_found_count = emails_found.scalar() or 0
+    
+    # Step 4: EMAILS VERIFIED (verification_status = "verified" AND contact_email IS NOT NULL)
     # Data-driven: Count prospects with verified emails from prospects table ONLY
-    verified_email_count = await db.execute(
+    # This matches what the Leads page shows as verified
+    emails_verified = await db.execute(
         select(func.count(Prospect.id)).where(
             Prospect.verification_status == VerificationStatus.VERIFIED.value,
             Prospect.contact_email.isnot(None)
         )
     )
-    verified_email_count = verified_email_count.scalar() or 0
+    emails_verified_count = emails_verified.scalar() or 0
     
     # Step 5: DRAFTING READY (stage = LEAD, email IS NOT NULL, verification_status = verified)
     # Data-driven: Count prospects ready for drafting based on actual data, not job completion
     # Requirements: stage = LEAD, contact_email IS NOT NULL, verification_status = verified
-    drafting_ready_count = 0
+    drafting_ready = 0
     try:
         # Check if stage column exists
         column_check = await db.execute(
@@ -918,17 +928,17 @@ async def get_pipeline_status(
                     "verification_status_value": VerificationStatus.VERIFIED.value
                 }
             )
-            drafting_ready_count = drafting_ready_result.scalar() or 0
+            drafting_ready = drafting_ready_result.scalar() or 0
         else:
             # Column doesn't exist yet - fallback to verification_status + email
-            logger.warning("⚠️  stage column not found, using fallback logic for drafting_ready_count")
+            logger.warning("⚠️  stage column not found, using fallback logic for drafting_ready")
             drafting_ready_fallback = await db.execute(
                 select(func.count(Prospect.id)).where(
                     Prospect.verification_status == VerificationStatus.VERIFIED.value,
                     Prospect.contact_email.isnot(None)
                 )
             )
-            drafting_ready_count = drafting_ready_fallback.scalar() or 0
+            drafting_ready = drafting_ready_fallback.scalar() or 0
     except Exception as e:
         logger.error(f"❌ Error counting drafting-ready prospects: {e}", exc_info=True)
         # Fallback to verification_status + email if stage query fails
@@ -939,10 +949,10 @@ async def get_pipeline_status(
                     Prospect.contact_email.isnot(None)
                 )
             )
-            drafting_ready_count = drafting_ready_fallback.scalar() or 0
+            drafting_ready = drafting_ready_fallback.scalar() or 0
         except Exception as fallback_err:
-            logger.error(f"❌ Fallback drafting_ready_count also failed: {fallback_err}", exc_info=True)
-            drafting_ready_count = 0
+            logger.error(f"❌ Fallback drafting_ready also failed: {fallback_err}", exc_info=True)
+            drafting_ready = 0
     
     # Return pipeline status counts
     # Stage lifecycle: DISCOVERED → SCRAPED/EMAIL_FOUND → LEAD → VERIFIED → DRAFTED → SENT
@@ -956,12 +966,15 @@ async def get_pipeline_status(
         # New explicit field used by the pipeline UI to unlock scraping
         "scrape_ready_count": scrape_ready_count,
         "email_found": email_found_count,  # Prospects with emails found (stage=EMAIL_FOUND)
+        "emails_found": emails_found_count,  # All prospects with emails (contact_email IS NOT NULL)
         "leads": leads_count,  # Explicitly promoted leads (stage=LEAD) - ONLY these are shown in Leads page
-        "verified": verified_email_count,  # Backwards-compatible: verification_status=verified AND email IS NOT NULL
-        "verified_email_count": verified_email_count,  # Data-driven: verification_status=verified AND contact_email IS NOT NULL
+        "verified": emails_verified_count,  # Backwards-compatible: verification_status=verified AND email IS NOT NULL
+        "verified_email_count": emails_verified_count,  # Backwards-compatible alias
+        "emails_verified": emails_verified_count,  # Data-driven: verification_status=verified AND contact_email IS NOT NULL (matches Leads page)
         "verified_stage": verified_stage_count,  # stage = VERIFIED
-        "reviewed": verified_email_count,  # Same as verified_email_count for review step
-        "drafting_ready_count": drafting_ready_count,  # Data-driven: stage=LEAD, email IS NOT NULL, verification_status=verified
+        "reviewed": emails_verified_count,  # Same as emails_verified_count for review step
+        "drafting_ready": drafting_ready,  # Data-driven: stage=LEAD, email IS NOT NULL, verification_status=verified
+        "drafting_ready_count": drafting_ready,  # Backwards-compatible alias
     }
 
 

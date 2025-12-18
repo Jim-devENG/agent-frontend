@@ -1112,16 +1112,19 @@ export interface PipelineStatus {
   approved?: number
   scraped?: number
   email_found?: number  // Prospects with emails found (stage=EMAIL_FOUND)
+  emails_found?: number  // All prospects with emails (contact_email IS NOT NULL)
   leads?: number  // Explicitly promoted leads (stage=LEAD) - ONLY these are shown in Leads page
   verified?: number  // Backwards-compatible: verification_status=verified AND email IS NOT NULL
-  verified_email_count?: number  // Data-driven: verification_status=verified AND contact_email IS NOT NULL
+  verified_email_count?: number  // Backwards-compatible alias
+  emails_verified?: number  // Data-driven: verification_status=verified AND contact_email IS NOT NULL (matches Leads page)
   verified_stage?: number  // stage = VERIFIED
-  reviewed?: number  // Same as verified_email_count for review step
+  reviewed?: number  // Same as emails_verified for review step
   drafted?: number  // Optional - may not be in response
   sent?: number  // Optional - may not be in response
   discovered_for_scraping?: number  // Legacy field - aliased to scrape_ready_count
   scrape_ready_count?: number       // New canonical field for scraping unlock
-  drafting_ready_count?: number     // Data-driven: stage=LEAD, email IS NOT NULL, verification_status=verified
+  drafting_ready?: number  // Data-driven: stage=LEAD, email IS NOT NULL, verification_status=verified
+  drafting_ready_count?: number  // Backwards-compatible alias
 }
 
 // Normalized pipeline status - ALL fields are guaranteed to be numbers
@@ -1130,16 +1133,19 @@ export interface NormalizedPipelineStatus {
   approved: number
   scraped: number
   email_found: number  // Prospects with emails found (stage=EMAIL_FOUND)
+  emails_found: number  // All prospects with emails (contact_email IS NOT NULL)
   leads: number  // Explicitly promoted leads (stage=LEAD) - ONLY these are shown in Leads page
   verified: number  // Backwards-compatible: verification_status=verified AND email IS NOT NULL
-  verified_email_count: number  // Data-driven: verification_status=verified AND contact_email IS NOT NULL
+  verified_email_count: number  // Backwards-compatible alias
+  emails_verified: number  // Data-driven: verification_status=verified AND contact_email IS NOT NULL (matches Leads page)
   verified_stage: number  // stage = VERIFIED
   reviewed: number
   drafted: number
   sent: number
   discovered_for_scraping: number
   scrape_ready_count: number
-  drafting_ready_count: number  // Data-driven: stage=LEAD, email IS NOT NULL, verification_status=verified
+  drafting_ready: number  // Data-driven: stage=LEAD, email IS NOT NULL, verification_status=verified
+  drafting_ready_count: number  // Backwards-compatible alias
 }
 
 /**
@@ -1162,16 +1168,19 @@ export function normalizePipelineStatus(rawStatus: Partial<PipelineStatus> | nul
     approved: typeof rawStatus?.approved === 'number' ? rawStatus.approved : 0,
     scraped: typeof rawStatus?.scraped === 'number' ? rawStatus.scraped : 0,
     email_found: typeof rawStatus?.email_found === 'number' ? rawStatus.email_found : 0,  // Prospects with emails found (stage=EMAIL_FOUND)
+    emails_found: typeof rawStatus?.emails_found === 'number' ? rawStatus.emails_found : 0,  // All prospects with emails (contact_email IS NOT NULL)
     leads: typeof rawStatus?.leads === 'number' ? rawStatus.leads : 0,  // Explicitly promoted leads (stage=LEAD)
-    verified: typeof rawStatus?.verified_email_count === 'number' ? rawStatus.verified_email_count : (typeof rawStatus?.verified === 'number' ? rawStatus.verified : 0),  // Use verified_email_count if available, fallback to verified
-    verified_email_count: typeof rawStatus?.verified_email_count === 'number' ? rawStatus.verified_email_count : (typeof rawStatus?.verified === 'number' ? rawStatus.verified : 0),  // Data-driven: verification_status=verified AND contact_email IS NOT NULL
+    verified: typeof rawStatus?.emails_verified === 'number' ? rawStatus.emails_verified : (typeof rawStatus?.verified_email_count === 'number' ? rawStatus.verified_email_count : (typeof rawStatus?.verified === 'number' ? rawStatus.verified : 0)),  // Use emails_verified if available, fallback to verified_email_count or verified
+    verified_email_count: typeof rawStatus?.emails_verified === 'number' ? rawStatus.emails_verified : (typeof rawStatus?.verified_email_count === 'number' ? rawStatus.verified_email_count : (typeof rawStatus?.verified === 'number' ? rawStatus.verified : 0)),  // Backwards-compatible alias
+    emails_verified: typeof rawStatus?.emails_verified === 'number' ? rawStatus.emails_verified : (typeof rawStatus?.verified_email_count === 'number' ? rawStatus.verified_email_count : (typeof rawStatus?.verified === 'number' ? rawStatus.verified : 0)),  // Data-driven: verification_status=verified AND contact_email IS NOT NULL (matches Leads page)
     verified_stage: typeof rawStatus?.verified_stage === 'number' ? rawStatus.verified_stage : 0,  // stage = VERIFIED
-    reviewed: typeof rawStatus?.reviewed === 'number' ? rawStatus.reviewed : 0,
+    reviewed: typeof rawStatus?.emails_verified === 'number' ? rawStatus.emails_verified : (typeof rawStatus?.reviewed === 'number' ? rawStatus.reviewed : 0),  // Same as emails_verified
     drafted: typeof rawStatus?.drafted === 'number' ? rawStatus.drafted : 0,
     sent: typeof rawStatus?.sent === 'number' ? rawStatus.sent : 0,
     discovered_for_scraping: discoveredForScraping,
     scrape_ready_count: discoveredForScraping,
-    drafting_ready_count: typeof rawStatus?.drafting_ready_count === 'number' ? rawStatus.drafting_ready_count : 0,  // Data-driven: stage=LEAD, email IS NOT NULL, verification_status=verified
+    drafting_ready: typeof rawStatus?.drafting_ready === 'number' ? rawStatus.drafting_ready : (typeof rawStatus?.drafting_ready_count === 'number' ? rawStatus.drafting_ready_count : 0),  // Data-driven: stage=LEAD, email IS NOT NULL, verification_status=verified
+    drafting_ready_count: typeof rawStatus?.drafting_ready === 'number' ? rawStatus.drafting_ready : (typeof rawStatus?.drafting_ready_count === 'number' ? rawStatus.drafting_ready_count : 0),  // Backwards-compatible alias
   }
 }
 
