@@ -73,6 +73,25 @@ export default function WebsitesTable() {
     }
   }
 
+  const handleApproveSingle = async (id: string) => {
+    setActionLoading(true)
+    setError(null)
+    try {
+      await pipelineApprove({
+        prospect_ids: [id],
+        action: 'approve',
+      })
+      const newSelected = new Set(selected)
+      newSelected.delete(id)
+      setSelected(newSelected)
+      await loadWebsites()
+    } catch (err: any) {
+      setError(err.message || 'Failed to approve website')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this website?')) return
 
@@ -264,8 +283,8 @@ export default function WebsitesTable() {
                       <div className="flex items-center space-x-2">
                         {website.approval_status !== 'approved' && (
                           <button
-                            onClick={() => handleApprove()}
-                            disabled={actionLoading || !selected.has(website.id)}
+                            onClick={() => handleApproveSingle(website.id)}
+                            disabled={actionLoading}
                             className="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
                             title="Approve"
                           >

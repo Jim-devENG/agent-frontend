@@ -5,6 +5,7 @@ import { CheckCircle2, Circle, Lock, Loader2, Search, Scissors, Shield, Eye, Fil
 import { 
   pipelineDiscover, 
   pipelineApprove, 
+  pipelineApproveAll,
   pipelineScrape, 
   pipelineVerify, 
   pipelineDraft, 
@@ -78,6 +79,19 @@ export default function Pipeline() {
       await loadStatus()
     } catch (err: any) {
       alert(err.message || 'Failed to start scraping')
+    }
+  }
+
+  const handleApproveAll = async () => {
+    try {
+      const res = await pipelineApproveAll()
+      alert(res.message || `Approved ${res.approved_count} websites`)
+      await loadStatus()
+      // Optionally, navigate user to Websites tab to review approved websites
+      const event = new CustomEvent('change-tab', { detail: 'websites' })
+      window.dispatchEvent(event)
+    } catch (err: any) {
+      alert(err.message || 'Failed to approve all websites')
     }
   }
 
@@ -159,24 +173,32 @@ export default function Pipeline() {
       name: 'Scraping',
       description: 'Extract emails from approved websites',
       icon: Scissors,
-      status: normalizedStatus.approved === 0 ? 'locked' :
+      // UNLOCK as soon as we have at least one scrape-ready website from the backend
+      status: normalizedStatus.scrape_ready_count === 0 ? 'locked' :
               normalizedStatus.scraped > 0 ? 'completed' : 'active',
       count: normalizedStatus.scraped,
-      ctaText: normalizedStatus.approved === 0 ? 'Approve Websites First' :
-               normalizedStatus.scraped > 0 ? 'View Prospects' : 'Start Scraping',
+      ctaText: normalizedStatus.scrape_ready_count === 0
+        ? 'Discover Websites First'
+        : normalizedStatus.scraped > 0
+        ? 'View Prospects'
+        : 'Start Scraping',
       ctaAction: () => {
-        if (normalizedStatus.approved === 0) {
-          alert('Please approve websites in the Websites tab first')
-          const event = new CustomEvent('change-tab', { detail: 'websites' })
+        // If nothing is scrape-ready yet, guide user back to discovery
+        if (normalizedStatus.scrape_ready_count === 0) {
+          const event = new CustomEvent('show-discovery-form')
           window.dispatchEvent(event)
           return
         }
+
+        // If scraping already ran, take user to leads
         if (normalizedStatus.scraped > 0) {
           const event = new CustomEvent('change-tab', { detail: 'leads' })
           window.dispatchEvent(event)
-        } else {
-          handleScrape()
+          return
         }
+
+        // Otherwise start scraping approved websites
+        handleScrape()
       }
     },
     {
@@ -300,6 +322,18 @@ export default function Pipeline() {
                   <p className="text-xs text-gray-500">
                     {step.count === 1 ? 'item' : 'items'} {isCompleted ? 'completed' : 'ready'}
                   </p>
+                  {step.id === 2 && (
+                    <div className="mt-1 space-y-1">
+                      <p className="text-xs text-gray-500">
+                        Discovered: {normalizedStatus.discovered} • Scrape-ready: {normalizedStatus.scrape_ready_count}
+                      </p>
+                      {normalizedStatus.scrape_ready_count === 0 && (
+                        <p className="text-xs text-red-500">
+                          Blocked: No discovered websites yet. Run discovery first.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {step.jobStatus && (
                   <span className={`px-2 py-1 rounded text-xs font-medium ${

@@ -919,6 +919,18 @@ export async function pipelineApprove(request: PipelineApprovalRequest): Promise
   return res.json()
 }
 
+export async function pipelineApproveAll(): Promise<PipelineApprovalResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/approve_all`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to approve all prospects' }))
+    throw new Error(error.detail || 'Failed to approve all prospects')
+  }
+  return res.json()
+}
+
 export interface PipelineScrapeRequest {
   prospect_ids?: string[]
 }
@@ -1047,7 +1059,8 @@ export interface PipelineStatus {
   reviewed?: number  // Same as verified for review step
   drafted?: number  // Optional - may not be in response
   sent?: number  // Optional - may not be in response
-  discovered_for_scraping?: number  // DISCOVERED status (ready for scraping)
+  discovered_for_scraping?: number  // Legacy field - aliased to scrape_ready_count
+  scrape_ready_count?: number       // New canonical field for scraping unlock
 }
 
 // Normalized pipeline status - ALL fields are guaranteed to be numbers
@@ -1060,6 +1073,7 @@ export interface NormalizedPipelineStatus {
   drafted: number
   sent: number
   discovered_for_scraping: number
+  scrape_ready_count: number
 }
 
 /**
@@ -1070,6 +1084,13 @@ export interface NormalizedPipelineStatus {
  * @returns Complete normalized status with all fields as numbers
  */
 export function normalizePipelineStatus(rawStatus: Partial<PipelineStatus> | null | undefined): NormalizedPipelineStatus {
+  const discoveredForScraping =
+    typeof rawStatus?.scrape_ready_count === 'number'
+      ? rawStatus.scrape_ready_count
+      : typeof rawStatus?.discovered_for_scraping === 'number'
+      ? rawStatus.discovered_for_scraping
+      : 0
+
   return {
     discovered: typeof rawStatus?.discovered === 'number' ? rawStatus.discovered : 0,
     approved: typeof rawStatus?.approved === 'number' ? rawStatus.approved : 0,
@@ -1078,7 +1099,8 @@ export function normalizePipelineStatus(rawStatus: Partial<PipelineStatus> | nul
     reviewed: typeof rawStatus?.reviewed === 'number' ? rawStatus.reviewed : 0,
     drafted: typeof rawStatus?.drafted === 'number' ? rawStatus.drafted : 0,
     sent: typeof rawStatus?.sent === 'number' ? rawStatus.sent : 0,
-    discovered_for_scraping: typeof rawStatus?.discovered_for_scraping === 'number' ? rawStatus.discovered_for_scraping : 0,
+    discovered_for_scraping: discoveredForScraping,
+    scrape_ready_count: discoveredForScraping,
   }
 }
 
