@@ -38,18 +38,19 @@ export default function Pipeline() {
   const loadStatus = async () => {
     try {
       const statusData = await pipelineStatus()
-      // Defensive: ensure all counts are numbers (handle zero safely)
-      const safeStatus = {
-        discovered: statusData.discovered || 0,
-        approved: statusData.approved || 0,
-        scraped: statusData.scraped || 0,
-        verified: statusData.verified || 0,
-        reviewed: statusData.reviewed || 0,
-        drafted: statusData.drafted || 0,
-        sent: statusData.sent || 0,
-        discovered_for_scraping: statusData.discovered_for_scraping || 0,
+      // Defensive: ensure all counts are numbers (handle zero/null/undefined safely)
+      // Backend returns: { discovered, approved, scraped, verified, reviewed, discovered_for_scraping }
+      const safeStatus: PipelineStatusType = {
+        discovered: typeof statusData.discovered === 'number' ? statusData.discovered : 0,
+        approved: typeof statusData.approved === 'number' ? statusData.approved : 0,
+        scraped: typeof statusData.scraped === 'number' ? statusData.scraped : 0,
+        verified: typeof statusData.verified === 'number' ? statusData.verified : 0,
+        reviewed: typeof statusData.reviewed === 'number' ? statusData.reviewed : 0,
+        drafted: typeof statusData.drafted === 'number' ? statusData.drafted : 0,
+        sent: typeof statusData.sent === 'number' ? statusData.sent : 0,
+        discovered_for_scraping: typeof statusData.discovered_for_scraping === 'number' ? statusData.discovered_for_scraping : 0,
       }
-      setStatus(safeStatus as PipelineStatusType)
+      setStatus(safeStatus)
       
       // Update steps based on status
       const newSteps: Step[] = [
