@@ -580,6 +580,50 @@ export async function listLeads(
   }
 }
 
+export async function listScrapedEmails(
+  skip = 0,
+  limit = 50
+): Promise<ProspectListResponse> {
+  const params = new URLSearchParams({
+    skip: skip.toString(),
+    limit: limit.toString(),
+  })
+  params.append('_t', Date.now().toString())
+  
+  try {
+    const res = await authenticatedFetch(`${API_BASE}/prospects/scraped-emails?${params}`)
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Failed to list scraped emails' }))
+      throw new Error(error.detail || `Failed to list scraped emails: ${res.status} ${res.statusText}`)
+    }
+    const result: any = await res.json()
+    
+    // Normalize to PaginatedResponse<Prospect>
+    let prospectsData: Prospect[] = []
+    let total = 0
+    
+    if (result.data && Array.isArray(result.data)) {
+      prospectsData = result.data
+      total = result.total ?? prospectsData.length
+    } else if (Array.isArray(result)) {
+      prospectsData = result
+      total = prospectsData.length
+    }
+    
+    console.log(`📊 listScrapedEmails: Found ${prospectsData.length} scraped emails (total: ${total})`)
+    
+    return {
+      data: prospectsData,
+      total: total,
+      skip,
+      limit,
+    }
+  } catch (error: any) {
+    console.error('listScrapedEmails API error:', error)
+    throw new Error(error.message || 'Failed to list scraped emails. Check if backend is running.')
+  }
+}
+
 export async function promoteToLead(prospectId: string): Promise<{ success: boolean; message: string; stage: string }> {
   const res = await authenticatedFetch(`${API_BASE}/prospects/${prospectId}/promote`, {
     method: 'POST',

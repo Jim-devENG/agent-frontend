@@ -1133,15 +1133,16 @@ async def get_websites(
     current_user: Optional[str] = Depends(get_current_user_optional)
 ):
     """
-    Get discovered websites (discovery results)
+    Get ALL websites (historical view)
     
-    Returns prospects with discovery_status = "DISCOVERED"
-    These are websites found during discovery, not yet scraped
+    Returns ALL prospects that have a domain/website, regardless of stage.
+    This is a HISTORICAL view, not stage-locked.
+    Includes discovered, scraped, verified, and manual websites.
     """
     try:
         result = await db.execute(
             select(Prospect).where(
-                Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value
+                Prospect.domain.isnot(None)  # Show ALL prospects with domain, regardless of stage
             )
             .order_by(Prospect.created_at.desc())
             .offset(skip)
@@ -1151,7 +1152,7 @@ async def get_websites(
         
         total_result = await db.execute(
             select(func.count(Prospect.id)).where(
-                Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value
+                Prospect.domain.isnot(None)  # Count ALL prospects with domain
             )
         )
         total = total_result.scalar() or 0

@@ -659,58 +659,26 @@ async def list_leads(
     current_user: Optional[str] = Depends(get_current_user_optional)
 ):
     """
-    List prospects with emails (scraped leads)
+    List ALL prospects with emails (cumulative view)
     
-    Returns prospects that have been scraped and have emails.
-    This includes:
-    - Prospects with stage = LEAD (explicitly promoted)
-    - Prospects with stage = EMAIL_FOUND (emails found but not yet promoted)
-    - Prospects with contact_email IS NOT NULL (fallback if stage column doesn't exist)
+    Returns ALL prospects that have emails, regardless of:
+    - verification status (verified or unverified)
+    - scraping status (scraped, enriched, etc.)
+    - stage (LEAD, EMAIL_FOUND, VERIFIED, etc.)
+    - source (manual or automated)
+    
+    This is a HISTORICAL view showing all prospects with emails.
     """
-    from sqlalchemy import text, or_
-    from app.models.prospect import ProspectStage
-    
     try:
-        # Check if stage column exists
-        column_check = await db.execute(
-            text("""
-                SELECT column_name
-                FROM information_schema.columns 
-                WHERE table_name = 'prospects' 
-                AND column_name = 'stage'
-            """)
-        )
-        has_stage_column = column_check.fetchone() is not None
+        # Query ALL prospects with emails - no stage restrictions
+        query = select(Prospect).where(
+            Prospect.contact_email.isnot(None)
+        ).order_by(Prospect.created_at.desc())
         
-        if has_stage_column:
-            # Stage column exists - query prospects with emails (LEAD or EMAIL_FOUND)
-            query = select(Prospect).where(
-                or_(
-                    Prospect.stage == ProspectStage.LEAD.value,
-                    Prospect.stage == ProspectStage.EMAIL_FOUND.value
-                ),
-                Prospect.contact_email.isnot(None)
-            ).order_by(Prospect.created_at.desc())
-            
-            # Get total count
-            count_query = select(func.count(Prospect.id)).where(
-                or_(
-                    Prospect.stage == ProspectStage.LEAD.value,
-                    Prospect.stage == ProspectStage.EMAIL_FOUND.value
-                ),
-                Prospect.contact_email.isnot(None)
-            )
-        else:
-            # Stage column doesn't exist - fallback to contact_email IS NOT NULL
-            logger.warning("⚠️  stage column not found, using contact_email fallback for leads")
-            query = select(Prospect).where(
-                Prospect.contact_email.isnot(None)
-            ).order_by(Prospect.created_at.desc())
-            
-            # Get total count
-            count_query = select(func.count(Prospect.id)).where(
-                Prospect.contact_email.isnot(None)
-            )
+        # Get total count
+        count_query = select(func.count(Prospect.id)).where(
+            Prospect.contact_email.isnot(None)
+        )
         
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
@@ -742,6 +710,81 @@ async def list_leads(
     except Exception as e:
         logger.error(f"❌ Error listing leads: {e}", exc_info=True)
         # Return empty result instead of 500 error
+        return {
+            "data": [],
+            "total": 0,
+            "skip": skip,
+            "limit": limit
+        }
+
+
+@router.get("/scraped-emails")
+async def list_scraped_emails(
+    skip: int = 0,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
+):
+    """
+    List prospects with scraped or verified emails
+    
+    Returns prospects where:
+    - contact_email IS NOT NULL
+    AND
+    - scrape_status IN ('SCRAPED', 'ENRICHED', 'VERIFIED')
+    
+    This shows all prospects that have been scraped or verified, regardless of current stage.
+    """
+    try:
+        from app.models.prospect import ScrapeStatus
+        
+        # Query prospects with emails AND scraping_status indicating they were scraped
+        query = select(Prospect).where(
+            Prospect.contact_email.isnot(None),
+            Prospect.scrape_status.in_([
+                ScrapeStatus.SCRAPED.value,
+                ScrapeStatus.ENRICHED.value,
+                ScrapeStatus.VERIFIED.value
+            ])
+        ).order_by(Prospect.created_at.desc())
+        
+        # Get total count
+        count_query = select(func.count(Prospect.id)).where(
+            Prospect.contact_email.isnot(None),
+            Prospect.scrape_status.in_([
+                ScrapeStatus.SCRAPED.value,
+                ScrapeStatus.ENRICHED.value,
+                ScrapeStatus.VERIFIED.value
+            ])
+        )
+        
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+        
+        # Get paginated results
+        result = await db.execute(query.offset(skip).limit(limit))
+        prospects = result.scalars().all()
+        
+        # Safely convert prospects to response
+        prospect_responses = []
+        for p in prospects:
+            try:
+                prospect_responses.append(ProspectResponse.model_validate(p))
+            except Exception as e:
+                logger.warning(f"⚠️  Error converting prospect {getattr(p, 'id', 'unknown')} to response: {e}")
+                continue
+        
+        logger.info(f"✅ [SCRAPED EMAILS] Returning {len(prospect_responses)} scraped emails (total: {total})")
+        
+        return {
+            "data": [p.dict() for p in prospect_responses],
+            "total": total,
+            "skip": skip,
+            "limit": limit
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error listing scraped emails: {e}", exc_info=True)
         return {
             "data": [],
             "total": 0,
