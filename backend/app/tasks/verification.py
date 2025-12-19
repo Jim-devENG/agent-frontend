@@ -143,7 +143,7 @@ async def verify_prospects_async(job_id: str):
                             
                             # Log all emails from Snov for debugging
                             snov_emails = snov_result.get("emails", [])
-                            logger.info(f"🔍 [VERIFICATION] Snov returned {len(snov_emails)} emails for {prospect.domain}. Looking for: '{scraped_email}'")
+                            logger.info(f"🔍 [VERIFICATION] Snov returned {len(snov_emails)} emails for {prospect.domain}. Looking for exact match: '{scraped_email}'")
                             
                             # Try multiple email field names (Snov.io might use different field names)
                             for email_data in snov_emails:
@@ -169,25 +169,20 @@ async def verify_prospects_async(job_id: str):
                                 logger.debug(f"🔍 [VERIFICATION] Comparing: scraped='{scraped_email}' vs snov='{email_value}'")
                                 
                                 if email_value == scraped_email:
-                                    # VERIFICATION: If Snov.io found this email for the domain, it's verified
-                                    # We don't need strict website-source check for verification
-                                    # The fact that Snov.io returns it for this domain is verification enough
+                                    # VERIFICATION: If Snov.io found this exact email for the domain, it's verified
+                                    # STRICT: Only verify if exact email match is found
                                     verified = True
                                     confidence = float(email_data.get("confidence_score", 0) or email_data.get("confidence", 0) or 0)
                                     # Log the source for debugging
                                     source = email_data.get("source", "unknown")
-                                    logger.info(f"✅ [VERIFICATION] Email match found in Snov results for {prospect.domain}: {email_value} (source={source}, confidence={confidence})")
+                                    logger.info(f"✅ [VERIFICATION] Exact email match found in Snov results for {prospect.domain}: {email_value} (source={source}, confidence={confidence})")
                                     break
                             
-                            # FALLBACK: If Snov.io returns ANY emails for this domain, and we already have an email scraped,
-                            # consider it verified (Snov.io knows about the domain, so our scraped email is likely valid)
+                            # Log what emails Snov returned if no match found
                             if not verified and len(snov_emails) > 0:
-                                logger.info(f"⚠️  [VERIFICATION] Exact email '{scraped_email}' not found in Snov results, but Snov returned {len(snov_emails)} emails for {prospect.domain}")
-                                logger.info(f"⚠️  [VERIFICATION] Snov emails: {[str(e.get('value') or e.get('email') or 'unknown') for e in snov_emails[:3]]}")
-                                # Since we already scraped the email and Snov knows about the domain, verify it
-                                verified = True
-                                confidence = 0.5  # Lower confidence since exact match wasn't found
-                                logger.info(f"✅ [VERIFICATION] Verifying based on domain presence in Snov (fallback): {prospect.contact_email}")
+                                snov_email_list = [str(e.get("value") or e.get("email") or e.get("address") or "unknown") for e in snov_emails[:5]]
+                                logger.warning(f"⚠️  [VERIFICATION] Exact email '{scraped_email}' not found in Snov results for {prospect.domain}")
+                                logger.warning(f"⚠️  [VERIFICATION] Snov returned {len(snov_emails)} emails: {snov_email_list}")
                             
                             if verified:
                                 prospect.verification_status = (
