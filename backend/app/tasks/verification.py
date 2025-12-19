@@ -236,8 +236,6 @@ async def verify_prospects_async(job_id: str):
                             await db.commit()
                             await db.refresh(prospect)
                             logger.debug(f"💾 [VERIFICATION] Committed verification for prospect {prospect.id}, verification_status is now: {prospect.verification_status}")
-                    else:
-                        logger.warning(f"⚠️  [VERIFICATION] Skipping prospect {prospect.id} - no email")
                     
                     elif (
                         prospect.scrape_status == ScrapeStatus.NO_EMAIL_FOUND.value
