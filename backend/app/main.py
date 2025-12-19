@@ -102,7 +102,7 @@ from app.api import auth, settings, scraper, pipeline, manual, health
 # from app.api import auth_supabase
 # app.include_router(auth_supabase.router, prefix="/api/auth", tags=["auth"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
+app.include_router(jobs.router, tags=["jobs"])  # Already has /api/jobs prefix
 app.include_router(prospects.router, prefix="/api/prospects", tags=["prospects"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 app.include_router(scraper.router, prefix="/api/scraper", tags=["scraper"])

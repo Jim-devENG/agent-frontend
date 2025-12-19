@@ -17,7 +17,7 @@ from app.schemas.job import JobResponse, JobCreate, JobListResponse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 
 @router.get("", response_model=JobListResponse)

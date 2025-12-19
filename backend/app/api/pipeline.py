@@ -1142,6 +1142,10 @@ async def get_websites(
             "limit": limit
         }
         
+        # CRITICAL: Guard against data integrity violation
+        from app.utils.response_guard import validate_list_response
+        response = validate_list_response(response, "get_websites")
+        
         # Log first few items for debugging
         if len(data) > 0:
             logger.info(f"📊 [WEBSITES] First website sample: {data[0] if data else 'N/A'}")

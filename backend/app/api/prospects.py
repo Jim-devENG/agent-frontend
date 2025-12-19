@@ -818,6 +818,10 @@ async def list_leads(
             "limit": limit
         }
         
+        # CRITICAL: Guard against data integrity violation
+        from app.utils.response_guard import validate_list_response
+        response = validate_list_response(response, "list_leads")
+        
         logger.info(f"📊 [LEADS] Final response: {len(data_dicts)} items in data array")
         
         return response
