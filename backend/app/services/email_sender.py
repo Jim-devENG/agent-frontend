@@ -59,7 +59,15 @@ async def send_prospect_email(
         try:
             gmail_client = GmailClient()
         except ValueError as e:
-            raise ValueError(f"Gmail not configured: {e}")
+            error_msg = str(e)
+            logger.error(f"❌ [SEND] Gmail client initialization failed: {error_msg}")
+            # Provide more helpful error message
+            if "not configured" in error_msg.lower():
+                raise ValueError(
+                    "Gmail is not configured. Please set GMAIL_ACCESS_TOKEN or GMAIL_REFRESH_TOKEN environment variables. "
+                    "If using refresh token, also set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET."
+                )
+            raise ValueError(f"Gmail configuration error: {error_msg}")
     
     # Send email via Gmail API
     logger.info(f"📧 [SEND] Sending email to {prospect.contact_email} (prospect_id: {prospect.id})...")
