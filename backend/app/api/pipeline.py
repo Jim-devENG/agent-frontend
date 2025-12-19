@@ -617,13 +617,24 @@ async def draft_emails(
         logger.info(f"🔍 [DRAFT DEBUG] Verified total: {verified_total}, With email: {verified_with_email}, Draft pending: {verified_pending}, Draft NULL: {verified_null}")
         logger.info(f"🔍 [DRAFT DEBUG] Draft status breakdown: {draft_status_counts}")
         
+        # Query draft-ready prospects
+        # Accept: draft_status = 'pending' OR NULL OR 'drafted' (if they don't have draft content yet)
+        # This handles cases where prospects were marked as drafted but don't have actual draft content
         result = await db.execute(
             select(Prospect).where(
                 Prospect.verification_status == VerificationStatus.VERIFIED.value,
                 Prospect.contact_email.isnot(None),
                 or_(
                     Prospect.draft_status == DraftStatus.PENDING.value,
-                    Prospect.draft_status.is_(None)
+                    Prospect.draft_status.is_(None),
+                    # Also accept 'drafted' if they don't have draft_subject or draft_body (incomplete draft)
+                    and_(
+                        Prospect.draft_status == DraftStatus.DRAFTED.value,
+                        or_(
+                            Prospect.draft_subject.is_(None),
+                            Prospect.draft_body.is_(None)
+                        )
+                    )
                 )
             )
         )
