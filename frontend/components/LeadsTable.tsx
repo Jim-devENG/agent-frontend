@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, Users, Globe, CheckCircle } from 'lucide-react'
-import { listLeads, listScrapedEmails, promoteToLead, composeEmail, sendEmail, manualScrape, manualVerify, type Prospect } from '@/lib/api'
+import { listLeads, listScrapedEmails, promoteToLead, composeEmail, manualScrape, manualVerify, type Prospect } from '@/lib/api'
 import { safeToFixed } from '@/lib/safe-utils'
 
 interface LeadsTableProps {
@@ -20,7 +20,6 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
   const [draftSubject, setDraftSubject] = useState('')
   const [draftBody, setDraftBody] = useState('')
   const [isComposing, setIsComposing] = useState(false)
-  const [isSending, setIsSending] = useState(false)
 
   // Manual actions state
   const [showManualActions, setShowManualActions] = useState(false)
@@ -162,30 +161,10 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     setDraftBody('')
   }
 
-  const handleSend = async () => {
-    if (!activeProspect) return
-    if (!draftSubject.trim() || !draftBody.trim()) {
-      alert('Please review and fill in subject and body before sending.')
-      return
-    }
-
-    if (!confirm(`Send email to ${activeProspect.contact_email}?`)) {
-      return
-    }
-
-    setIsSending(true)
-    try {
-      await sendEmail(activeProspect.id, draftSubject, draftBody)
-      await loadProspects()
-      alert('Email sent successfully!')
-      closeComposeModal()
-    } catch (error: any) {
-      console.error('Failed to send email:', error)
-      alert(error.message || 'Failed to send email')
-    } finally {
-      setIsSending(false)
-    }
-  }
+  // REMOVED: handleSend function
+  // Compose is DRAFT-ONLY. Sending must happen via Pipeline Send card.
+  // Individual send endpoint is disabled (410 Gone).
+  // Use pipelineSend() from the Pipeline page instead.
 
   const handleManualScrape = async () => {
     if (!manualWebsiteUrl.trim()) {
@@ -202,9 +181,13 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
         ? `✅ Website already exists - marked as follow-up candidate. ${result.message}`
         : `✅ Website scraped successfully! ${result.message}`)
       setManualWebsiteUrl('')
-      // Reload prospects after scraping
+      // Reload prospects and refresh pipeline status after scraping
       setTimeout(() => {
         loadProspects()
+        // Trigger pipeline status refresh
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('refreshPipelineStatus'))
+        }
       }, 1000)
     } catch (err: any) {
       setError(err.message || 'Failed to scrape website')
@@ -235,9 +218,13 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
         ? `✅ Email already exists - verified. Status: ${result.verification_status}`
         : `✅ Email verified! Status: ${result.verification_status}`)
       setManualEmail('')
-      // Reload prospects after verification
+      // Reload prospects and refresh pipeline status after verification
       setTimeout(() => {
         loadProspects()
+        // Trigger pipeline status refresh
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('refreshPipelineStatus'))
+        }
       }, 1000)
     } catch (err: any) {
       setError(err.message || 'Failed to verify email')
@@ -498,7 +485,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">
-                  Review &amp; Send Email
+                  Review Draft Email
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {activeProspect.domain} — {activeProspect.contact_email}
@@ -540,32 +527,26 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
 
             <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
               <p className="text-xs text-gray-500">
-                Emails are never sent automatically. You always review and click send manually.
+                This is a DRAFT ONLY. To send emails, use the Pipeline → Send card.
               </p>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={closeComposeModal}
                   className="px-3 py-2 text-sm text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-                  disabled={isSending}
                 >
-                  Cancel
+                  Close
                 </button>
                 <button
-                  onClick={handleSend}
-                  disabled={isSending}
-                  className="flex items-center space-x-2 px-4 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50"
+                  onClick={() => {
+                    // Navigate to Pipeline tab to use Send card
+                    const event = new CustomEvent('change-tab', { detail: 'pipeline' })
+                    window.dispatchEvent(event)
+                    closeComposeModal()
+                  }}
+                  className="flex items-center space-x-2 px-4 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700"
                 >
-                  {isSending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Sending...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      <span>Send Email</span>
-                    </>
-                  )}
+                  <Send className="w-4 h-4" />
+                  <span>Go to Pipeline to Send</span>
                 </button>
               </div>
             </div>
