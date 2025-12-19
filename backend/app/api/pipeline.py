@@ -292,8 +292,8 @@ async def scrape_websites(
         query = query.where(Prospect.id.in_(request.prospect_ids))
     
     try:
-    result = await db.execute(query)
-    prospects = result.scalars().all()
+        result = await db.execute(query)
+        prospects = result.scalars().all()
     except Exception as query_err:
         logger.error(f"❌ [PIPELINE STEP 3] Query error: {query_err}", exc_info=True)
         await db.rollback()  # Rollback on query failure
@@ -318,9 +318,9 @@ async def scrape_websites(
     )
     
     try:
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
+        db.add(job)
+        await db.commit()
+        await db.refresh(job)
     except Exception as commit_err:
         logger.error(f"❌ [PIPELINE STEP 3] Commit error: {commit_err}", exc_info=True)
         await db.rollback()  # Rollback on commit failure
@@ -339,9 +339,9 @@ async def scrape_websites(
         logger.error(f"❌ [PIPELINE STEP 3] Failed to start scraping job: {e}", exc_info=True)
         try:
             await db.rollback()  # Rollback on exception
-        job.status = "failed"
-        job.error_message = str(e)
-        await db.commit()
+            job.status = "failed"
+            job.error_message = str(e)
+            await db.commit()
         except Exception as rollback_err:
             logger.error(f"❌ [PIPELINE STEP 3] Error during rollback: {rollback_err}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to start scraping job: {str(e)}")
@@ -444,9 +444,9 @@ async def verify_emails(
         logger.error(f"❌ [PIPELINE STEP 4] Failed to start verification job: {e}", exc_info=True)
         try:
             await db.rollback()  # Rollback on exception
-        job.status = "failed"
-        job.error_message = str(e)
-        await db.commit()
+            job.status = "failed"
+            job.error_message = str(e)
+            await db.commit()
         except Exception as rollback_err:
             logger.error(f"❌ [PIPELINE STEP 4] Error during rollback: {rollback_err}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to start verification job: {str(e)}")
