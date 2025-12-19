@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, Users, Globe, CheckCircle } from 'lucide-react'
-import { listLeads, promoteToLead, composeEmail, sendEmail, manualScrape, manualVerify, type Prospect } from '@/lib/api'
+import { listLeads, listScrapedEmails, promoteToLead, composeEmail, sendEmail, manualScrape, manualVerify, type Prospect } from '@/lib/api'
 import { safeToFixed } from '@/lib/safe-utils'
 
 interface LeadsTableProps {
@@ -36,16 +36,20 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     try {
       setLoading(true)
       setError(null)
-      // Use dedicated leads endpoint - returns ONLY stage = LEAD (explicitly promoted leads)
-      const response = await listLeads(skip, limit)
+      // Use different endpoints based on emailsOnly prop
+      // Leads tab: all prospects with emails
+      // Scraped Emails tab: prospects with emails AND scraping_status IN (SCRAPED, ENRICHED, VERIFIED)
+      const response = emailsOnly 
+        ? await listScrapedEmails(skip, limit)
+        : await listLeads(skip, limit)
       const leads = Array.isArray(response?.data) ? response.data : []
       setProspects(leads)
       setTotal(response.total ?? leads.length)
       // Clear error if we successfully got data (even if empty)
       // Empty data is not an error, it's a valid state
     } catch (error: any) {
-      console.error('Failed to load leads:', error)
-      const errorMessage = error?.message || 'Failed to load leads. Check if backend is running.'
+      console.error(`Failed to load ${emailsOnly ? 'scraped emails' : 'leads'}:`, error)
+      const errorMessage = error?.message || `Failed to load ${emailsOnly ? 'scraped emails' : 'leads'}. Check if backend is running.`
       setError(errorMessage)
       setProspects([])
       setTotal(0)
