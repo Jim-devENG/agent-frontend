@@ -60,3 +60,4 @@ def validate_list_response(response: Dict[str, Any], endpoint_name: str) -> Dict
     
     return response
 
+

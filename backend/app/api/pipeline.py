@@ -1002,10 +1002,10 @@ async def get_pipeline_status(
         
         # Return pipeline status counts
         # DATA-DRIVEN: All counts derived from Prospect state only, NOT from jobs
-        # Unlock logic:
+        # Unlock logic (DATA-DRIVEN from database state):
         # - Verification card is COMPLETE if verified_count > 0
         # - Drafting card is UNLOCKED if verified_count > 0 (draft_ready_count > 0)
-        # - Sending card is UNLOCKED if drafted_count > 0
+        # - Sending card is UNLOCKED if send_ready_count > 0 (verified + drafted + not sent)
         return {
             "discovered": discovered_count,
             "approved": approved_count,

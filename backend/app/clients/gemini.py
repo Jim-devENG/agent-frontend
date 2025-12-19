@@ -273,7 +273,7 @@ Do not include any text before or after the JSON. Return ONLY the JSON object.""
         # Create prompt for follow-up email
         prompt = f"""You are a professional outreach specialist for an art and creative services company.
 
-Your task is to compose a SHORT, WITTY, POLITE follow-up email. This is follow-up #{followup_count} in the thread.
+Your task is to compose a SHORT, PLAYFUL, LIGHT, WITTY follow-up email. This is follow-up #{followup_count} in the thread.
 
 Context about their website:
 {context}
@@ -283,11 +283,12 @@ Previous emails in this thread:
 
 Requirements:
 1. The email must be SHORT (1-2 paragraphs max)
-2. It should be WITTY and CLEVER (use a humorous hook, but not spammy)
-3. It should be POLITE and professional
-4. Reference the previous attempt SUBTLY (don't be pushy)
-5. It should be memorable and stand out
+2. It should be PLAYFUL and LIGHT - use humor, wit, and a clever hook that makes them smile
+3. It should be POLITE and professional (playful doesn't mean unprofessional)
+4. Reference the previous attempt SUBTLY and PLAYFULLY (don't be pushy or desperate)
+5. It should be memorable and stand out - think of it as a friendly nudge, not a sales pitch
 6. Keep it concise - people are busy
+7. The tone should be LIGHT and CONVERSATIONAL - like you're reaching out to a friend, not a cold prospect
 
 You MUST return ONLY valid JSON with this exact structure:
 {{

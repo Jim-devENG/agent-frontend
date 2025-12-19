@@ -110,6 +110,14 @@ async def manual_scrape(
         # Website already exists → mark as follow-up candidate
         logger.info(f"📌 [MANUAL SCRAPE] Domain {domain} already exists (prospect_id: {existing_prospect.id}) - marking as follow-up candidate")
         prospect = existing_prospect
+        
+        # Set up thread tracking for follow-up
+        # Use existing prospect's thread_id, or create one if it doesn't have one
+        if not prospect.thread_id:
+            prospect.thread_id = existing_prospect.id
+        # Increment sequence_index for follow-up
+        prospect.sequence_index = (existing_prospect.sequence_index or 0) + 1
+        logger.info(f"📌 [MANUAL SCRAPE] Set up follow-up tracking: thread_id={prospect.thread_id}, sequence={prospect.sequence_index}")
     else:
         # Create new Prospect with is_manual = "true"
         prospect = Prospect(
@@ -208,6 +216,14 @@ async def manual_verify(
         # Email exists → verify existing Prospect email
         logger.info(f"📌 [MANUAL VERIFY] Email {email} already exists (prospect_id: {existing_prospect.id}) - verifying")
         prospect = existing_prospect
+        
+        # Set up thread tracking for follow-up
+        # Use existing prospect's thread_id, or create one if it doesn't have one
+        if not prospect.thread_id:
+            prospect.thread_id = existing_prospect.id
+        # Increment sequence_index for follow-up
+        prospect.sequence_index = (existing_prospect.sequence_index or 0) + 1
+        logger.info(f"📌 [MANUAL VERIFY] Set up follow-up tracking: thread_id={prospect.thread_id}, sequence={prospect.sequence_index}")
     else:
         # Email does not exist → create Prospect with email only
         prospect = Prospect(

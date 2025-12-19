@@ -39,7 +39,7 @@ export default function WebsitesTable() {
         isArray: Array.isArray(response?.data)
       })
       if (response?.data && Array.isArray(response.data)) {
-        setWebsites(response.data)
+      setWebsites(response.data)
         setTotal(response.total ?? response.data.length)
         console.log('✅ [WEBSITES] Set websites:', response.data.length)
       } else {
