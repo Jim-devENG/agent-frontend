@@ -448,19 +448,35 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                       )}
                     </td>
                     <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          prospect.outreach_status === 'sent'
-                            ? 'bg-green-100 text-green-800'
-                            : prospect.outreach_status === 'replied'
-                            ? 'bg-blue-100 text-blue-800'
-                            : prospect.outreach_status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {prospect.outreach_status}
-                      </span>
+                      <div className="flex flex-col space-y-1">
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            prospect.verification_status === 'verified'
+                              ? 'bg-green-100 text-green-800'
+                              : prospect.verification_status === 'unverified' || prospect.verification_status === 'UNVERIFIED'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : prospect.verification_status === 'failed'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {prospect.verification_status || 'PENDING'}
+                        </span>
+                        {/* Show outreach_status (secondary, for sent/replied) */}
+                        {prospect.outreach_status && prospect.outreach_status !== 'pending' && (
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-medium ${
+                              prospect.outreach_status === 'sent'
+                                ? 'bg-green-100 text-green-800'
+                                : prospect.outreach_status === 'replied'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}
+                          >
+                            {prospect.outreach_status}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <span className="text-gray-900">{safeToFixed(prospect.score, 2)}</span>
