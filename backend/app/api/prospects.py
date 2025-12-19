@@ -667,6 +667,8 @@ async def list_leads(
     try:
         # Leads tab - contact_email IS NOT NULL (show ALL prospects with emails)
         # Removed verification_status filter to show all prospects with emails
+        logger.info(f"🔍 [LEADS] Querying prospects with contact_email IS NOT NULL (skip={skip}, limit={limit})")
+        
         query = select(Prospect).where(
             Prospect.contact_email.isnot(None)
         ).order_by(Prospect.created_at.desc())
@@ -678,10 +680,12 @@ async def list_leads(
         
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
+        logger.info(f"🔍 [LEADS] Total prospects with emails: {total}")
         
         # Get paginated results
         result = await db.execute(query.offset(skip).limit(limit))
         prospects = result.scalars().all()
+        logger.info(f"🔍 [LEADS] Found {len(prospects)} prospects from database query")
         
         # Safely convert prospects to response, handling NULL draft fields
         prospect_responses = []
@@ -734,6 +738,8 @@ async def list_scraped_emails(
     try:
         # Scraped Emails tab - contact_email IS NOT NULL (show ALL prospects with emails)
         # Removed scrape_status filter to show all prospects with emails
+        logger.info(f"🔍 [SCRAPED EMAILS] Querying prospects with contact_email IS NOT NULL (skip={skip}, limit={limit})")
+        
         query = select(Prospect).where(
             Prospect.contact_email.isnot(None)
         ).order_by(Prospect.created_at.desc())
@@ -745,10 +751,12 @@ async def list_scraped_emails(
         
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
+        logger.info(f"🔍 [SCRAPED EMAILS] Total prospects with emails: {total}")
         
         # Get paginated results
         result = await db.execute(query.offset(skip).limit(limit))
         prospects = result.scalars().all()
+        logger.info(f"🔍 [SCRAPED EMAILS] Found {len(prospects)} prospects from database query")
         
         # Safely convert prospects to response
         prospect_responses = []

@@ -1054,6 +1054,8 @@ async def get_websites(
     Includes discovered, scraped, verified, and manual websites.
     """
     try:
+        logger.info(f"🔍 [WEBSITES] Querying prospects with domain IS NOT NULL (skip={skip}, limit={limit})")
+        
         result = await db.execute(
             select(Prospect).where(
                 Prospect.domain.isnot(None)  # Show ALL prospects with domain, regardless of stage
@@ -1063,6 +1065,7 @@ async def get_websites(
             .limit(limit)
         )
         websites = result.scalars().all()
+        logger.info(f"🔍 [WEBSITES] Found {len(websites)} websites from database query")
         
         total_result = await db.execute(
             select(func.count(Prospect.id)).where(
@@ -1070,6 +1073,7 @@ async def get_websites(
             )
         )
         total = total_result.scalar() or 0
+        logger.info(f"🔍 [WEBSITES] Total prospects with domain: {total}")
         
         # Safely build response data with error handling
         data = []
