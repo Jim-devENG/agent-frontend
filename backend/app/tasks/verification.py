@@ -52,8 +52,11 @@ async def verify_prospects_async(job_id: str):
                 await db.commit()
                 return {"error": "No prospect IDs provided"}
             
-            # Get EMAIL_FOUND or LEAD prospects ready for verification (canonical stage-based query)
-            # Defensive: Check if stage column exists, fallback to scrape_status + email
+            # Get prospects ready for verification
+            # CRITICAL: Match the verify endpoint logic - process prospects that are NOT verified
+            # This includes: UNVERIFIED, pending, unverified, etc. (anything != "verified")
+            # The verify endpoint selects: verification_status != VERIFIED
+            # So we must process the same set of prospects
             from sqlalchemy import text
             try:
                 # Check if stage column exists
@@ -71,7 +74,8 @@ async def verify_prospects_async(job_id: str):
                         select(Prospect).where(
                             Prospect.id.in_([UUID(pid) for pid in prospect_ids]),
                             Prospect.stage.in_([ProspectStage.EMAIL_FOUND.value, ProspectStage.LEAD.value]),
-                            Prospect.verification_status == VerificationStatus.PENDING.value,
+                            # CRITICAL FIX: Process prospects that are NOT verified (matches verify endpoint logic)
+                            Prospect.verification_status != VerificationStatus.VERIFIED.value,
                         )
                     )
                 else:
@@ -82,7 +86,8 @@ async def verify_prospects_async(job_id: str):
                             Prospect.id.in_([UUID(pid) for pid in prospect_ids]),
                             Prospect.scrape_status.in_([ScrapeStatus.SCRAPED.value, ScrapeStatus.ENRICHED.value]),
                             Prospect.contact_email.isnot(None),
-                            Prospect.verification_status == VerificationStatus.PENDING.value,
+                            # CRITICAL FIX: Process prospects that are NOT verified (matches verify endpoint logic)
+                            Prospect.verification_status != VerificationStatus.VERIFIED.value,
                         )
                     )
             except Exception as e:
@@ -93,13 +98,14 @@ async def verify_prospects_async(job_id: str):
                         Prospect.id.in_([UUID(pid) for pid in prospect_ids]),
                         Prospect.scrape_status.in_([ScrapeStatus.SCRAPED.value, ScrapeStatus.ENRICHED.value]),
                         Prospect.contact_email.isnot(None),
-                        Prospect.verification_status == VerificationStatus.PENDING.value,
+                        # CRITICAL FIX: Process prospects that are NOT verified (matches verify endpoint logic)
+                        Prospect.verification_status != VerificationStatus.VERIFIED.value,
                     )
                 )
             
             prospects = result.scalars().all()
             
-            logger.info(f"✅ [VERIFICATION] Starting verification for {len(prospects)} prospects (stage=EMAIL_FOUND or LEAD)")
+            logger.info(f"✅ [VERIFICATION] Starting verification for {len(prospects)} prospects (not yet verified)")
             
             # Initialize Snov client
             try:
