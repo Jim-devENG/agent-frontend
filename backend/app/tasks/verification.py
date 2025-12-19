@@ -123,16 +123,20 @@ async def verify_prospects_async(job_id: str):
             
             for idx, prospect in enumerate(prospects, 1):
                 try:
-                    logger.info(f"✅ [VERIFICATION] [{idx}/{len(prospects)}] Verifying {prospect.domain}...")
+                    logger.info(f"🔍 [VERIFICATION] [{idx}/{len(prospects)}] Verifying {prospect.domain} (email: {prospect.contact_email}, scrape_status: {prospect.scrape_status})...")
                     
                     # If prospect has scraped email, verify it
                     # CRITICAL: Process both SCRAPED and ENRICHED prospects (matches verify endpoint logic)
                     if prospect.contact_email and prospect.scrape_status in [ScrapeStatus.SCRAPED.value, ScrapeStatus.ENRICHED.value]:
                         # Verify existing scraped email
+                        logger.debug(f"🔍 [VERIFICATION] Calling Snov.io domain_search for {prospect.domain}...")
                         snov_result = await snov_client.domain_search(prospect.domain)
+                        logger.debug(f"🔍 [VERIFICATION] Snov.io response for {prospect.domain}: success={snov_result.get('success')}, emails_count={len(snov_result.get('emails', []))}")
                         
                         if snov_result.get("success") and snov_result.get("emails"):
-                            # Check if scraped email is in Snov results and from website
+                            # Check if scraped email is in Snov results
+                            # VERIFICATION LOGIC: If Snov.io returns the email in domain search results, that's verification
+                            # We're more lenient here than enrichment - any email Snov finds for the domain is considered verified
                             scraped_email = prospect.contact_email.lower()
                             verified = False
                             confidence = 0.0
@@ -143,11 +147,17 @@ async def verify_prospects_async(job_id: str):
                                 
                                 email_value = email_data.get("value", "").lower()
                                 if email_value == scraped_email:
-                                    # Check if from website
-                                    if _is_snov_email_from_website(email_data):
-                                        verified = True
-                                        confidence = float(email_data.get("confidence_score", 0) or 0)
-                                        break
+                                    # VERIFICATION: If Snov.io found this email for the domain, it's verified
+                                    # We don't need strict website-source check for verification
+                                    # The fact that Snov.io returns it for this domain is verification enough
+                                    verified = True
+                                    confidence = float(email_data.get("confidence_score", 0) or 0)
+                                    # Log the source for debugging
+                                    source = email_data.get("source", "unknown")
+                                    logger.info(f"✅ [VERIFICATION] Email match found in Snov results for {prospect.domain}: {email_value} (source={source}, confidence={confidence})")
+                                    break
+                                else:
+                                    logger.debug(f"🔍 [VERIFICATION] Email mismatch: looking for '{scraped_email}', found '{email_value}'")
                             
                             if verified:
                                 prospect.verification_status = (
@@ -160,15 +170,16 @@ async def verify_prospects_async(job_id: str):
                                 prospect.verification_payload = snov_result
                                 verified_count += 1
                                 logger.info(f"✅ [VERIFICATION] Verified scraped email for {prospect.domain}: {prospect.contact_email} (confidence: {confidence})")
-                                logger.info(f"📝 [VERIFICATION] Updated prospect {prospect.id} - verification_status=VERIFIED, stage=VERIFIED")
+                                logger.info(f"📝 [VERIFICATION] Updated prospect {prospect.id} - verification_status=VERIFIED, stage=LEAD")
                             else:
+                                # Email not found in Snov results for this domain
                                 prospect.verification_status = (
                                     VerificationStatus.UNVERIFIED_LOWER.value
                                 )
                                 prospect.verification_confidence = 0.0
                                 prospect.verification_payload = snov_result
                                 unverified_count += 1
-                                logger.warning(f"⚠️  [VERIFICATION] Scraped email not verified for {prospect.domain}: {prospect.contact_email}")
+                                logger.warning(f"⚠️  [VERIFICATION] Scraped email {prospect.contact_email} not found in Snov results for {prospect.domain}")
                         else:
                             # Snov returned no results or failed
                             prospect.verification_status = (
