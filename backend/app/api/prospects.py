@@ -693,9 +693,27 @@ async def list_leads(
         logger.info(f"🔍 [LEADS] Total prospects with emails: {total}")
         
         # Get paginated results
-        result = await db.execute(query.offset(skip).limit(limit))
-        prospects = result.scalars().all()
-        logger.info(f"🔍 [LEADS] Found {len(prospects)} prospects from database query")
+        # Wrap in try/except to handle final_body column errors
+        try:
+            result = await db.execute(query.offset(skip).limit(limit))
+            prospects = result.scalars().all()
+            logger.info(f"🔍 [LEADS] Found {len(prospects)} prospects from database query")
+        except Exception as query_err:
+            error_msg = str(query_err).lower()
+            if 'final_body' in error_msg or ('column' in error_msg and 'does not exist' in error_msg):
+                logger.error(f"❌ [LEADS] Query failed due to missing final_body column: {query_err}")
+                logger.error(f"❌ [LEADS] Migration needs to run. Backend will add columns on next restart.")
+                await db.rollback()
+                # Return empty result instead of 500 error
+                return {
+                    "data": [],
+                    "total": total,  # Keep the count we got earlier
+                    "skip": skip,
+                    "limit": limit
+                }
+            else:
+                # Re-raise if it's a different error
+                raise
         
         # Safely convert prospects to response, handling NULL draft fields and missing columns
         prospect_responses = []
