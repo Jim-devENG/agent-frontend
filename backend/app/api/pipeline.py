@@ -1096,6 +1096,8 @@ async def get_websites(
                 # Skip this prospect but continue with others
                 continue
         
+        logger.info(f"✅ [WEBSITES] Returning {len(data)} websites (total: {total})")
+        
         return {
             "data": data,
             "total": total,
@@ -1104,11 +1106,75 @@ async def get_websites(
         }
     except Exception as e:
         logger.error(f"❌ Error in get_websites endpoint: {e}", exc_info=True)
+        try:
+            await db.rollback()  # Rollback on exception to prevent transaction poisoning
+        except Exception as rollback_err:
+            logger.error(f"❌ Error during rollback: {rollback_err}", exc_info=True)
         # Return empty result instead of 500 error
         return {
             "data": [],
             "total": 0,
             "skip": skip,
             "limit": limit
+        }
+
+
+@router.get("/debug/counts")
+async def debug_counts(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
+):
+    """
+    Debug endpoint to check raw database counts
+    Helps diagnose empty tabs issue
+    """
+    try:
+        from sqlalchemy import text
+        
+        # Get total prospects count
+        total_result = await db.execute(text("SELECT COUNT(*) FROM prospects"))
+        total = total_result.scalar() or 0
+        
+        # Get prospects with domain
+        domain_result = await db.execute(
+            text("SELECT COUNT(*) FROM prospects WHERE domain IS NOT NULL")
+        )
+        domain_count = domain_result.scalar() or 0
+        
+        # Get prospects with email
+        email_result = await db.execute(
+            text("SELECT COUNT(*) FROM prospects WHERE contact_email IS NOT NULL")
+        )
+        email_count = email_result.scalar() or 0
+        
+        # Get prospects with domain AND email
+        both_result = await db.execute(
+            text("""
+                SELECT COUNT(*) FROM prospects 
+                WHERE domain IS NOT NULL AND contact_email IS NOT NULL
+            """)
+        )
+        both_count = both_result.scalar() or 0
+        
+        logger.info(f"🔍 [DEBUG] Total prospects: {total}, with domain: {domain_count}, with email: {email_count}, with both: {both_count}")
+        
+        return {
+            "total_prospects": total,
+            "with_domain": domain_count,
+            "with_email": email_count,
+            "with_both": both_count
+        }
+    except Exception as e:
+        logger.error(f"❌ Error in debug_counts endpoint: {e}", exc_info=True)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        return {
+            "error": str(e),
+            "total_prospects": 0,
+            "with_domain": 0,
+            "with_email": 0,
+            "with_both": 0
         }
 
