@@ -265,13 +265,17 @@ export default function Pipeline() {
       name: 'Drafting',
       description: 'Generate outreach emails with Gemini',
       icon: FileText,
-      status: normalizedStatus.drafting_ready === 0 ? 'locked' :
-              normalizedStatus.drafted > 0 ? 'completed' : 'active',
+      // UNLOCK when drafts exist OR when verified prospects exist (drafting_ready > 0)
+      // This allows composing even if not all prospects are verified yet
+      status: (normalizedStatus.drafted > 0 || normalizedStatus.drafting_ready > 0) 
+        ? (normalizedStatus.drafted > 0 ? 'completed' : 'active')
+        : 'locked',
       count: normalizedStatus.drafted,
-      ctaText: normalizedStatus.drafting_ready === 0 ? 'Verify Leads First' :
-               normalizedStatus.drafted > 0 ? 'View Drafts' : 'Start Drafting',
+      ctaText: normalizedStatus.drafted > 0 ? 'View Drafts' :
+               normalizedStatus.drafting_ready === 0 ? 'Verify Leads First' :
+               'Start Drafting',
       ctaAction: () => {
-        if (normalizedStatus.drafting_ready === 0) {
+        if (normalizedStatus.drafting_ready === 0 && normalizedStatus.drafted === 0) {
           alert('Please verify leads first. Leads must be promoted, have emails, and be verified.')
           return
         }
@@ -283,13 +287,17 @@ export default function Pipeline() {
       name: 'Sending',
       description: 'Send emails via Gmail API',
       icon: Send,
-      status: normalizedStatus.send_ready_count === 0 ? 'locked' :
-              normalizedStatus.sent > 0 ? 'completed' : 'active',
+      // UNLOCK when drafts exist (drafted > 0) OR when send-ready exists (send_ready_count > 0)
+      // Backend will filter to only send verified + drafted + not sent prospects
+      status: (normalizedStatus.drafted > 0 || normalizedStatus.send_ready_count > 0)
+        ? (normalizedStatus.sent > 0 ? 'completed' : 'active')
+        : 'locked',
       count: normalizedStatus.sent,
-      ctaText: normalizedStatus.send_ready_count === 0 ? 'No Emails Ready' :
-               normalizedStatus.sent > 0 ? 'View Sent' : 'Start Sending',
+      ctaText: normalizedStatus.sent > 0 ? 'View Sent' :
+               normalizedStatus.drafted > 0 || normalizedStatus.send_ready_count > 0 ? 'Start Sending' :
+               'No Emails Ready',
       ctaAction: () => {
-        if (normalizedStatus.send_ready_count === 0) {
+        if (normalizedStatus.send_ready_count === 0 && normalizedStatus.drafted === 0) {
           alert('No emails ready for sending. Ensure prospects have verified email, draft subject, and draft body.')
           return
         }
