@@ -803,128 +803,128 @@ async def get_pipeline_status(
     )
     approved_count = approved.scalar() or 0
     
-        # Step 3: SCRAPED = Prospects with scrape_status IN ("SCRAPED", "ENRICHED")
-        # SINGLE SOURCE OF TRUTH: scrape_status IN ("SCRAPED", "ENRICHED")
+    # Step 3: SCRAPED = Prospects with scrape_status IN ("SCRAPED", "ENRICHED")
+    # SINGLE SOURCE OF TRUTH: scrape_status IN ("SCRAPED", "ENRICHED")
     scraped = await db.execute(
         select(func.count(Prospect.id)).where(
-                Prospect.scrape_status.in_([
-                    ScrapeStatus.SCRAPED.value,
-                    ScrapeStatus.ENRICHED.value
-                ])
+            Prospect.scrape_status.in_([
+                ScrapeStatus.SCRAPED.value,
+                ScrapeStatus.ENRICHED.value
+            ])
         )
     )
     scraped_count = scraped.scalar() or 0
-        logger.info(f"📊 [PIPELINE STATUS] SCRAPED count: {scraped_count} (scrape_status IN ('SCRAPED', 'ENRICHED'))")
-        
-        # Scrape-ready: any DISCOVERED prospect that has NOT been explicitly rejected.
-        # This unlocks scraping as soon as at least one website has been discovered,
-        # while still allowing optional manual rejection to exclude sites.
-        scrape_ready = await db.execute(
-        select(func.count(Prospect.id)).where(
-                Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value,
-                Prospect.approval_status != "rejected",
-            )
-        )
-        scrape_ready_count = scrape_ready.scalar() or 0
-        
-        # Stage-based counts (defensive: check if stage column exists)
-        email_found_count = 0
-        leads_count = 0
-        verified_stage_count = 0
-        
-        try:
-            # Check if stage column exists using raw SQL
-            column_check = await db.execute(
-                text("""
-                    SELECT column_name
-                    FROM information_schema.columns 
-                    WHERE table_name = 'prospects' 
-                    AND column_name = 'stage'
-                """)
-            )
-            if column_check.fetchone():
-                # Column exists - use raw SQL to query safely
-                # EMAIL_FOUND: prospects with emails found but not yet promoted to LEAD
-                email_found_result = await db.execute(
-                    text("""
-                        SELECT COUNT(*) 
-                        FROM prospects 
-                        WHERE stage = :stage_value
-                    """),
-                    {"stage_value": ProspectStage.EMAIL_FOUND.value}
-                )
-                email_found_count = email_found_result.scalar() or 0
-                
-                # LEAD: explicitly promoted leads (ready for outreach)
-                leads_result = await db.execute(
-                    text("""
-                        SELECT COUNT(*) 
-                        FROM prospects 
-                        WHERE stage = :stage_value
-                    """),
-                    {"stage_value": ProspectStage.LEAD.value}
-                )
-                leads_count = leads_result.scalar() or 0
-                
-                # VERIFIED: prospects with verified emails
-                verified_stage_result = await db.execute(
-                    text("""
-                        SELECT COUNT(*) 
-                        FROM prospects 
-                        WHERE stage = :stage_value
-                    """),
-                    {"stage_value": ProspectStage.VERIFIED.value}
-                )
-                verified_stage_count = verified_stage_result.scalar() or 0
-            else:
-                # Column doesn't exist yet - fallback to scrape_status + email
-                logger.warning("⚠️  stage column not found, using fallback logic for stage counts")
-                # Fallback: count prospects with emails as EMAIL_FOUND
-                email_found_fallback = await db.execute(
-                    select(func.count(Prospect.id)).where(
-                        Prospect.scrape_status.in_([ScrapeStatus.SCRAPED.value, ScrapeStatus.ENRICHED.value]),
-                        Prospect.contact_email.isnot(None)
-                    )
-                )
-                email_found_count = email_found_fallback.scalar() or 0
-                leads_count = 0  # No leads without stage column
-        except Exception as e:
-            logger.error(f"❌ Error counting stage-based prospects: {e}", exc_info=True)
-            # Fallback to scrape_status + email if stage query fails
-            try:
-                email_found_fallback = await db.execute(
-                    select(func.count(Prospect.id)).where(
-                        Prospect.scrape_status.in_([ScrapeStatus.SCRAPED.value, ScrapeStatus.ENRICHED.value]),
-                        Prospect.contact_email.isnot(None)
-                    )
-                )
-                email_found_count = email_found_fallback.scalar() or 0
-            except Exception as fallback_err:
-                logger.error(f"❌ Fallback stage count also failed: {fallback_err}", exc_info=True)
-                email_found_count = 0
-                leads_count = 0
-        
-        # Step 3.5: EMAILS FOUND (contact_email IS NOT NULL)
-        # Count all prospects with emails (regardless of verification status)
-        emails_found = await db.execute(
-            select(func.count(Prospect.id)).where(
-                Prospect.contact_email.isnot(None)
-            )
-        )
-        emails_found_count = emails_found.scalar() or 0
+    logger.info(f"📊 [PIPELINE STATUS] SCRAPED count: {scraped_count} (scrape_status IN ('SCRAPED', 'ENRICHED'))")
     
-        # Step 4: VERIFIED = Prospects where verification_status == "verified"
-        # SINGLE SOURCE OF TRUTH: verification_status = "verified"
+    # Scrape-ready: any DISCOVERED prospect that has NOT been explicitly rejected.
+    # This unlocks scraping as soon as at least one website has been discovered,
+    # while still allowing optional manual rejection to exclude sites.
+    scrape_ready = await db.execute(
+        select(func.count(Prospect.id)).where(
+            Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value,
+            Prospect.approval_status != "rejected",
+        )
+    )
+    scrape_ready_count = scrape_ready.scalar() or 0
+    
+    # Stage-based counts (defensive: check if stage column exists)
+    email_found_count = 0
+    leads_count = 0
+    verified_stage_count = 0
+    
+    try:
+        # Check if stage column exists using raw SQL
+        column_check = await db.execute(
+            text("""
+                SELECT column_name
+                FROM information_schema.columns 
+                WHERE table_name = 'prospects' 
+                AND column_name = 'stage'
+            """)
+        )
+        if column_check.fetchone():
+            # Column exists - use raw SQL to query safely
+            # EMAIL_FOUND: prospects with emails found but not yet promoted to LEAD
+            email_found_result = await db.execute(
+                text("""
+                    SELECT COUNT(*) 
+                    FROM prospects 
+                    WHERE stage = :stage_value
+                """),
+                {"stage_value": ProspectStage.EMAIL_FOUND.value}
+            )
+            email_found_count = email_found_result.scalar() or 0
+            
+            # LEAD: explicitly promoted leads (ready for outreach)
+            leads_result = await db.execute(
+                text("""
+                    SELECT COUNT(*) 
+                    FROM prospects 
+                    WHERE stage = :stage_value
+                """),
+                {"stage_value": ProspectStage.LEAD.value}
+            )
+            leads_count = leads_result.scalar() or 0
+            
+            # VERIFIED: prospects with verified emails
+            verified_stage_result = await db.execute(
+                text("""
+                    SELECT COUNT(*) 
+                    FROM prospects 
+                    WHERE stage = :stage_value
+                """),
+                {"stage_value": ProspectStage.VERIFIED.value}
+            )
+            verified_stage_count = verified_stage_result.scalar() or 0
+        else:
+            # Column doesn't exist yet - fallback to scrape_status + email
+            logger.warning("⚠️  stage column not found, using fallback logic for stage counts")
+            # Fallback: count prospects with emails as EMAIL_FOUND
+            email_found_fallback = await db.execute(
+                select(func.count(Prospect.id)).where(
+                    Prospect.scrape_status.in_([ScrapeStatus.SCRAPED.value, ScrapeStatus.ENRICHED.value]),
+                    Prospect.contact_email.isnot(None)
+                )
+            )
+            email_found_count = email_found_fallback.scalar() or 0
+            leads_count = 0  # No leads without stage column
+    except Exception as e:
+        logger.error(f"❌ Error counting stage-based prospects: {e}", exc_info=True)
+        # Fallback to scrape_status + email if stage query fails
+        try:
+            email_found_fallback = await db.execute(
+                select(func.count(Prospect.id)).where(
+                    Prospect.scrape_status.in_([ScrapeStatus.SCRAPED.value, ScrapeStatus.ENRICHED.value]),
+                    Prospect.contact_email.isnot(None)
+                )
+            )
+            email_found_count = email_found_fallback.scalar() or 0
+        except Exception as fallback_err:
+            logger.error(f"❌ Fallback stage count also failed: {fallback_err}", exc_info=True)
+            email_found_count = 0
+            leads_count = 0
+    
+    # Step 3.5: EMAILS FOUND (contact_email IS NOT NULL)
+    # Count all prospects with emails (regardless of verification status)
+    emails_found = await db.execute(
+        select(func.count(Prospect.id)).where(
+            Prospect.contact_email.isnot(None)
+        )
+    )
+    emails_found_count = emails_found.scalar() or 0
+
+    # Step 4: VERIFIED = Prospects where verification_status == "verified"
+    # SINGLE SOURCE OF TRUTH: verification_status = "verified"
     verified = await db.execute(
         select(func.count(Prospect.id)).where(
             Prospect.verification_status == VerificationStatus.VERIFIED.value
         )
     )
     verified_count = verified.scalar() or 0
-        logger.info(f"📊 [PIPELINE STATUS] VERIFIED count: {verified_count} (verification_status = 'verified')")
-        
-        # Also count verified with email (for backwards compatibility)
-        emails_verified = await db.execute(
+    logger.info(f"📊 [PIPELINE STATUS] VERIFIED count: {verified_count} (verification_status = 'verified')")
+    
+    # Also count verified with email (for backwards compatibility)
+    emails_verified = await db.execute(
             select(func.count(Prospect.id)).where(
                 Prospect.verification_status == VerificationStatus.VERIFIED.value,
                 Prospect.contact_email.isnot(None)
