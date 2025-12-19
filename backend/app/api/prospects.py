@@ -844,51 +844,46 @@ async def list_scraped_emails(
         prospects = result.scalars().all()
         logger.info(f"🔍 [SCRAPED EMAILS] Found {len(prospects)} prospects from database query")
         
-        # Safely convert prospects to response
+        # Safely convert prospects to response - use manual dict construction to avoid final_body issues
         prospect_responses = []
         conversion_errors = 0
         for p in prospects:
             try:
-                prospect_responses.append(ProspectResponse.model_validate(p))
+                # Manually build response dict to avoid final_body issues
+                response_dict = {
+                    "id": p.id,
+                    "domain": p.domain or "",
+                    "page_url": getattr(p, 'page_url', None),
+                    "page_title": getattr(p, 'page_title', None),
+                    "contact_email": getattr(p, 'contact_email', None),
+                    "contact_method": getattr(p, 'contact_method', None),
+                    "da_est": getattr(p, 'da_est', None),
+                    "score": getattr(p, 'score', None),
+                    "outreach_status": getattr(p, 'outreach_status', 'pending'),
+                    "last_sent": getattr(p, 'last_sent', None).isoformat() if getattr(p, 'last_sent', None) else None,
+                    "followups_sent": getattr(p, 'followups_sent', 0) or 0,
+                    "draft_subject": getattr(p, 'draft_subject', None),
+                    "draft_body": getattr(p, 'draft_body', None),
+                    # final_body is commented out in schema, so don't include it
+                    "thread_id": getattr(p, 'thread_id', None),
+                    "sequence_index": getattr(p, 'sequence_index', None) or 0,
+                    "is_manual": getattr(p, 'is_manual', None) or False,
+                    "discovery_status": getattr(p, 'discovery_status', None),
+                    "approval_status": getattr(p, 'approval_status', None),
+                    "scrape_status": getattr(p, 'scrape_status', None),
+                    "verification_status": getattr(p, 'verification_status', None),
+                    "draft_status": getattr(p, 'draft_status', None),
+                    "send_status": getattr(p, 'send_status', None),
+                    "stage": getattr(p, 'stage', None),
+                    "created_at": getattr(p, 'created_at', None).isoformat() if getattr(p, 'created_at', None) else None,
+                    "updated_at": getattr(p, 'updated_at', None).isoformat() if getattr(p, 'updated_at', None) else None,
+                }
+                prospect_responses.append(ProspectResponse(**response_dict))
             except Exception as e:
                 conversion_errors += 1
                 error_msg = str(e).lower()
                 logger.warning(f"⚠️  Error converting prospect {getattr(p, 'id', 'unknown')}: {error_msg[:200]}")
-                
-                # Try fallback conversion
-                try:
-                    response_dict = {
-                        "id": str(p.id) if p.id else "",
-                        "domain": p.domain or "",
-                        "page_url": getattr(p, 'page_url', None),
-                        "page_title": getattr(p, 'page_title', None),
-                        "contact_email": getattr(p, 'contact_email', None),
-                        "contact_method": getattr(p, 'contact_method', None),
-                        "da_est": getattr(p, 'da_est', None),
-                        "score": getattr(p, 'score', None),
-                        "outreach_status": getattr(p, 'outreach_status', 'pending'),
-                        "last_sent": getattr(p, 'last_sent', None).isoformat() if getattr(p, 'last_sent', None) else None,
-                        "followups_sent": getattr(p, 'followups_sent', 0) or 0,
-                        "draft_subject": getattr(p, 'draft_subject', None),
-                        "draft_body": getattr(p, 'draft_body', None),
-                        "final_body": None,
-                        "thread_id": getattr(p, 'thread_id', None),
-                        "sequence_index": getattr(p, 'sequence_index', None) or 0,
-                        "is_manual": getattr(p, 'is_manual', None) or False,
-                        "discovery_status": getattr(p, 'discovery_status', None),
-                        "approval_status": getattr(p, 'approval_status', None),
-                        "scrape_status": getattr(p, 'scrape_status', None),
-                        "verification_status": getattr(p, 'verification_status', None),
-                        "draft_status": getattr(p, 'draft_status', None),
-                        "send_status": getattr(p, 'send_status', None),
-                        "stage": getattr(p, 'stage', None),
-                        "created_at": getattr(p, 'created_at', None).isoformat() if getattr(p, 'created_at', None) else None,
-                        "updated_at": getattr(p, 'updated_at', None).isoformat() if getattr(p, 'updated_at', None) else None,
-                    }
-                    prospect_responses.append(ProspectResponse(**response_dict))
-                except Exception as fallback_err:
-                    logger.error(f"❌ Fallback conversion also failed: {fallback_err}")
-                    continue
+                continue
         
         if conversion_errors > 0:
             logger.warning(f"⚠️  [SCRAPED EMAILS] Had {conversion_errors} conversion errors, but {len(prospect_responses)} prospects converted successfully")
