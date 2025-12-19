@@ -126,7 +126,8 @@ async def verify_prospects_async(job_id: str):
                     logger.info(f"✅ [VERIFICATION] [{idx}/{len(prospects)}] Verifying {prospect.domain}...")
                     
                     # If prospect has scraped email, verify it
-                    if prospect.contact_email and prospect.scrape_status == "SCRAPED":
+                    # CRITICAL: Process both SCRAPED and ENRICHED prospects (matches verify endpoint logic)
+                    if prospect.contact_email and prospect.scrape_status in [ScrapeStatus.SCRAPED.value, ScrapeStatus.ENRICHED.value]:
                         # Verify existing scraped email
                         snov_result = await snov_client.domain_search(prospect.domain)
                         
