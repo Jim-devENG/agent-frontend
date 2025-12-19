@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, Users } from 'lucide-react'
-import { listLeads, promoteToLead, composeEmail, sendEmail, type Prospect } from '@/lib/api'
+import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, Users, Globe, CheckCircle } from 'lucide-react'
+import { listLeads, promoteToLead, composeEmail, sendEmail, manualScrape, manualVerify, type Prospect } from '@/lib/api'
 import { safeToFixed } from '@/lib/safe-utils'
 
 interface LeadsTableProps {
@@ -21,6 +21,14 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
   const [draftBody, setDraftBody] = useState('')
   const [isComposing, setIsComposing] = useState(false)
   const [isSending, setIsSending] = useState(false)
+
+  // Manual actions state
+  const [showManualActions, setShowManualActions] = useState(false)
+  const [manualWebsiteUrl, setManualWebsiteUrl] = useState('')
+  const [manualEmail, setManualEmail] = useState('')
+  const [isManualScraping, setIsManualScraping] = useState(false)
+  const [isManualVerifying, setIsManualVerifying] = useState(false)
+  const [manualSuccess, setManualSuccess] = useState<string | null>(null)
 
   const [error, setError] = useState<string | null>(null)
 
@@ -161,20 +169,171 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     }
   }
 
+  const handleManualScrape = async () => {
+    if (!manualWebsiteUrl.trim()) {
+      setError('Please enter a website URL')
+      return
+    }
+
+    try {
+      setIsManualScraping(true)
+      setError(null)
+      setManualSuccess(null)
+      const result = await manualScrape({ website_url: manualWebsiteUrl.trim() })
+      setManualSuccess(result.is_followup 
+        ? `✅ Website already exists - marked as follow-up candidate. ${result.message}`
+        : `✅ Website scraped successfully! ${result.message}`)
+      setManualWebsiteUrl('')
+      // Reload prospects after scraping
+      setTimeout(() => {
+        loadProspects()
+      }, 1000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to scrape website')
+    } finally {
+      setIsManualScraping(false)
+    }
+  }
+
+  const handleManualVerify = async () => {
+    if (!manualEmail.trim()) {
+      setError('Please enter an email address')
+      return
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(manualEmail.trim())) {
+      setError('Please enter a valid email address')
+      return
+    }
+
+    try {
+      setIsManualVerifying(true)
+      setError(null)
+      setManualSuccess(null)
+      const result = await manualVerify({ email: manualEmail.trim() })
+      setManualSuccess(result.is_followup
+        ? `✅ Email already exists - verified. Status: ${result.verification_status}`
+        : `✅ Email verified! Status: ${result.verification_status}`)
+      setManualEmail('')
+      // Reload prospects after verification
+      setTimeout(() => {
+        loadProspects()
+      }, 1000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to verify email')
+    } finally {
+      setIsManualVerifying(false)
+    }
+  }
+
   return (
     <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-gray-900">
           {emailsOnly ? 'Scraped Emails' : 'Leads'}
         </h2>
-        <button
-          onClick={loadProspects}
-          className="flex items-center space-x-2 px-3 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setShowManualActions(!showManualActions)}
+            className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md"
+          >
+            <Globe className="w-4 h-4" />
+            <span>Manual Actions</span>
+          </button>
+          <button
+            onClick={loadProspects}
+            className="flex items-center space-x-2 px-3 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+          </button>
+        </div>
       </div>
+
+      {/* Manual Actions Panel */}
+      {showManualActions && (
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Manual Input</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Manual Scrape */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Globe className="w-4 h-4 inline mr-1" />
+                Scrape Website
+              </label>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={manualWebsiteUrl}
+                  onChange={(e) => setManualWebsiteUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-olive-500 focus:border-olive-500"
+                  disabled={isManualScraping}
+                />
+                <button
+                  onClick={handleManualScrape}
+                  disabled={isManualScraping || !manualWebsiteUrl.trim()}
+                  className="px-4 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {isManualScraping ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Scraping...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Globe className="w-4 h-4" />
+                      <span>Scrape</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Manual Verify */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <CheckCircle className="w-4 h-4 inline mr-1" />
+                Verify Email
+              </label>
+              <div className="flex space-x-2">
+                <input
+                  type="email"
+                  value={manualEmail}
+                  onChange={(e) => setManualEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-olive-500 focus:border-olive-500"
+                  disabled={isManualVerifying}
+                />
+                <button
+                  onClick={handleManualVerify}
+                  disabled={isManualVerifying || !manualEmail.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {isManualVerifying ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Verifying...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Verify</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+          {manualSuccess && (
+            <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
+              {manualSuccess}
+            </div>
+          )}
+        </div>
+      )}
 
       {loading && prospects.length === 0 ? (
         <div className="text-center py-8">

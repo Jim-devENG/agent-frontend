@@ -1233,3 +1233,54 @@ export async function pipelineStatus(): Promise<PipelineStatus> {
   }
   return res.json()
 }
+
+// ============================================
+// MANUAL INPUT ENDPOINTS
+// ============================================
+
+export interface ManualScrapeRequest {
+  website_url: string
+}
+
+export interface ManualScrapeResponse {
+  success: boolean
+  prospect_id: string
+  message: string
+  is_followup: boolean
+}
+
+export async function manualScrape(request: ManualScrapeRequest): Promise<ManualScrapeResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/manual/scrape`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to scrape website' }))
+    throw new Error(error.detail || 'Failed to scrape website')
+  }
+  return res.json()
+}
+
+export interface ManualVerifyRequest {
+  email: string
+}
+
+export interface ManualVerifyResponse {
+  success: boolean
+  prospect_id: string
+  message: string
+  verification_status: string
+  is_followup: boolean
+}
+
+export async function manualVerify(request: ManualVerifyRequest): Promise<ManualVerifyResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/manual/verify`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to verify email' }))
+    throw new Error(error.detail || 'Failed to verify email')
+  }
+  return res.json()
+}
