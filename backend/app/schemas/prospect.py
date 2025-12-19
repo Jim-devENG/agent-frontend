@@ -23,6 +23,11 @@ class ProspectResponse(BaseModel):
     followups_sent: int
     draft_subject: Optional[str] = None
     draft_body: Optional[str] = None
+    drafted_at: Optional[datetime] = None  # When draft was created
+    final_body: Optional[str] = None  # Final sent email body (moved from draft_body after sending)
+    thread_id: Optional[UUID] = None  # Thread ID for follow-up emails
+    sequence_index: Optional[int] = None  # Follow-up sequence (0 = initial, 1+ = follow-up)
+    is_manual: Optional[bool] = None  # True if manually added, False otherwise
     serp_intent: Optional[str] = None  # SERP intent: service, brand, blog, media, marketplace, platform, unknown
     serp_confidence: Optional[Decimal] = None  # Confidence score (0.0-1.0)
     serp_signals: Optional[list[str]] = None  # List of signals that led to intent classification

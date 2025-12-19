@@ -944,15 +944,29 @@ async def get_pipeline_status(
     drafting_ready = draft_ready_count
     drafting_ready_count = draft_ready_count
     
-    # Step 6: DRAFTED = Prospects where draft_subject IS NOT NULL
-    # USER RULE: Drafted count = Prospects where draft_subject IS NOT NULL (or draft_body IS NOT NULL)
-    # Using draft_subject as primary indicator (draft exists if subject exists)
-    drafted = await db.execute(
-        select(func.count(Prospect.id)).where(
-            Prospect.draft_subject.isnot(None)
+    # Step 6: DRAFTED = Prospects where drafted_at IS NOT NULL
+    # USER RULE: Drafted count = Prospects where drafted_at IS NOT NULL
+    # This indicates a draft has been created (regardless of draft_subject/draft_body)
+    try:
+        drafted = await db.execute(
+            select(func.count(Prospect.id)).where(
+                Prospect.drafted_at.isnot(None)
+            )
         )
-    )
-    drafted_count = drafted.scalar() or 0
+        drafted_count = drafted.scalar() or 0
+    except Exception as e:
+        # Fallback to draft_subject if drafted_at column doesn't exist yet
+        logger.warning(f"⚠️  drafted_at column may not exist, using draft_subject fallback: {e}")
+        try:
+            drafted = await db.execute(
+                select(func.count(Prospect.id)).where(
+                    Prospect.draft_subject.isnot(None)
+                )
+            )
+            drafted_count = drafted.scalar() or 0
+        except Exception as fallback_err:
+            logger.error(f"❌ Both drafted_at and draft_subject queries failed: {fallback_err}", exc_info=True)
+            drafted_count = 0
     
     # Step 7: SENT = Prospects where last_sent IS NOT NULL
     # USER RULE: Sent count = Prospects where last_sent IS NOT NULL

@@ -2,7 +2,7 @@
 Prospect model - stores discovered websites and their contact information
 STRICT PIPELINE: Each step has explicit status tracking
 """
-from sqlalchemy import Column, String, Text, Numeric, Integer, DateTime, JSON, ForeignKey
+from sqlalchemy import Column, String, Text, Numeric, Integer, DateTime, JSON, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -145,7 +145,7 @@ class Prospect(Base):
     final_body = Column(Text)  # Final sent email body (moved from draft_body after sending)
     thread_id = Column(UUID(as_uuid=True), index=True)  # Thread ID for follow-up emails
     sequence_index = Column(Integer, default=0)  # Follow-up sequence (0 = initial, 1+ = follow-up)
-    is_manual = Column(String, default="false")  # "true" if manually added, "false" otherwise
+    is_manual = Column(Boolean, default=False, nullable=True)  # True if manually added, False otherwise
     
     # Discovery metadata
     discovery_query_id = Column(UUID(as_uuid=True), ForeignKey("discovery_queries.id"), nullable=True, index=True)

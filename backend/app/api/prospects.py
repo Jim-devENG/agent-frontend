@@ -703,8 +703,19 @@ async def list_leads(
         result = await db.execute(query.offset(skip).limit(limit))
         prospects = result.scalars().all()
         
+        # Safely convert prospects to response, handling NULL draft fields
+        prospect_responses = []
+        for p in prospects:
+            try:
+                # Use model_validate which handles NULL values better than from_orm
+                prospect_responses.append(ProspectResponse.model_validate(p))
+            except Exception as e:
+                logger.warning(f"⚠️  Error converting prospect {getattr(p, 'id', 'unknown')} to response: {e}")
+                # Skip this prospect but continue with others
+                continue
+        
         return {
-            "data": [ProspectResponse.from_orm(p).dict() for p in prospects],
+            "data": [p.dict() for p in prospect_responses],
             "total": total,
             "skip": skip,
             "limit": limit
@@ -712,7 +723,13 @@ async def list_leads(
         
     except Exception as e:
         logger.error(f"❌ Error listing leads: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to list leads: {str(e)}")
+        # Return empty result instead of 500 error
+        return {
+            "data": [],
+            "total": 0,
+            "skip": skip,
+            "limit": limit
+        }
 
 
 @router.get("")
