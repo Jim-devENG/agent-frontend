@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, Users, Globe, CheckCircle } from 'lucide-react'
+import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, Users, Globe, CheckCircle, Eye, Edit2 } from 'lucide-react'
 import { listLeads, listScrapedEmails, promoteToLead, composeEmail, sendEmail, manualScrape, manualVerify, type Prospect } from '@/lib/api'
 import { safeToFixed } from '@/lib/safe-utils'
 
@@ -513,7 +513,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
       {/* Compose / Review Modal */}
       {activeProspect && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-height-[80vh] max-h-[80vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-height-[85vh] max-h-[85vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">
@@ -531,30 +531,116 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Subject
-                </label>
-                <input
-                  type="text"
-                  value={draftSubject}
-                  onChange={(e) => setDraftSubject(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-olive-500 text-sm"
-                  placeholder="Email subject"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Message
-                </label>
-                <textarea
-                  value={draftBody}
-                  onChange={(e) => setDraftBody(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-olive-500 text-sm h-48 resize-vertical"
-                  placeholder="Your email message will appear here. You can edit it before sending."
-                />
-              </div>
+            {/* Tabs */}
+            <div className="flex border-b border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setActiveTab('edit')}
+                className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'edit'
+                    ? 'text-olive-600 border-b-2 border-olive-600 bg-white'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Edit2 className="w-4 h-4" />
+                <span>Edit</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('preview')}
+                className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'preview'
+                    ? 'text-olive-600 border-b-2 border-olive-600 bg-white'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Eye className="w-4 h-4" />
+                <span>Preview</span>
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            <div className="flex-1 overflow-y-auto">
+              {activeTab === 'edit' ? (
+                <div className="p-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Subject
+                    </label>
+                    <input
+                      type="text"
+                      value={draftSubject}
+                      onChange={(e) => setDraftSubject(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-olive-500 text-sm"
+                      placeholder="Email subject"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Message
+                    </label>
+                    <textarea
+                      value={draftBody}
+                      onChange={(e) => setDraftBody(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-olive-500 text-sm h-64 resize-vertical"
+                      placeholder="Your email message will appear here. You can edit it before sending."
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4">
+                  {/* Email Preview - styled like Gmail */}
+                  <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                    {/* Email Header */}
+                    <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="text-sm font-semibold text-gray-900 mb-1">
+                            {draftSubject || '(No subject)'}
+                          </div>
+                          <div className="text-xs text-gray-600 space-y-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">From:</span>
+                              <span>Your Email (via Gmail)</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">To:</span>
+                              <span>{activeProspect.contact_email}</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">Date:</span>
+                              <span>{new Date().toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Email Body */}
+                    <div className="px-4 py-6">
+                      <div className="prose prose-sm max-w-none">
+                        <div 
+                          className="text-gray-900 whitespace-pre-wrap leading-relaxed"
+                          style={{ 
+                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                            lineHeight: '1.6'
+                          }}
+                        >
+                          {draftBody || (
+                            <span className="text-gray-400 italic">No message content yet. Switch to Edit tab to compose.</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Preview Info */}
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <p className="text-xs text-blue-800">
+                      <strong>Preview:</strong> This is how your email will appear to the recipient. 
+                      The actual email will be sent via Gmail API.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
