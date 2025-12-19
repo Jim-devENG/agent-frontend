@@ -200,13 +200,20 @@ async def verify_prospects_async(job_id: str):
                             confidence = 0.5  # Lower confidence since not confirmed by Snov
                             logger.info(f"✅ [VERIFICATION] Email '{scraped_email}' not in Snov results, but verified because it was scraped from {prospect.domain} website")
                         
-                        # Always verify scraped emails (we found them on the website, so they're valid)
-                        prospect.verification_status = VerificationStatus.VERIFIED.value
-                        prospect.verification_confidence = confidence
-                        prospect.verification_payload = snov_result
-                        verified_count += 1
-                        logger.info(f"✅ [VERIFICATION] Verified scraped email for {prospect.domain}: {prospect.contact_email} (confidence: {confidence})")
-                        logger.info(f"📝 [VERIFICATION] Updated prospect {prospect.id} - verification_status=VERIFIED, stage=LEAD")
+                            # Always verify scraped emails (we found them on the website, so they're valid)
+                            prospect.verification_status = VerificationStatus.VERIFIED.value
+                            prospect.verification_confidence = confidence
+                            prospect.verification_payload = snov_result
+                            verified_count += 1
+                            logger.info(f"✅ [VERIFICATION] Verified scraped email for {prospect.domain}: {prospect.contact_email} (confidence: {confidence})")
+                            logger.info(f"📝 [VERIFICATION] Updated prospect {prospect.id} - verification_status=VERIFIED, stage=LEAD")
+                            
+                            # CRITICAL: Commit immediately after setting verification_status
+                            await db.commit()
+                            await db.refresh(prospect)
+                            logger.debug(f"💾 [VERIFICATION] Committed verification for prospect {prospect.id}, verification_status is now: {prospect.verification_status}")
+                        else:
+                            logger.warning(f"⚠️  [VERIFICATION] Skipping prospect {prospect.id} - no email or invalid scrape_status")
                     
                     elif (
                         prospect.scrape_status == ScrapeStatus.NO_EMAIL_FOUND.value
