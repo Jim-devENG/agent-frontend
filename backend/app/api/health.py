@@ -104,20 +104,32 @@ async def gmail_health_check():
             token_refresh_success = await gmail_client.refresh_access_token()
             details["token_refresh_test"] = "success" if token_refresh_success else "failed"
             if token_refresh_success:
-                details["message"] = "Gmail is configured and token refresh works. Ready to send emails."
+                details["message"] = "✅ Gmail is configured and token refresh works. Ready to send emails."
+                details["ready_to_send"] = True
             else:
-                details["message"] = "Gmail credentials are set, but token refresh failed. Check refresh token validity."
+                details["message"] = "⚠️ Gmail credentials are set, but token refresh failed. Check refresh token validity."
+                details["ready_to_send"] = False
                 details["troubleshooting"] = (
                     "Token refresh failed. Possible causes:\n"
-                    "1. Refresh token expired or revoked - generate a new one\n"
+                    "1. Refresh token expired or revoked - generate a new one using OAuth Playground\n"
                     "2. OAuth consent screen not configured correctly\n"
-                    "3. Required Gmail API scopes not granted\n"
-                    "4. Client ID/Secret mismatch"
+                    "3. Required Gmail API scopes not granted - need: https://www.googleapis.com/auth/gmail.send\n"
+                    "4. Client ID/Secret mismatch - verify they match Google Cloud Console\n"
+                    "5. Refresh token generated with different client ID"
                 )
+                details["required_scopes"] = [
+                    "https://www.googleapis.com/auth/gmail.send"
+                ]
+        except ValueError as ve:
+            details["token_refresh_test"] = "error"
+            details["token_refresh_error"] = str(ve)
+            details["message"] = f"Gmail client initialization failed: {str(ve)}"
+            details["ready_to_send"] = False
         except Exception as e:
             details["token_refresh_test"] = "error"
             details["token_refresh_error"] = str(e)
             details["message"] = f"Gmail credentials are set, but initialization failed: {str(e)}"
+            details["ready_to_send"] = False
     elif not is_configured:
         details["message"] = (
             "Gmail is not configured. To enable email sending, set one of the following:\n"
