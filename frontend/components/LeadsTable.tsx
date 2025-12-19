@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, Users, Globe, CheckCircle } from 'lucide-react'
-import { listLeads, listScrapedEmails, promoteToLead, composeEmail, manualScrape, manualVerify, type Prospect } from '@/lib/api'
+import { listLeads, listScrapedEmails, promoteToLead, composeEmail, sendEmail, manualScrape, manualVerify, type Prospect } from '@/lib/api'
 import { safeToFixed } from '@/lib/safe-utils'
 
 interface LeadsTableProps {
@@ -20,6 +20,8 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
   const [draftSubject, setDraftSubject] = useState('')
   const [draftBody, setDraftBody] = useState('')
   const [isComposing, setIsComposing] = useState(false)
+  const [isSending, setIsSending] = useState(false)
+  const [isSending, setIsSending] = useState(false)
 
   // Manual actions state
   const [showManualActions, setShowManualActions] = useState(false)
@@ -161,9 +163,39 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     setDraftBody('')
   }
 
-  // REMOVED: handleSend function
-  // Compose is DRAFT-ONLY. Sending must happen via Pipeline Send card.
-  // Individual send endpoint is disabled (410 Gone).
+  const handleSendNow = async () => {
+    if (!activeProspect) return
+    
+    // Validate draft exists
+    if (!activeProspect.draft_subject || !activeProspect.draft_body) {
+      alert('No draft email found. Please compose email first.')
+      return
+    }
+    
+    setIsSending(true)
+    try {
+      await sendEmail(activeProspect.id)
+      
+      // Success - close modal, refresh data, show confirmation
+      closeComposeModal()
+      
+      // Refresh prospects list
+      await loadProspects()
+      
+      // Refresh pipeline status
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('refreshPipelineStatus'))
+      }
+      
+      alert('Email sent successfully!')
+    } catch (error: any) {
+      console.error('Failed to send email:', error)
+      // Error messages are already specific from API (400, 409, 500)
+      alert(error.message || 'Failed to send email')
+    } finally {
+      setIsSending(false)
+    }
+  }
   // Use pipelineSend() from the Pipeline page instead.
 
   const handleManualScrape = async () => {
@@ -527,7 +559,9 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
 
             <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
               <p className="text-xs text-gray-500">
-                This is a DRAFT ONLY. To send emails, use the Pipeline → Send card.
+                {activeProspect.draft_subject && activeProspect.draft_body
+                  ? 'Review and send your drafted email, or send via Pipeline.'
+                  : 'This is a DRAFT ONLY. To send emails, use the Pipeline → Send card.'}
               </p>
               <div className="flex items-center space-x-2">
                 <button
@@ -536,6 +570,16 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                 >
                   Close
                 </button>
+                {activeProspect.draft_subject && activeProspect.draft_body && (
+                  <button
+                    onClick={handleSendNow}
+                    disabled={isSending}
+                    className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>{isSending ? 'Sending...' : 'Send Now'}</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     // Navigate to Pipeline tab to use Send card
@@ -545,7 +589,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                   }}
                   className="flex items-center space-x-2 px-4 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700"
                 >
-                      <Send className="w-4 h-4" />
+                  <Send className="w-4 h-4" />
                   <span>Go to Pipeline to Send</span>
                 </button>
               </div>

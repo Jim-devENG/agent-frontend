@@ -729,9 +729,7 @@ export async function composeEmail(prospectId: string): Promise<{
 }
 
 export async function sendEmail(
-  prospectId: string,
-  subject?: string,
-  body?: string
+  prospectId: string
 ): Promise<{
   prospect_id: string
   email_log_id: string
@@ -739,15 +737,23 @@ export async function sendEmail(
   success: boolean
   message_id?: string
 }> {
+  // Manual send endpoint - sends existing draft (no body content in request)
+  // Email content comes ONLY from database (draft_subject, draft_body)
   const res = await authenticatedFetch(`${API_BASE}/prospects/${prospectId}/send`, {
     method: 'POST',
-    body: JSON.stringify({
-      subject,
-      body,
-    }),
+    // No body - endpoint uses draft from database
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to send email' }))
+    const status = res.status
+    // Map HTTP status codes to specific error messages
+    if (status === 400) {
+      throw new Error(error.detail || 'Prospect is not ready for sending. Ensure draft exists and email is verified.')
+    } else if (status === 409) {
+      throw new Error(error.detail || 'Email already sent for this prospect.')
+    } else if (status === 500) {
+      throw new Error(error.detail || 'Failed to send email. Please try again.')
+    }
     throw new Error(error.detail || 'Failed to send email')
   }
   return res.json()

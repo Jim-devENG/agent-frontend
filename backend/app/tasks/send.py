@@ -123,12 +123,10 @@ async def process_send_job(job_id: str) -> Dict[str, Any]:
                     logger.info(f"📧 [SEND] [{idx}/{len(prospects)}] Processing {prospect.domain} ({prospect.contact_email})")
                     logger.info(f"📥 [SEND] Input - prospect_id: {prospect.id}, email: {prospect.contact_email}, has_draft: {bool(prospect.draft_subject and prospect.draft_body)}")
                     
-                    # Get or compose email
-                    subject = prospect.draft_subject
-                    body = prospect.draft_body
-                    
-                    # If no draft and auto_send is enabled, compose email
-                    if (not subject or not body) and gemini_client:
+                    # Validate prospect has draft before sending
+                    # The shared send service will validate draft_subject and draft_body exist
+                    # If no draft and auto_send is enabled, compose email first
+                    if (not prospect.draft_subject or not prospect.draft_body) and gemini_client:
                         logger.info(f"📝 [{idx}/{len(prospects)}] Composing email for {prospect.domain}...")
                         
                         # Extract context for email composition
@@ -156,82 +154,51 @@ async def process_send_job(job_id: str) -> Dict[str, Any]:
                         )
                         
                         if gemini_result.get("success"):
-                            subject = gemini_result.get("subject")
-                            body = gemini_result.get("body")
-                            prospect.draft_subject = subject
-                            prospect.draft_body = body
+                            prospect.draft_subject = gemini_result.get("subject")
+                            prospect.draft_body = gemini_result.get("body")
+                            await db.commit()
+                            await db.refresh(prospect)
                             logger.info(f"✅ [{idx}/{len(prospects)}] Email composed for {prospect.domain}")
                         else:
                             error_msg = gemini_result.get('error', 'Unknown error')
                             logger.warning(f"⚠️  [{idx}/{len(prospects)}] Failed to compose email for {prospect.domain}: {error_msg}")
                             failed_count += 1
                             continue
-                    elif not subject or not body:
+                    elif not prospect.draft_subject or not prospect.draft_body:
                         logger.warning(f"⚠️  [{idx}/{len(prospects)}] No draft email for {prospect.domain} and auto_send is False")
                         skipped_count += 1
                         continue
                     
-                    # Send email
+                    # Send email using shared service (same logic as manual send)
                     send_start = time.time()
                     logger.info(f"📧 [SEND] [{idx}/{len(prospects)}] Sending email to {prospect.contact_email}...")
                     
                     try:
-                        send_result = await gmail_client.send_email(
-                            to_email=prospect.contact_email,
-                            subject=subject,
-                            body=body
-                        )
+                        from app.services.email_sender import send_prospect_email
+                        send_result = await send_prospect_email(prospect, db, gmail_client)
                         send_time = (time.time() - send_start) * 1000
                         logger.info(f"⏱️  [SEND] Gmail API call completed in {send_time:.0f}ms")
-                    except Exception as send_err:
-                        send_time = (time.time() - send_start) * 1000
-                        logger.error(f"❌ [SEND] Gmail API call failed after {send_time:.0f}ms: {send_err}", exc_info=True)
-                        send_result = {"success": False, "error": str(send_err)}
-                    
-                    if send_result.get("success"):
-                        # Create email log
-                        email_log = EmailLog(
-                            prospect_id=prospect.id,
-                            subject=subject,
-                            body=body,
-                            response=send_result
-                        )
-                        db.add(email_log)
-                        
-                        # Update prospect: move draft_body to final_body, set sent_at, update status
-                        from app.models.prospect import SendStatus
-                        # Move draft to final_body after sending
-                        # NOTE: final_body column doesn't exist yet - skip for now
-                        # prospect.final_body = prospect.draft_body
-                        # TODO: Re-enable after migration adds final_body column
-                        prospect.draft_body = None  # Clear draft after sending
-                        prospect.draft_subject = None  # Clear draft subject
-                        prospect.last_sent = datetime.now(timezone.utc)
-                        prospect.send_status = SendStatus.SENT.value
-                        prospect.outreach_status = "sent"  # Legacy field
-                        
-                        # Increment follow-up sequence index if this is a follow-up
-                        if prospect.sequence_index and prospect.sequence_index > 0:
-                            # This is already a follow-up, increment
-                            prospect.sequence_index += 1
-                        elif prospect.thread_id and prospect.thread_id != prospect.id:
-                            # This is a follow-up (thread_id != own id), set sequence_index to 1
-                            prospect.sequence_index = 1
                         
                         sent_count += 1
-                        
                         total_time = (time.time() - prospect_start_time) * 1000
                         logger.info(f"✅ [SEND] [{idx}/{len(prospects)}] Email sent to {prospect.contact_email} in {total_time:.0f}ms")
                         logger.info(f"📤 [SEND] Output - status: sent, message_id: {send_result.get('message_id', 'N/A')}")
-                    else:
-                        error_msg = send_result.get('error', 'Unknown error')
+                    except ValueError as val_err:
+                        # Validation errors (prospect not sendable)
+                        send_time = (time.time() - send_start) * 1000
                         total_time = (time.time() - prospect_start_time) * 1000
-                        logger.error(f"❌ [SEND] [{idx}/{len(prospects)}] Failed to send email to {prospect.contact_email} after {total_time:.0f}ms: {error_msg}")
-                        logger.error(f"📤 [SEND] Output - error: {error_msg}")
+                        logger.warning(f"⚠️  [SEND] [{idx}/{len(prospects)}] Skipping {prospect.contact_email} after {total_time:.0f}ms: {val_err}")
+                        skipped_count += 1
+                        continue
+                    except Exception as send_err:
+                        send_time = (time.time() - send_start) * 1000
+                        total_time = (time.time() - prospect_start_time) * 1000
+                        logger.error(f"❌ [SEND] [{idx}/{len(prospects)}] Failed to send email to {prospect.contact_email} after {total_time:.0f}ms: {send_err}", exc_info=True)
+                        logger.error(f"📤 [SEND] Output - error: {str(send_err)}")
                         failed_count += 1
+                        continue
                     
-                    await db.commit()
-                    await db.refresh(prospect)
+                    # Note: send_prospect_email already commits and refreshes prospect
                     
                     # Rate limiting (1 email per 2 seconds to avoid Gmail rate limits)
                     await asyncio.sleep(2)

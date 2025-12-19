@@ -1577,79 +1577,106 @@ async def compose_email(
 @router.post("/{prospect_id}/send", response_model=SendResponse)
 async def send_email(
     prospect_id: UUID,
-    request: SendRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
 ):
     """
-    DISABLED: Individual send endpoint is disabled.
+    Manual send endpoint - sends a single drafted email.
     
-    Use POST /api/pipeline/send instead - this is the ONLY endpoint that sends emails.
-    All sending must go through the pipeline to ensure proper follow-up handling,
-    draft-to-final conversion, and sequence tracking.
+    CANONICAL RULES:
+    - Works ONLY on existing drafts (no raw text from UI)
+    - Email content comes ONLY from database (draft_subject, draft_body)
+    - Same Gmail send logic as pipeline
+    - Same thread_id and sequence_index handling
+    - Same send_status updates
+    - Pipeline counts must reflect manual sends
+    
+    Requirements:
+    - draft_status = 'drafted' (draft exists and is ready)
+    - draft_subject IS NOT NULL
+    - draft_body IS NOT NULL
+    - send_status != 'sent' (not already sent)
+    - contact_email IS NOT NULL
+    - verification_status = 'verified'
+    
+    Returns:
+        SendResponse with success status and message_id
     """
-    raise HTTPException(
-        status_code=410,  # Gone - endpoint is deprecated
-        detail="Individual send endpoint is disabled. Use POST /api/pipeline/send instead to send emails through the pipeline."
-    )
+    from app.models.prospect import DraftStatus, SendStatus, VerificationStatus
+    from app.services.email_sender import send_prospect_email
+    from app.models.email_log import EmailLog
+    
+    # Fetch prospect
     result = await db.execute(select(Prospect).where(Prospect.id == prospect_id))
     prospect = result.scalar_one_or_none()
     
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
     
-    if not prospect.contact_email:
-        raise HTTPException(status_code=400, detail="Prospect has no contact email")
-    
-    # Use draft if subject/body not provided
-    subject = request.subject or prospect.draft_subject
-    body = request.body or prospect.draft_body
-    
-    if not subject or not body:
+    # Validate: draft_status = 'drafted' (draft exists and is ready)
+    if prospect.draft_status != DraftStatus.DRAFTED.value:
         raise HTTPException(
             status_code=400,
-            detail="Email subject and body required. Either provide in request or compose email first."
+            detail=f"Prospect is not ready for sending. Current draft_status: {prospect.draft_status}. Draft must be created first (draft_status = 'drafted')."
         )
     
-    # Send email via Gmail API
-    from datetime import datetime
-    from app.models.email_log import EmailLog
-    import asyncio
+    # Validate: draft_subject and draft_body exist
+    if not prospect.draft_subject or not prospect.draft_body:
+        raise HTTPException(
+            status_code=400,
+            detail="Prospect has no draft email. Draft subject and body are required. Compose email first."
+        )
     
+    # Validate: send_status != 'sent' (not already sent)
+    if prospect.send_status == SendStatus.SENT.value:
+        raise HTTPException(
+            status_code=409,  # Conflict - already sent
+            detail="Email already sent for this prospect. Cannot send again."
+        )
+    
+    # Validate: contact_email exists
+    if not prospect.contact_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Prospect has no contact email. Cannot send email."
+        )
+    
+    # Validate: verification_status = 'verified'
+    if prospect.verification_status != VerificationStatus.VERIFIED.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Prospect email is not verified. Current status: {prospect.verification_status}. Verify email first."
+        )
+    
+    # Send email using shared service (same logic as pipeline)
     try:
-        from app.clients.gmail import GmailClient
-        gmail_client = GmailClient()
-    except ImportError as e:
-        logger.error(f"Failed to import GmailClient: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Gmail client not available: {str(e)}")
+        send_result = await send_prospect_email(prospect, db)
     except ValueError as e:
-        raise HTTPException(status_code=500, detail=f"Gmail not configured: {str(e)}")
+        # Validation errors (400)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Gmail API errors (500)
+        logger.error(f"❌ [MANUAL SEND] Failed to send email for prospect {prospect_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
     
-    # Send email
-    send_result = asyncio.run(gmail_client.send_email(
-        to_email=prospect.contact_email,
-        subject=subject,
-        body=body
-    ))
-    
-    if not send_result.get("success"):
-        error = send_result.get("error", "Unknown error")
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {error}")
-    
-    # Create email log entry
-    email_log = EmailLog(
-        prospect_id=prospect.id,
-        subject=subject,
-        body=body,
-        response=send_result
+    # Get the email log that was created
+    email_log_result = await db.execute(
+        select(EmailLog).where(EmailLog.prospect_id == prospect_id).order_by(EmailLog.sent_at.desc())
     )
-    db.add(email_log)
+    email_log = email_log_result.scalar_one_or_none()
     
-    # Update prospect
-    prospect.outreach_status = "sent"
-    prospect.last_sent = datetime.utcnow()
+    if not email_log:
+        # Fallback - create response without email_log_id
+        logger.warning(f"⚠️  [MANUAL SEND] Email log not found for prospect {prospect_id} after sending")
+        return SendResponse(
+            prospect_id=prospect.id,
+            email_log_id=prospect_id,  # Use prospect_id as fallback
+            sent_at=prospect.last_sent or datetime.now(timezone.utc),
+            success=True,
+            message_id=send_result.get("message_id")
+        )
     
-    await db.commit()
-    await db.refresh(email_log)
+    logger.info(f"✅ [MANUAL SEND] Email sent successfully for prospect {prospect_id} (message_id: {send_result.get('message_id')})")
     
     return SendResponse(
         prospect_id=prospect.id,
