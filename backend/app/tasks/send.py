@@ -200,9 +200,8 @@ async def process_send_job(job_id: str) -> Dict[str, Any]:
                         
                         # Update prospect: move draft_body to final_body, set sent_at, update status
                         from app.models.prospect import SendStatus
-                        # final_body column doesn't exist yet - skip for now
-                        # prospect.final_body = prospect.draft_body  # Move draft to final
-                        # TODO: Re-enable after migration adds final_body column
+                        # Move draft to final_body after sending
+                        prospect.final_body = prospect.draft_body
                         prospect.draft_body = None  # Clear draft after sending
                         prospect.draft_subject = None  # Clear draft subject
                         prospect.last_sent = datetime.now(timezone.utc)

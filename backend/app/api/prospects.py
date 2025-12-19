@@ -1286,29 +1286,15 @@ async def compose_email(
                 """)
             )
             if column_check.fetchone():
-                # Column exists - safe to query
-                # But we can't use Prospect.final_body since it's commented out in the model
-                # Use raw SQL instead
+                # Column exists - safe to query using ORM
                 previous_prospects_query = await db.execute(
-                    text("""
-                        SELECT * FROM prospects
-                        WHERE thread_id = :thread_id
-                        AND id != :prospect_id
-                        AND final_body IS NOT NULL
-                        ORDER BY last_sent ASC
-                    """),
-                    {"thread_id": prospect.thread_id, "prospect_id": prospect_id}
+                    select(Prospect).where(
+                        Prospect.thread_id == prospect.thread_id,
+                        Prospect.id != prospect_id,
+                        Prospect.final_body.isnot(None)
+                    ).order_by(Prospect.last_sent.asc())
                 )
-                # Convert raw results to Prospect objects manually
-                previous_prospects = []
-                for row in previous_prospects_query.fetchall():
-                    # Re-query using ORM for each ID to get full Prospect object
-                    prospect_result = await db.execute(
-                        select(Prospect).where(Prospect.id == row.id)
-                    )
-                    prev_prospect = prospect_result.scalar_one_or_none()
-                    if prev_prospect:
-                        previous_prospects.append(prev_prospect)
+                previous_prospects = previous_prospects_query.scalars().all()
             else:
                 logger.warning("⚠️  final_body column doesn't exist - skipping prospect history check")
         except Exception as e:
@@ -1325,8 +1311,8 @@ async def compose_email(
             })
         
         for prev_prospect in previous_prospects:
-            # Safely access final_body (may not exist)
-            final_body = getattr(prev_prospect, 'final_body', None)
+            # final_body column doesn't exist yet - use draft_body or None
+            final_body = getattr(prev_prospect, 'final_body', None) or getattr(prev_prospect, 'draft_body', None)
             previous_emails.append({
                 "subject": prev_prospect.draft_subject or "No subject",
                 "body": final_body or "",
