@@ -30,7 +30,7 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { CheckCircle2, Circle, Lock, Loader2, Search, Scissors, Shield, Eye, FileText, Send, RefreshCw, ArrowRight } from 'lucide-react'
 import { 
   pipelineDiscover, 
@@ -63,6 +63,7 @@ export default function Pipeline() {
   const [status, setStatus] = useState<NormalizedPipelineStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [discoveryJobs, setDiscoveryJobs] = useState<Job[]>([])
+  const [verificationJobs, setVerificationJobs] = useState<Job[]>([])
 
   const loadStatus = async () => {
     try {
@@ -88,6 +89,30 @@ export default function Pipeline() {
     }
   }
 
+  // Track if we've already triggered refresh for completed verification jobs
+  const hasTriggeredVerificationRefresh = useRef(false)
+
+  const loadVerificationJobs = async () => {
+    try {
+      const jobs = await listJobs(0, 50)
+      const verificationJobsList = jobs.filter((j: Job) => j.job_type === 'verify')
+      setVerificationJobs(verificationJobsList)
+      
+      // Check for completed verification jobs and trigger refresh
+      const completedJobs = verificationJobsList.filter((j: Job) => j.status === 'completed')
+      if (completedJobs.length > 0 && !hasTriggeredVerificationRefresh.current) {
+        hasTriggeredVerificationRefresh.current = true
+        console.log('🔄 Found completed verification job, triggering refresh...', completedJobs[0].id)
+        setTimeout(() => {
+          loadStatus()
+          hasTriggeredVerificationRefresh.current = false
+        }, 2000)
+      }
+    } catch (err) {
+      console.error('Failed to load verification jobs:', err)
+    }
+  }
+
   useEffect(() => {
     let abortController = new AbortController()
     let debounceTimeout: NodeJS.Timeout | null = null
@@ -106,6 +131,7 @@ export default function Pipeline() {
       debounceTimeout = setTimeout(() => {
         loadStatus()
         loadDiscoveryJobs()
+        loadVerificationJobs()
       }, 300)
     }
     
@@ -179,6 +205,13 @@ export default function Pipeline() {
    * - Disable button when count is 0 (backend will reject with 400)
    * - Show backend error message (not generic alert)
    * - NEVER call endpoint optimistically
+   * - Show job status so user knows verification is running
+   * 
+   * VERIFICATION FLOW:
+   * - Verifies scraped emails using Snov.io API
+   * - Updates verification_status to 'verified' or 'unverified'
+   * - Verified prospects become ready for drafting (drafting_ready_count increases)
+   * - Note: Verification doesn't automatically promote to "leads" - that's a separate stage
    */
   const handleVerify = async () => {
     // Calculate verify-ready count from backend truth
@@ -195,8 +228,13 @@ export default function Pipeline() {
     }
     
     try {
-      await pipelineVerify()
-      await loadStatus()
+      const response = await pipelineVerify()
+      // Show success message with job info
+      alert(`✅ Verification job started!\n\nVerifying ${response.prospects_count} scraped emails using Snov.io.\nJob ID: ${response.job_id}\n\nWhat happens:\n• Emails are verified via Snov.io API\n• Verified emails become ready for drafting\n• Check the Jobs tab or refresh to see progress\n• Verified count will update when complete`)
+      // Refresh status and jobs to show running job
+      await Promise.all([loadStatus(), loadVerificationJobs()])
+      // Set flag to prevent duplicate refresh
+      hasTriggeredVerificationRefresh.current = false
     } catch (err: any) {
       // Backend returns 400 with specific message when no eligible prospects
       // Show backend's exact error message (not generic)
@@ -297,6 +335,14 @@ export default function Pipeline() {
       })[0]
     : null
 
+  const latestVerificationJob = verificationJobs.length > 0
+    ? verificationJobs.sort((a: Job, b: Job) => {
+        const dateA = new Date(a.created_at || 0).getTime()
+        const dateB = new Date(b.created_at || 0).getTime()
+        return dateB - dateA
+      })[0]
+    : null
+
   const steps: StepCard[] = [
     {
       id: 1,
@@ -356,7 +402,7 @@ export default function Pipeline() {
     {
       id: 3,
       name: 'Verification',
-      description: 'Verify emails with Snov.io',
+      description: 'Verify scraped emails with Snov.io API',
       icon: Shield,
       // BACKEND AUTHORITY: Verify-ready = scraped + email + not verified
       // Calculate from backend status: emails_found - emails_verified (only if scraped > 0)
@@ -366,6 +412,10 @@ export default function Pipeline() {
         const verifyReady = normalizedStatus.scraped > 0 
           ? Math.max(0, normalizedStatus.emails_found - normalizedStatus.emails_verified)
           : 0
+        // Show 'active' if job is running
+        if (latestVerificationJob?.status === 'running' || latestVerificationJob?.status === 'pending') {
+          return 'active'
+        }
         if (verifyReady === 0) return 'locked'
         if (normalizedStatus.emails_verified > 0) return 'completed'
         return 'active'
@@ -376,6 +426,9 @@ export default function Pipeline() {
         const verifyReady = normalizedStatus.scraped > 0 
           ? Math.max(0, normalizedStatus.emails_found - normalizedStatus.emails_verified)
           : 0
+        // Show job status if verification is running
+        if (latestVerificationJob?.status === 'running') return 'Verifying...'
+        if (latestVerificationJob?.status === 'pending') return 'Starting...'
         if (verifyReady === 0 && normalizedStatus.scraped === 0) return 'Scrape Websites First'
         if (verifyReady === 0) return 'No Prospects Ready'
         if (normalizedStatus.emails_verified > 0) return 'View Verified'
@@ -396,8 +449,14 @@ export default function Pipeline() {
           }
           return
         }
+        // If verification is already running, show message
+        if (latestVerificationJob?.status === 'running' || latestVerificationJob?.status === 'pending') {
+          alert(`Verification is already running (Job ID: ${latestVerificationJob.id}). Check the Jobs tab for progress.`)
+          return
+        }
         handleVerify()
-      }
+      },
+      jobStatus: latestVerificationJob?.status
     },
     {
       id: 4,
@@ -534,13 +593,39 @@ export default function Pipeline() {
                   {step.id === 3 && (
                     <div className="mt-1 space-y-1">
                       <p className="text-xs text-gray-500">
-                        Email found: {normalizedStatus.email_found || 0} • Promoted to lead: {normalizedStatus.leads}
+                        Scraped with emails: {normalizedStatus.emails_found || 0} • Verified: {normalizedStatus.emails_verified}
                       </p>
-                      {normalizedStatus.leads === 0 && normalizedStatus.email_found > 0 && (
-                        <p className="text-xs text-yellow-600">
-                          {normalizedStatus.email_found} prospects with emails need promotion to lead
+                      {latestVerificationJob && (
+                        <p className={`text-xs ${
+                          latestVerificationJob.status === 'running' ? 'text-yellow-600' :
+                          latestVerificationJob.status === 'completed' ? 'text-green-600' :
+                          latestVerificationJob.status === 'failed' ? 'text-red-600' :
+                          'text-gray-500'
+                        }`}>
+                          {latestVerificationJob.status === 'running' && '🔄 Verification in progress...'}
+                          {latestVerificationJob.status === 'pending' && '⏳ Verification starting...'}
+                          {latestVerificationJob.status === 'completed' && '✅ Verification completed! Check verified count above.'}
+                          {latestVerificationJob.status === 'failed' && `❌ Verification failed: ${latestVerificationJob.error_message || 'Unknown error'}`}
                         </p>
                       )}
+                      {normalizedStatus.emails_verified > 0 && (
+                        <p className="text-xs text-green-600">
+                          ✓ {normalizedStatus.emails_verified} verified emails ready for drafting
+                        </p>
+                      )}
+                      {(() => {
+                        const verifyReady = normalizedStatus.scraped > 0 
+                          ? Math.max(0, normalizedStatus.emails_found - normalizedStatus.emails_verified)
+                          : 0
+                        if (verifyReady > 0 && !latestVerificationJob) {
+                          return (
+                            <p className="text-xs text-blue-600">
+                              {verifyReady} scraped emails ready to verify
+                            </p>
+                          )
+                        }
+                        return null
+                      })()}
                     </div>
                   )}
                 </div>
