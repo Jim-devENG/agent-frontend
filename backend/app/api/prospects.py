@@ -659,12 +659,15 @@ async def list_leads(
     current_user: Optional[str] = Depends(get_current_user_optional)
 ):
     """
-    List ONLY prospects with stage = LEAD (explicitly promoted leads)
+    List prospects with emails (scraped leads)
     
-    This endpoint returns ONLY prospects that have been explicitly promoted to LEAD stage.
-    Prospects with emails but not yet promoted (EMAIL_FOUND) are NOT included.
+    Returns prospects that have been scraped and have emails.
+    This includes:
+    - Prospects with stage = LEAD (explicitly promoted)
+    - Prospects with stage = EMAIL_FOUND (emails found but not yet promoted)
+    - Prospects with contact_email IS NOT NULL (fallback if stage column doesn't exist)
     """
-    from sqlalchemy import text
+    from sqlalchemy import text, or_
     from app.models.prospect import ProspectStage
     
     try:
@@ -677,25 +680,38 @@ async def list_leads(
                 AND column_name = 'stage'
             """)
         )
-        if not column_check.fetchone():
-            # Column doesn't exist - return empty (can't determine leads without stage)
-            logger.warning("⚠️  stage column not found, returning empty leads list")
-            return {
-                "data": [],
-                "total": 0,
-                "skip": skip,
-                "limit": limit
-            }
+        has_stage_column = column_check.fetchone() is not None
         
-        # Query ONLY stage = LEAD
-        query = select(Prospect).where(
-            Prospect.stage == ProspectStage.LEAD.value
-        ).order_by(Prospect.created_at.desc())
+        if has_stage_column:
+            # Stage column exists - query prospects with emails (LEAD or EMAIL_FOUND)
+            query = select(Prospect).where(
+                or_(
+                    Prospect.stage == ProspectStage.LEAD.value,
+                    Prospect.stage == ProspectStage.EMAIL_FOUND.value
+                ),
+                Prospect.contact_email.isnot(None)
+            ).order_by(Prospect.created_at.desc())
+            
+            # Get total count
+            count_query = select(func.count(Prospect.id)).where(
+                or_(
+                    Prospect.stage == ProspectStage.LEAD.value,
+                    Prospect.stage == ProspectStage.EMAIL_FOUND.value
+                ),
+                Prospect.contact_email.isnot(None)
+            )
+        else:
+            # Stage column doesn't exist - fallback to contact_email IS NOT NULL
+            logger.warning("⚠️  stage column not found, using contact_email fallback for leads")
+            query = select(Prospect).where(
+                Prospect.contact_email.isnot(None)
+            ).order_by(Prospect.created_at.desc())
+            
+            # Get total count
+            count_query = select(func.count(Prospect.id)).where(
+                Prospect.contact_email.isnot(None)
+            )
         
-        # Get total count
-        count_query = select(func.count(Prospect.id)).where(
-            Prospect.stage == ProspectStage.LEAD.value
-        )
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
         
@@ -713,6 +729,8 @@ async def list_leads(
                 logger.warning(f"⚠️  Error converting prospect {getattr(p, 'id', 'unknown')} to response: {e}")
                 # Skip this prospect but continue with others
                 continue
+        
+        logger.info(f"✅ [LEADS] Returning {len(prospect_responses)} leads (total: {total})")
         
         return {
             "data": [p.dict() for p in prospect_responses],
