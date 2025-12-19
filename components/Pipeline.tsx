@@ -1,3 +1,33 @@
+/**
+ * PIPELINE COMPONENT - BACKEND AUTHORITY DISCIPLINE
+ * 
+ * CRITICAL PRINCIPLE: The backend is the SINGLE SOURCE OF TRUTH for pipeline state.
+ * 
+ * Why pipeline status is authoritative:
+ * - Backend `/api/pipeline/status` computes counts directly from database state
+ * - Frontend cannot know database state without querying backend
+ * - Any frontend assumption about state can be wrong (race conditions, stale data)
+ * 
+ * Why frontend must not guess:
+ * - Backend endpoints enforce strict validation rules
+ * - Calling endpoints optimistically causes 400/422 errors
+ * - User experience degrades when buttons are enabled but backend rejects
+ * - Frontend guessing creates inconsistencies between UI and actual state
+ * 
+ * Why errors were happening before:
+ * - Verify button checked `leads === 0` instead of calculating verify-ready count
+ * - Draft button didn't strictly check `drafting_ready_count === 0`
+ * - Endpoints were called optimistically without checking backend state
+ * - Generic error messages hid backend's specific validation failures
+ * 
+ * DISCIPLINE ENFORCED:
+ * 1. All button enable/disable logic derives from `/api/pipeline/status` response
+ * 2. Never call pipeline endpoints unless backend confirms readiness
+ * 3. Show backend's exact error messages (not generic alerts)
+ * 4. Calculate verify-ready count from backend fields (emails_found - emails_verified)
+ * 5. Use backend's explicit counts (drafting_ready_count, send_ready_count) for gating
+ */
+
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -136,30 +166,111 @@ export default function Pipeline() {
     }
   }
 
+  /**
+   * BACKEND AUTHORITY: /api/pipeline/verify
+   * 
+   * Backend allows verify ONLY when prospects satisfy:
+   * - scrape_status IN ('SCRAPED','ENRICHED')
+   * - contact_email IS NOT NULL
+   * - verification_status != 'verified'
+   * 
+   * Frontend MUST:
+   * - Calculate verify-ready count from backend status (emails_found - emails_verified)
+   * - Disable button when count is 0 (backend will reject with 400)
+   * - Show backend error message (not generic alert)
+   * - NEVER call endpoint optimistically
+   */
   const handleVerify = async () => {
+    // Calculate verify-ready count from backend truth
+    // Verify-ready = prospects with emails that are NOT verified
+    // Must also be scraped (scraped > 0 ensures scraping has occurred)
+    const verifyReadyCount = normalizedStatus.scraped > 0 
+      ? Math.max(0, normalizedStatus.emails_found - normalizedStatus.emails_verified)
+      : 0
+    
+    // CRITICAL: Never call backend if we know it will reject
+    if (verifyReadyCount === 0) {
+      alert('No prospects ready for verification. Ensure prospects are scraped and have emails.')
+      return
+    }
+    
     try {
       await pipelineVerify()
       await loadStatus()
     } catch (err: any) {
-      alert(err.message || 'Failed to start verification')
+      // Backend returns 400 with specific message when no eligible prospects
+      // Show backend's exact error message (not generic)
+      const errorMessage = err.message || 'Failed to start verification'
+      alert(errorMessage)
     }
   }
 
+  /**
+   * BACKEND AUTHORITY: /api/pipeline/draft
+   * 
+   * Backend allows draft ONLY when prospects satisfy:
+   * - verification_status = 'verified'
+   * - contact_email IS NOT NULL
+   * - draft_status = 'pending' (not already drafted)
+   * 
+   * Frontend MUST:
+   * - Use backend's drafting_ready_count (verified + email)
+   * - Note: Backend also requires draft_status = 'pending', which we can't check
+   * - Disable button when drafting_ready_count is 0
+   * - Send valid payload matching backend schema exactly
+   * - Show backend error message (not generic alert)
+   */
   const handleDraft = async () => {
+    // CRITICAL: Never call backend if backend says no draft-ready prospects
+    // Backend will reject with 422 if requirements not met
+    if (normalizedStatus.drafting_ready_count === 0) {
+      alert('No prospects ready for drafting. Ensure prospects are verified and have emails.')
+      return
+    }
+    
     try {
-      await pipelineDraft()
+      // Backend schema: DraftRequest { prospect_ids?: List[UUID] }
+      // Send empty object to trigger automatic selection of all draft-ready prospects
+      await pipelineDraft({})
       await loadStatus()
     } catch (err: any) {
-      alert(err.message || 'Failed to start drafting')
+      // Backend returns 422 with specific message when requirements not met
+      // Show backend's exact error message
+      const errorMessage = err.message || 'Failed to start drafting'
+      alert(errorMessage)
     }
   }
 
+  /**
+   * BACKEND AUTHORITY: /api/pipeline/send
+   * 
+   * Backend allows send ONLY when prospects satisfy:
+   * - verification_status = 'verified'
+   * - draft_status = 'drafted'
+   * - send_status != 'sent'
+   * 
+   * Frontend MUST:
+   * - Use backend's send_ready_count (verified + drafted + not sent)
+   * - Disable button when send_ready_count is 0
+   * - Show backend error message (not generic alert)
+   */
   const handleSend = async () => {
+    // CRITICAL: Never call backend if backend says no send-ready prospects
+    if (normalizedStatus.send_ready_count === 0) {
+      alert('No emails ready for sending. Ensure prospects have verified email, draft subject, and draft body.')
+      return
+    }
+    
     try {
-      await pipelineSend()
+      // Backend schema: SendRequest { prospect_ids?: List[UUID] }
+      // Send empty object to trigger automatic selection of all send-ready prospects
+      await pipelineSend({})
       await loadStatus()
     } catch (err: any) {
-      alert(err.message || 'Failed to start sending')
+      // Backend returns 422 with specific message when requirements not met
+      // Show backend's exact error message
+      const errorMessage = err.message || 'Failed to start sending'
+      alert(errorMessage)
     }
   }
 
@@ -247,14 +358,42 @@ export default function Pipeline() {
       name: 'Verification',
       description: 'Verify emails with Snov.io',
       icon: Shield,
-      status: normalizedStatus.leads === 0 ? 'locked' :
-              normalizedStatus.emails_verified > 0 ? 'completed' : 'active',
+      // BACKEND AUTHORITY: Verify-ready = scraped + email + not verified
+      // Calculate from backend status: emails_found - emails_verified (only if scraped > 0)
+      // Lock if no verify-ready prospects exist (backend will reject with 400)
+      status: (() => {
+        // Calculate verify-ready count from backend truth
+        const verifyReady = normalizedStatus.scraped > 0 
+          ? Math.max(0, normalizedStatus.emails_found - normalizedStatus.emails_verified)
+          : 0
+        if (verifyReady === 0) return 'locked'
+        if (normalizedStatus.emails_verified > 0) return 'completed'
+        return 'active'
+      })(),
       count: normalizedStatus.emails_verified,
-      ctaText: normalizedStatus.leads === 0 ? 'Scrape Websites First' :
-               normalizedStatus.emails_verified > 0 ? 'View Verified' : 'Start Verification',
+      ctaText: (() => {
+        // Calculate verify-ready count from backend truth
+        const verifyReady = normalizedStatus.scraped > 0 
+          ? Math.max(0, normalizedStatus.emails_found - normalizedStatus.emails_verified)
+          : 0
+        if (verifyReady === 0 && normalizedStatus.scraped === 0) return 'Scrape Websites First'
+        if (verifyReady === 0) return 'No Prospects Ready'
+        if (normalizedStatus.emails_verified > 0) return 'View Verified'
+        return 'Start Verification'
+      })(),
       ctaAction: () => {
-        if (normalizedStatus.leads === 0) {
-          alert('Please scrape websites first to create leads')
+        // CRITICAL: Check verify-ready count before calling backend
+        // Backend will reject with 400 if no eligible prospects
+        // Calculate from backend status (emails_found - emails_verified)
+        const verifyReady = normalizedStatus.scraped > 0 
+          ? Math.max(0, normalizedStatus.emails_found - normalizedStatus.emails_verified)
+          : 0
+        if (verifyReady === 0) {
+          if (normalizedStatus.scraped === 0) {
+            alert('Please scrape websites first to extract emails')
+          } else {
+            alert('No prospects ready for verification. All scraped prospects with emails are already verified.')
+          }
           return
         }
         handleVerify()
@@ -265,18 +404,22 @@ export default function Pipeline() {
       name: 'Drafting',
       description: 'Generate outreach emails with Gemini',
       icon: FileText,
-      // UNLOCK when drafts exist OR when verified prospects exist (drafting_ready > 0)
-      // This allows composing even if not all prospects are verified yet
-      status: (normalizedStatus.drafted > 0 || normalizedStatus.drafting_ready > 0) 
-        ? (normalizedStatus.drafted > 0 ? 'completed' : 'active')
-        : 'locked',
+      // BACKEND AUTHORITY: Draft-ready = verified + email + draft_status = 'pending'
+      // Backend returns drafting_ready_count (verified + email)
+      // Note: Backend also requires draft_status = 'pending', which we can't check from status
+      // Lock if backend says no draft-ready prospects (backend will reject with 422)
+      status: normalizedStatus.drafting_ready_count === 0 
+        ? 'locked'
+        : (normalizedStatus.drafted > 0 ? 'completed' : 'active'),
       count: normalizedStatus.drafted,
       ctaText: normalizedStatus.drafted > 0 ? 'View Drafts' :
-               normalizedStatus.drafting_ready === 0 ? 'Verify Leads First' :
+               normalizedStatus.drafting_ready_count === 0 ? 'Verify Leads First' :
                'Start Drafting',
       ctaAction: () => {
-        if (normalizedStatus.drafting_ready === 0 && normalizedStatus.drafted === 0) {
-          alert('Please verify leads first. Leads must be promoted, have emails, and be verified.')
+        // CRITICAL: Check backend's draft-ready count before calling
+        // Backend will reject with 422 if no eligible prospects
+        if (normalizedStatus.drafting_ready_count === 0) {
+          alert('No prospects ready for drafting. Ensure prospects are verified and have emails.')
           return
         }
         handleDraft()
