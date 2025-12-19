@@ -585,11 +585,11 @@ async def draft_emails(
             select(Prospect).where(
                 Prospect.id.in_(request.prospect_ids),
                 Prospect.verification_status == VerificationStatus.VERIFIED.value,
-            Prospect.contact_email.isnot(None),
-            Prospect.draft_status == "pending"
+                Prospect.contact_email.isnot(None),
+                Prospect.draft_status == "pending"
+            )
         )
-    )
-    prospects = result.scalars().all()
+        prospects = result.scalars().all()
     
     if len(prospects) != len(request.prospect_ids):
         raise HTTPException(
@@ -796,43 +796,43 @@ async def get_pipeline_status(
         )
         discovered_count = discovered.scalar() or 0
         logger.info(f"📊 [PIPELINE STATUS] DISCOVERED count: {discovered_count} (discovery_status = 'DISCOVERED')")
-    
-    # Step 2: APPROVED (approval_status = "approved")
-    approved = await db.execute(
-        select(func.count(Prospect.id)).where(Prospect.approval_status == "approved")
-    )
-    approved_count = approved.scalar() or 0
-    
-    # Step 3: SCRAPED = Prospects with scrape_status IN ("SCRAPED", "ENRICHED")
-    # SINGLE SOURCE OF TRUTH: scrape_status IN ("SCRAPED", "ENRICHED")
-    scraped = await db.execute(
-        select(func.count(Prospect.id)).where(
-            Prospect.scrape_status.in_([
-                ScrapeStatus.SCRAPED.value,
-                ScrapeStatus.ENRICHED.value
-            ])
+        
+        # Step 2: APPROVED (approval_status = "approved")
+        approved = await db.execute(
+            select(func.count(Prospect.id)).where(Prospect.approval_status == "approved")
         )
-    )
-    scraped_count = scraped.scalar() or 0
-    logger.info(f"📊 [PIPELINE STATUS] SCRAPED count: {scraped_count} (scrape_status IN ('SCRAPED', 'ENRICHED'))")
-    
-    # Scrape-ready: any DISCOVERED prospect that has NOT been explicitly rejected.
-    # This unlocks scraping as soon as at least one website has been discovered,
-    # while still allowing optional manual rejection to exclude sites.
-    scrape_ready = await db.execute(
-        select(func.count(Prospect.id)).where(
-            Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value,
-            Prospect.approval_status != "rejected",
+        approved_count = approved.scalar() or 0
+        
+        # Step 3: SCRAPED = Prospects with scrape_status IN ("SCRAPED", "ENRICHED")
+        # SINGLE SOURCE OF TRUTH: scrape_status IN ("SCRAPED", "ENRICHED")
+        scraped = await db.execute(
+            select(func.count(Prospect.id)).where(
+                Prospect.scrape_status.in_([
+                    ScrapeStatus.SCRAPED.value,
+                    ScrapeStatus.ENRICHED.value
+                ])
+            )
         )
-    )
-    scrape_ready_count = scrape_ready.scalar() or 0
-    
-    # Stage-based counts (defensive: check if stage column exists)
-    email_found_count = 0
-    leads_count = 0
-    verified_stage_count = 0
-    
-    try:
+        scraped_count = scraped.scalar() or 0
+        logger.info(f"📊 [PIPELINE STATUS] SCRAPED count: {scraped_count} (scrape_status IN ('SCRAPED', 'ENRICHED'))")
+        
+        # Scrape-ready: any DISCOVERED prospect that has NOT been explicitly rejected.
+        # This unlocks scraping as soon as at least one website has been discovered,
+        # while still allowing optional manual rejection to exclude sites.
+        scrape_ready = await db.execute(
+            select(func.count(Prospect.id)).where(
+                Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value,
+                Prospect.approval_status != "rejected",
+            )
+        )
+        scrape_ready_count = scrape_ready.scalar() or 0
+        
+        # Stage-based counts (defensive: check if stage column exists)
+        email_found_count = 0
+        leads_count = 0
+        verified_stage_count = 0
+        
+        try:
         # Check if stage column exists using raw SQL
         column_check = await db.execute(
             text("""
@@ -903,132 +903,132 @@ async def get_pipeline_status(
             logger.error(f"❌ Fallback stage count also failed: {fallback_err}", exc_info=True)
             email_found_count = 0
             leads_count = 0
-    
-    # Step 3.5: EMAILS FOUND (contact_email IS NOT NULL)
-    # Count all prospects with emails (regardless of verification status)
-    emails_found = await db.execute(
-        select(func.count(Prospect.id)).where(
-            Prospect.contact_email.isnot(None)
+        
+        # Step 3.5: EMAILS FOUND (contact_email IS NOT NULL)
+        # Count all prospects with emails (regardless of verification status)
+        emails_found = await db.execute(
+            select(func.count(Prospect.id)).where(
+                Prospect.contact_email.isnot(None)
+            )
         )
-    )
-    emails_found_count = emails_found.scalar() or 0
+        emails_found_count = emails_found.scalar() or 0
 
-    # Step 4: VERIFIED = Prospects where verification_status == "verified"
-    # SINGLE SOURCE OF TRUTH: verification_status = "verified"
-    verified = await db.execute(
-        select(func.count(Prospect.id)).where(
-            Prospect.verification_status == VerificationStatus.VERIFIED.value
-        )
-    )
-    verified_count = verified.scalar() or 0
-    logger.info(f"📊 [PIPELINE STATUS] VERIFIED count: {verified_count} (verification_status = 'verified')")
-    
-    # Also count verified with email (for backwards compatibility)
-    emails_verified = await db.execute(
-        select(func.count(Prospect.id)).where(
-            Prospect.verification_status == VerificationStatus.VERIFIED.value,
-            Prospect.contact_email.isnot(None)
-        )
-    )
-    emails_verified_count = emails_verified.scalar() or 0
-    
-    # Step 5: DRAFT-READY = Prospects where verification_status == "verified" AND email IS NOT NULL
-    # SINGLE SOURCE OF TRUTH: verification_status = "verified" AND contact_email IS NOT NULL
-    draft_ready = await db.execute(
-        select(func.count(Prospect.id)).where(
-            Prospect.verification_status == VerificationStatus.VERIFIED.value,
-            Prospect.contact_email.isnot(None)
-        )
-    )
-    draft_ready_count = draft_ready.scalar() or 0
-    logger.info(f"📊 [PIPELINE STATUS] DRAFT-READY count: {draft_ready_count} (verification_status = 'verified' AND contact_email IS NOT NULL)")
-    
-    # Backwards compatibility alias
-    drafting_ready = draft_ready_count
-    drafting_ready_count = draft_ready_count
-    
-    # Step 6: DRAFTED = Prospects where draft_status = "drafted"
-    # SINGLE SOURCE OF TRUTH: draft_status = "drafted"
-    drafted_count = 0
-    try:
-        drafted = await db.execute(
+        # Step 4: VERIFIED = Prospects where verification_status == "verified"
+        # SINGLE SOURCE OF TRUTH: verification_status = "verified"
+        verified = await db.execute(
             select(func.count(Prospect.id)).where(
-                Prospect.draft_status == DraftStatus.DRAFTED.value
+                Prospect.verification_status == VerificationStatus.VERIFIED.value
             )
         )
-        drafted_count = drafted.scalar() or 0
-        logger.info(f"📊 [PIPELINE STATUS] DRAFTED count: {drafted_count} (draft_status = 'drafted')")
-    except Exception as e:
-        logger.error(f"❌ Error counting drafted prospects: {e}", exc_info=True)
-        drafted_count = 0
-    
-    # Step 7: SENT = Prospects where send_status = "sent"
-    # SINGLE SOURCE OF TRUTH: send_status = "sent"
-    sent_count = 0
-    try:
-        sent = await db.execute(
+        verified_count = verified.scalar() or 0
+        logger.info(f"📊 [PIPELINE STATUS] VERIFIED count: {verified_count} (verification_status = 'verified')")
+        
+        # Also count verified with email (for backwards compatibility)
+        emails_verified = await db.execute(
             select(func.count(Prospect.id)).where(
-                Prospect.send_status == SendStatus.SENT.value
-            )
-        )
-        sent_count = sent.scalar() or 0
-        logger.info(f"📊 [PIPELINE STATUS] SENT count: {sent_count} (send_status = 'sent')")
-    except Exception as e:
-        logger.error(f"❌ Error counting sent prospects: {e}", exc_info=True)
-        sent_count = 0
-    
-    # SEND READY = verified + drafted + not sent
-    # SINGLE SOURCE OF TRUTH: verification_status = "verified" AND draft_status = "drafted" AND send_status != "sent"
-    send_ready_count = 0
-    try:
-        send_ready = await db.execute(
-            select(func.count(Prospect.id)).where(
-                Prospect.contact_email.isnot(None),
                 Prospect.verification_status == VerificationStatus.VERIFIED.value,
-                Prospect.draft_status == DraftStatus.DRAFTED.value,
-                Prospect.send_status != SendStatus.SENT.value
+                Prospect.contact_email.isnot(None)
             )
         )
-        send_ready_count = send_ready.scalar() or 0
-        logger.info(f"📊 [PIPELINE STATUS] SEND-READY count: {send_ready_count} (verified + drafted + not sent)")
-    except Exception as e:
-        logger.error(f"❌ Error counting send-ready prospects: {e}", exc_info=True)
+        emails_verified_count = emails_verified.scalar() or 0
+        
+        # Step 5: DRAFT-READY = Prospects where verification_status == "verified" AND email IS NOT NULL
+        # SINGLE SOURCE OF TRUTH: verification_status = "verified" AND contact_email IS NOT NULL
+        draft_ready = await db.execute(
+            select(func.count(Prospect.id)).where(
+                Prospect.verification_status == VerificationStatus.VERIFIED.value,
+                Prospect.contact_email.isnot(None)
+            )
+        )
+        draft_ready_count = draft_ready.scalar() or 0
+        logger.info(f"📊 [PIPELINE STATUS] DRAFT-READY count: {draft_ready_count} (verification_status = 'verified' AND contact_email IS NOT NULL)")
+        
+        # Backwards compatibility alias
+        drafting_ready = draft_ready_count
+        drafting_ready_count = draft_ready_count
+        
+        # Step 6: DRAFTED = Prospects where draft_status = "drafted"
+        # SINGLE SOURCE OF TRUTH: draft_status = "drafted"
+        drafted_count = 0
+        try:
+            drafted = await db.execute(
+                select(func.count(Prospect.id)).where(
+                    Prospect.draft_status == DraftStatus.DRAFTED.value
+                )
+            )
+            drafted_count = drafted.scalar() or 0
+            logger.info(f"📊 [PIPELINE STATUS] DRAFTED count: {drafted_count} (draft_status = 'drafted')")
+        except Exception as e:
+            logger.error(f"❌ Error counting drafted prospects: {e}", exc_info=True)
+            drafted_count = 0
+        
+        # Step 7: SENT = Prospects where send_status = "sent"
+        # SINGLE SOURCE OF TRUTH: send_status = "sent"
+        sent_count = 0
+        try:
+            sent = await db.execute(
+                select(func.count(Prospect.id)).where(
+                    Prospect.send_status == SendStatus.SENT.value
+                )
+            )
+            sent_count = sent.scalar() or 0
+            logger.info(f"📊 [PIPELINE STATUS] SENT count: {sent_count} (send_status = 'sent')")
+        except Exception as e:
+            logger.error(f"❌ Error counting sent prospects: {e}", exc_info=True)
+            sent_count = 0
+        
+        # SEND READY = verified + drafted + not sent
+        # SINGLE SOURCE OF TRUTH: verification_status = "verified" AND draft_status = "drafted" AND send_status != "sent"
         send_ready_count = 0
-    
-    # Defensive logging: Log all counts for debugging
-    logger.info(f"📊 [PIPELINE STATUS] Counts computed: discovered={discovered_count}, approved={approved_count}, "
-                f"scraped={scraped_count}, verified={verified_count}, draft_ready={draft_ready_count}, "
-                f"drafted={drafted_count}, sent={sent_count}, send_ready={send_ready_count}")
-    
-    # Return pipeline status counts
-    # DATA-DRIVEN: All counts derived from Prospect state only, NOT from jobs
-    # Unlock logic:
-    # - Verification card is COMPLETE if verified_count > 0
-    # - Drafting card is UNLOCKED if verified_count > 0 (draft_ready_count > 0)
-    # - Sending card is UNLOCKED if drafted_count > 0
-    return {
-        "discovered": discovered_count,
-        "approved": approved_count,
-        "scraped": scraped_count,  # USER RULE: Prospects where email IS NOT NULL
-        "discovered_for_scraping": scrape_ready_count,
-        "scrape_ready_count": scrape_ready_count,
-        "email_found": email_found_count,  # Backwards-compatible (stage-based)
-        "emails_found": emails_found_count,  # All prospects with emails (contact_email IS NOT NULL)
-        "leads": leads_count,  # Backwards-compatible (stage-based)
-        "verified": verified_count,  # USER RULE: Prospects where verification_status == "verified"
-        "verified_email_count": emails_verified_count,  # Backwards-compatible: verified AND email IS NOT NULL
-        "verified_count": verified_count,  # Primary: verification_status == "verified"
-        "emails_verified": emails_verified_count,  # Backwards-compatible: verified AND email IS NOT NULL
-        "verified_stage": verified_stage_count,  # Backwards-compatible (stage-based)
-        "reviewed": emails_verified_count,  # Backwards-compatible
-        "drafting_ready": draft_ready_count,  # USER RULE: verified AND email IS NOT NULL
-        "drafting_ready_count": draft_ready_count,  # Primary: draft-ready count
-        "drafted": drafted_count,  # USER RULE: Prospects where draft_subject IS NOT NULL
-        "drafted_count": drafted_count,  # Primary: drafted count
-        "sent": sent_count,  # USER RULE: Prospects where last_sent IS NOT NULL
-        "send_ready": send_ready_count,  # verified + drafted + not sent
-        "send_ready_count": send_ready_count,  # Primary: send-ready count
-    }
+        try:
+            send_ready = await db.execute(
+                select(func.count(Prospect.id)).where(
+                    Prospect.contact_email.isnot(None),
+                    Prospect.verification_status == VerificationStatus.VERIFIED.value,
+                    Prospect.draft_status == DraftStatus.DRAFTED.value,
+                    Prospect.send_status != SendStatus.SENT.value
+                )
+            )
+            send_ready_count = send_ready.scalar() or 0
+            logger.info(f"📊 [PIPELINE STATUS] SEND-READY count: {send_ready_count} (verified + drafted + not sent)")
+        except Exception as e:
+            logger.error(f"❌ Error counting send-ready prospects: {e}", exc_info=True)
+            send_ready_count = 0
+        
+        # Defensive logging: Log all counts for debugging
+        logger.info(f"📊 [PIPELINE STATUS] Counts computed: discovered={discovered_count}, approved={approved_count}, "
+                    f"scraped={scraped_count}, verified={verified_count}, draft_ready={draft_ready_count}, "
+                    f"drafted={drafted_count}, sent={sent_count}, send_ready={send_ready_count}")
+        
+        # Return pipeline status counts
+        # DATA-DRIVEN: All counts derived from Prospect state only, NOT from jobs
+        # Unlock logic:
+        # - Verification card is COMPLETE if verified_count > 0
+        # - Drafting card is UNLOCKED if verified_count > 0 (draft_ready_count > 0)
+        # - Sending card is UNLOCKED if drafted_count > 0
+        return {
+            "discovered": discovered_count,
+            "approved": approved_count,
+            "scraped": scraped_count,  # USER RULE: Prospects where email IS NOT NULL
+            "discovered_for_scraping": scrape_ready_count,
+            "scrape_ready_count": scrape_ready_count,
+            "email_found": email_found_count,  # Backwards-compatible (stage-based)
+            "emails_found": emails_found_count,  # All prospects with emails (contact_email IS NOT NULL)
+            "leads": leads_count,  # Backwards-compatible (stage-based)
+            "verified": verified_count,  # USER RULE: Prospects where verification_status == "verified"
+            "verified_email_count": emails_verified_count,  # Backwards-compatible: verified AND email IS NOT NULL
+            "verified_count": verified_count,  # Primary: verification_status == "verified"
+            "emails_verified": emails_verified_count,  # Backwards-compatible: verified AND email IS NOT NULL
+            "verified_stage": verified_stage_count,  # Backwards-compatible (stage-based)
+            "reviewed": emails_verified_count,  # Backwards-compatible
+            "drafting_ready": draft_ready_count,  # USER RULE: verified AND email IS NOT NULL
+            "drafting_ready_count": draft_ready_count,  # Primary: draft-ready count
+            "drafted": drafted_count,  # USER RULE: Prospects where draft_subject IS NOT NULL
+            "drafted_count": drafted_count,  # Primary: drafted count
+            "sent": sent_count,  # USER RULE: Prospects where last_sent IS NOT NULL
+            "send_ready": send_ready_count,  # verified + drafted + not sent
+            "send_ready_count": send_ready_count,  # Primary: send-ready count
+        }
     except Exception as e:
         # Rollback transaction on error to prevent "transaction aborted" errors
         await db.rollback()
@@ -1056,7 +1056,7 @@ async def get_pipeline_status(
             "sent": 0,
             "send_ready": 0,
             "send_ready_count": 0,
-    }
+        }
 
 
 # ============================================
