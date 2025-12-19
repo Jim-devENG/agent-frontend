@@ -157,8 +157,44 @@ async def startup():
     
     async def run_database_setup():
         """Run all database setup operations in background"""
-        # Add a small delay to ensure server is fully started first
-        await asyncio.sleep(2)
+        # CRITICAL: Run migrations FIRST before any queries
+        # This ensures schema is correct before SELECT queries run
+        try:
+            from alembic.config import Config
+            from alembic import command
+            
+            logger.info("🔄 Running database migrations on startup (CRITICAL: must run before queries)...")
+            
+            # Get the backend directory path
+            import os
+            backend_dir = os.path.dirname(os.path.dirname(__file__))
+            alembic_cfg = Config(os.path.join(backend_dir, "alembic.ini"))
+            
+            # Run migrations FIRST
+            try:
+                command.upgrade(alembic_cfg, "head")
+                logger.info("✅ Database migrations completed successfully")
+            except Exception as migration_error:
+                logger.error(f"❌ Migration failed: {migration_error}", exc_info=True)
+                # Try to create tables directly if migrations fail (first deploy)
+                try:
+                    async with engine.begin() as conn:
+                        await conn.run_sync(Base.metadata.create_all)
+                    logger.info("✅ Created database tables directly (first deploy)")
+                except Exception as create_error:
+                    logger.error(f"❌ Failed to create tables: {create_error}", exc_info=True)
+        except Exception as e:
+            logger.error(f"❌ Migration setup failed: {e}", exc_info=True)
+            # Fallback: create tables directly
+            try:
+                async with engine.begin() as conn:
+                    await conn.run_sync(Base.metadata.create_all)
+                logger.info("✅ Created database tables directly (fallback)")
+            except Exception as create_error:
+                logger.error(f"❌ Failed to create tables: {create_error}", exc_info=True)
+        
+        # Add a small delay after migrations
+        await asyncio.sleep(1)
         
         # TASK: Log database connection info and data count
         try:
@@ -185,40 +221,6 @@ async def startup():
                 logger.info(f"📊 Prospects count in database: {prospects_count}")
         except Exception as db_check_err:
             logger.error(f"❌ Error checking database connection: {db_check_err}", exc_info=True)
-        
-        try:
-            from alembic.config import Config
-            from alembic import command
-            
-            logger.info("Running database migrations on startup...")
-            
-            # Get the backend directory path
-            import os
-            backend_dir = os.path.dirname(os.path.dirname(__file__))
-            alembic_cfg = Config(os.path.join(backend_dir, "alembic.ini"))
-            
-            # Run migrations
-            try:
-                command.upgrade(alembic_cfg, "head")
-                logger.info("✅ Database migrations completed successfully")
-            except Exception as migration_error:
-                logger.warning(f"Migration failed (may be first run): {migration_error}")
-                # Try to create tables directly if migrations fail (first deploy)
-                try:
-                    async with engine.begin() as conn:
-                        await conn.run_sync(Base.metadata.create_all)
-                    logger.info("✅ Created database tables directly (first deploy)")
-                except Exception as create_error:
-                    logger.error(f"Failed to create tables: {create_error}")
-        except Exception as e:
-            logger.warning(f"Migration setup failed: {e}")
-            # Fallback: create tables directly
-            try:
-                async with engine.begin() as conn:
-                    await conn.run_sync(Base.metadata.create_all)
-                logger.info("✅ Created database tables directly (fallback)")
-            except Exception as create_error:
-                logger.error(f"Failed to create tables: {create_error}")
         
         # EMERGENCY FIX: Check and add discovery_query_id column if missing
         try:

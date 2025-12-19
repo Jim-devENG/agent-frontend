@@ -687,16 +687,57 @@ async def list_leads(
         prospects = result.scalars().all()
         logger.info(f"🔍 [LEADS] Found {len(prospects)} prospects from database query")
         
-        # Safely convert prospects to response, handling NULL draft fields
+        # Safely convert prospects to response, handling NULL draft fields and missing columns
         prospect_responses = []
         for p in prospects:
             try:
                 # Use model_validate which handles NULL values better than from_orm
+                # If final_body column doesn't exist, model_validate will fail
+                # Catch and handle gracefully
                 prospect_responses.append(ProspectResponse.model_validate(p))
             except Exception as e:
-                logger.warning(f"⚠️  Error converting prospect {getattr(p, 'id', 'unknown')} to response: {e}")
-                # Skip this prospect but continue with others
-                continue
+                error_msg = str(e).lower()
+                if 'final_body' in error_msg or 'column' in error_msg:
+                    logger.warning(f"⚠️  Schema mismatch for prospect {getattr(p, 'id', 'unknown')}: {e}")
+                    logger.warning(f"⚠️  This indicates missing columns - migration may not have run")
+                    # Try to create a minimal response without the problematic field
+                    try:
+                        # Manually build response, skipping final_body if it doesn't exist
+                        response_dict = {
+                            "id": p.id,
+                            "domain": p.domain or "",
+                            "page_url": getattr(p, 'page_url', None),
+                            "page_title": getattr(p, 'page_title', None),
+                            "contact_email": getattr(p, 'contact_email', None),
+                            "contact_method": getattr(p, 'contact_method', None),
+                            "da_est": getattr(p, 'da_est', None),
+                            "score": getattr(p, 'score', None),
+                            "outreach_status": getattr(p, 'outreach_status', 'pending'),
+                            "last_sent": getattr(p, 'last_sent', None),
+                            "followups_sent": getattr(p, 'followups_sent', 0),
+                            "draft_subject": getattr(p, 'draft_subject', None),
+                            "draft_body": getattr(p, 'draft_body', None),
+                            "final_body": None,  # Set to None if column doesn't exist
+                            "thread_id": getattr(p, 'thread_id', None),
+                            "sequence_index": getattr(p, 'sequence_index', None),
+                            "is_manual": getattr(p, 'is_manual', None),
+                            "discovery_status": getattr(p, 'discovery_status', None),
+                            "approval_status": getattr(p, 'approval_status', None),
+                            "scrape_status": getattr(p, 'scrape_status', None),
+                            "verification_status": getattr(p, 'verification_status', None),
+                            "draft_status": getattr(p, 'draft_status', None),
+                            "send_status": getattr(p, 'send_status', None),
+                            "stage": getattr(p, 'stage', None),
+                            "created_at": getattr(p, 'created_at', None),
+                            "updated_at": getattr(p, 'updated_at', None),
+                        }
+                        prospect_responses.append(ProspectResponse(**response_dict))
+                    except Exception as fallback_err:
+                        logger.error(f"❌ Fallback conversion also failed: {fallback_err}")
+                        continue
+                else:
+                    logger.warning(f"⚠️  Error converting prospect {getattr(p, 'id', 'unknown')} to response: {e}")
+                    continue
         
         logger.info(f"✅ [LEADS] Returning {len(prospect_responses)} leads (total: {total})")
         
