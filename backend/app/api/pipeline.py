@@ -980,47 +980,18 @@ async def get_pipeline_status(
             sent_count = 0
         
         # SEND READY = verified + drafted + not sent
-        # Defensive: Use raw SQL to avoid transaction errors
+        # Use draft_subject as indicator (drafted_at column doesn't exist)
         send_ready_count = 0
         try:
-            # Check if drafted_at column exists
-            column_check = await db.execute(
-                text("""
-                    SELECT column_name
-                    FROM information_schema.columns 
-                    WHERE table_name = 'prospects' 
-                    AND column_name = 'drafted_at'
-                """)
+            send_ready = await db.execute(
+                select(func.count(Prospect.id)).where(
+                    Prospect.contact_email.isnot(None),
+                    Prospect.verification_status == VerificationStatus.VERIFIED.value,
+                    Prospect.draft_subject.isnot(None),
+                    Prospect.last_sent.is_(None)  # Not yet sent
+                )
             )
-            has_drafted_at = column_check.fetchone() is not None
-            
-            if has_drafted_at:
-                # Use drafted_at if available
-                send_ready_result = await db.execute(
-                    text("""
-                        SELECT COUNT(*) 
-                        FROM prospects 
-                        WHERE contact_email IS NOT NULL
-                        AND verification_status = :verified_status
-                        AND drafted_at IS NOT NULL
-                        AND last_sent IS NULL
-                    """),
-                    {"verified_status": VerificationStatus.VERIFIED.value}
-                )
-            else:
-                # Fallback to draft_subject
-                send_ready_result = await db.execute(
-                    text("""
-                        SELECT COUNT(*) 
-                        FROM prospects 
-                        WHERE contact_email IS NOT NULL
-                        AND verification_status = :verified_status
-                        AND draft_subject IS NOT NULL
-                        AND last_sent IS NULL
-                    """),
-                    {"verified_status": VerificationStatus.VERIFIED.value}
-                )
-            send_ready_count = send_ready_result.scalar() or 0
+            send_ready_count = send_ready.scalar() or 0
         except Exception as e:
             logger.error(f"❌ Error counting send-ready prospects: {e}", exc_info=True)
             send_ready_count = 0
