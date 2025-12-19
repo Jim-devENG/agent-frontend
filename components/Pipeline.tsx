@@ -74,8 +74,8 @@ export default function Pipeline() {
       
       // Debounce: wait 300ms before making request
       debounceTimeout = setTimeout(() => {
-        loadStatus()
-        loadDiscoveryJobs()
+    loadStatus()
+    loadDiscoveryJobs()
       }, 300)
     }
     
