@@ -671,6 +671,8 @@ async def list_leads(
         # Pipeline counts: scrape_status IN ("SCRAPED", "ENRICHED")
         logger.info(f"🔍 [LEADS] Querying prospects with scrape_status IN ('SCRAPED', 'ENRICHED') (skip={skip}, limit={limit})")
         
+        # Use select(Prospect) - SQLAlchemy will handle missing columns gracefully
+        # If final_body doesn't exist, the query will fail, but we catch it below
         query = select(Prospect).where(
             Prospect.scrape_status.in_([
                 ScrapeStatus.SCRAPED.value,
@@ -810,7 +812,14 @@ async def list_leads(
         return response
         
     except Exception as e:
+        error_msg = str(e).lower()
         logger.error(f"❌ Error listing leads: {e}", exc_info=True)
+        
+        # Check if error is due to missing final_body column
+        if 'final_body' in error_msg or ('column' in error_msg and 'does not exist' in error_msg):
+            logger.error(f"❌ [LEADS] Query failed due to missing final_body column")
+            logger.error(f"❌ [LEADS] Migration needs to run. Use: python backend/apply_migration_now.py")
+        
         try:
             await db.rollback()  # Rollback on exception to prevent transaction poisoning
         except Exception as rollback_err:

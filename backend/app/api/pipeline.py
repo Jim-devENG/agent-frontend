@@ -1081,16 +1081,34 @@ async def get_websites(
         # Pipeline counts: discovery_status = "DISCOVERED"
         logger.info(f"🔍 [WEBSITES] Querying prospects with discovery_status = 'DISCOVERED' (skip={skip}, limit={limit})")
         
-        result = await db.execute(
-            select(Prospect).where(
-                Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value
+        # Wrap in try/except to handle final_body column errors
+        try:
+            result = await db.execute(
+                select(Prospect).where(
+                    Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value
+                )
+                .order_by(Prospect.created_at.desc())
+                .offset(skip)
+                .limit(limit)
             )
-            .order_by(Prospect.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-        websites = result.scalars().all()
-        logger.info(f"🔍 [WEBSITES] Found {len(websites)} websites from database query")
+            websites = result.scalars().all()
+            logger.info(f"🔍 [WEBSITES] Found {len(websites)} websites from database query")
+        except Exception as query_err:
+            error_msg = str(query_err).lower()
+            if 'final_body' in error_msg or 'column' in error_msg:
+                logger.error(f"❌ [WEBSITES] Query failed due to missing final_body column: {query_err}")
+                logger.error(f"❌ [WEBSITES] Migration needs to run or final_body must be removed from model")
+                await db.rollback()
+                # Return empty result instead of 500 error
+                return {
+                    "data": [],
+                    "total": 0,
+                    "skip": skip,
+                    "limit": limit
+                }
+            else:
+                # Re-raise if it's a different error
+                raise
         
         total_result = await db.execute(
             select(func.count(Prospect.id)).where(
