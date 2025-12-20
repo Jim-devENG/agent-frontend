@@ -1133,6 +1133,10 @@ async def get_websites(
         # Pipeline counts: discovery_status = "DISCOVERED"
         logger.info(f"🔍 [WEBSITES] Querying prospects with discovery_status = 'DISCOVERED' (skip={skip}, limit={limit})")
         
+        # Initialize total to avoid UnboundLocalError
+        total = 0
+        websites = []
+        
         # NO WORKAROUNDS - Schema validation ensures columns exist
         try:
             result = await db.execute(
