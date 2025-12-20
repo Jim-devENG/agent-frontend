@@ -282,24 +282,27 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
   }
 
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
+    <div className="glass rounded-3xl shadow-xl border border-white/20 p-6 animate-fade-in">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold text-gray-900">
-          {emailsOnly ? 'Scraped Emails' : 'Leads'}
-        </h2>
-        <div className="flex items-center space-x-2">
+        <div>
+          <h2 className="text-2xl font-bold liquid-gradient-text">
+            {emailsOnly ? 'Scraped Emails' : 'Leads'}
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">Liquid Canvas Outreach</p>
+        </div>
+        <div className="flex items-center space-x-3">
           <button
             onClick={() => setShowManualActions(!showManualActions)}
-            className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md"
+            className="flex items-center space-x-2 px-4 py-2 glass hover:bg-white/80 text-gray-700 rounded-xl transition-all duration-200 font-medium hover:shadow-md"
           >
             <Globe className="w-4 h-4" />
             <span>Manual Actions</span>
           </button>
         <button
           onClick={loadProspects}
-          className="flex items-center space-x-2 px-3 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700"
+          className="flex items-center space-x-2 px-4 py-2 liquid-gradient text-white rounded-xl transition-all duration-200 font-medium shadow-lg hover:shadow-xl hover:scale-105"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
         </button>
       </div>
@@ -307,10 +310,10 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
 
       {/* Error/Success Message Display */}
       {error && (
-        <div className={`mb-4 p-3 rounded-md ${
+        <div className={`mb-4 p-4 rounded-xl shadow-md border-2 animate-slide-up ${
           error.includes('successfully') || error.includes('✅')
-            ? 'bg-green-50 border border-green-200 text-green-800'
-            : 'bg-red-50 border border-red-200 text-red-800'
+            ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300 text-green-800'
+            : 'bg-gradient-to-r from-red-50 to-pink-50 border-red-300 text-red-800'
         }`}>
           <p className="text-sm font-medium">{error}</p>
         </div>
@@ -339,7 +342,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                 <button
                   onClick={handleManualScrape}
                   disabled={isManualScraping || !manualWebsiteUrl.trim()}
-                  className="px-4 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  className="px-4 py-2 liquid-gradient text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 font-medium shadow-md"
                 >
                   {isManualScraping ? (
                     <>
@@ -434,57 +437,57 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-2xl border border-gray-200/50 shadow-lg">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Domain</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Email</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Score</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Created</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Actions</th>
+                <tr className="bg-gradient-to-r from-liquid-50 to-purple-50 border-b border-gray-200/50">
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Domain</th>
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Email</th>
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Score</th>
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Created</th>
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="bg-white divide-y divide-gray-100">
                 {prospects.map((prospect) => (
-                  <tr key={prospect.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4">
+                  <tr key={prospect.id} className="hover:bg-gradient-to-r hover:from-liquid-50/30 hover:to-purple-50/30 transition-all duration-200">
+                    <td className="py-4 px-6">
                       <div className="flex items-center space-x-2">
-                        <span className="font-medium text-gray-900">{prospect.domain}</span>
+                        <span className="font-semibold text-gray-900">{prospect.domain}</span>
                         {prospect.page_url && (
                           <a
                             href={prospect.page_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-olive-600 hover:text-olive-700"
+                            className="text-liquid-600 hover:text-liquid-700 transition-colors"
                           >
                             <ExternalLink className="w-4 h-4" />
                           </a>
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-4 px-6">
                       {prospect.contact_email ? (
                         <div className="flex items-center space-x-2">
-                          <Mail className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-900">{prospect.contact_email}</span>
+                          <Mail className="w-4 h-4 text-liquid-500" />
+                          <span className="text-gray-900 font-medium">{prospect.contact_email}</span>
                         </div>
                       ) : (
-                        <span className="text-gray-400">No email</span>
+                        <span className="text-gray-400 italic">No email</span>
                       )}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-4 px-6">
                       <div className="flex flex-col space-y-1">
                         <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold shadow-sm ${
                             prospect.verification_status === 'verified'
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white'
                               : prospect.verification_status === 'unverified' || prospect.verification_status === 'UNVERIFIED'
-                              ? 'bg-yellow-100 text-yellow-800'
+                              ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-white'
                               : prospect.verification_status === 'failed'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-gray-100 text-gray-800'
+                              ? 'bg-gradient-to-r from-red-500 to-pink-600 text-white'
+                              : 'bg-gray-200 text-gray-700'
                           }`}
                         >
                           {prospect.verification_status || 'PENDING'}
@@ -492,12 +495,12 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                         {/* Show outreach_status (secondary, for sent/replied) */}
                         {prospect.outreach_status && prospect.outreach_status !== 'pending' && (
                           <span
-                            className={`px-2 py-1 rounded text-xs font-medium ${
+                            className={`px-3 py-1 rounded-lg text-xs font-semibold shadow-sm ${
                               prospect.outreach_status === 'sent'
-                                ? 'bg-green-100 text-green-800'
+                                ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white'
                                 : prospect.outreach_status === 'replied'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-gray-100 text-gray-800'
+                                ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white'
+                                : 'bg-gray-200 text-gray-700'
                             }`}
                           >
                             {prospect.outreach_status}
@@ -505,19 +508,19 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-4">
-                      <span className="text-gray-900">{safeToFixed(prospect.score, 2)}</span>
+                    <td className="py-4 px-6">
+                      <span className="text-gray-900 font-semibold">{safeToFixed(prospect.score, 2)}</span>
                     </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">
+                    <td className="py-4 px-6 text-sm text-gray-600">
                       {formatDate(prospect.created_at)}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-4 px-6">
                       <div className="flex items-center space-x-2">
                         {prospect.contact_email && (
                           <button
                             onClick={() => openComposeModal(prospect)}
                             disabled={isComposing}
-                            className="text-olive-600 hover:text-olive-700 text-sm underline"
+                            className="liquid-gradient-text hover:underline text-sm font-semibold transition-all duration-200"
                           >
                             {prospect.draft_subject ? 'View / Edit Email' : 'Compose Email'}
                           </button>
@@ -537,7 +540,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
               <button
                 onClick={() => setSkip(Math.max(0, skip - limit))}
                 disabled={skip === 0}
-                className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+                  className="px-3 py-2 glass hover:bg-white/80 text-gray-700 rounded-xl hover:shadow-md transition-all duration-200 disabled:opacity-50 font-medium"
               >
                 Previous
               </button>
@@ -555,33 +558,33 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
 
       {/* Compose / Review Modal */}
       {activeProspect && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-height-[85vh] max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="glass rounded-3xl shadow-2xl w-full max-w-4xl max-height-[85vh] max-h-[85vh] overflow-hidden flex flex-col border border-white/20 animate-scale-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200/50 bg-gradient-to-r from-liquid-50/50 to-purple-50/30">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-xl font-bold liquid-gradient-text">
                   Review Draft Email
                 </h3>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-xs text-gray-600 mt-1 font-medium">
                   {activeProspect.domain} — {activeProspect.contact_email}
                 </p>
               </div>
               <button
                 onClick={closeComposeModal}
-                className="p-1 rounded-full hover:bg-gray-200 text-gray-500"
+                className="p-2 rounded-xl hover:bg-white/80 text-gray-500 transition-all duration-200 hover:scale-110"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-gray-200 bg-gray-50">
+            <div className="flex border-b border-gray-200/50 bg-gradient-to-r from-gray-50/50 to-white/50">
               <button
                 onClick={() => setActiveTab('edit')}
-                className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-2 px-6 py-3 text-sm font-semibold transition-all duration-200 ${
                   activeTab === 'edit'
-                    ? 'text-olive-600 border-b-2 border-olive-600 bg-white'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'liquid-gradient-text border-b-2 border-liquid-500 bg-white/80'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
                 }`}
               >
                 <Edit2 className="w-4 h-4" />
@@ -589,10 +592,10 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
               </button>
               <button
                 onClick={() => setActiveTab('preview')}
-                className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium transition-colors ${
+                className={`flex items-center space-x-2 px-6 py-3 text-sm font-semibold transition-all duration-200 ${
                   activeTab === 'preview'
-                    ? 'text-olive-600 border-b-2 border-olive-600 bg-white'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'liquid-gradient-text border-b-2 border-liquid-500 bg-white/80'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
                 }`}
               >
                 <Eye className="w-4 h-4" />
@@ -612,18 +615,18 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                       type="text"
                       value={draftSubject}
                       onChange={(e) => setDraftSubject(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-olive-500 text-sm"
+                      className="w-full px-4 py-3 glass border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-liquid-500 focus:border-liquid-500 text-sm transition-all duration-200"
                       placeholder="Email subject"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Message
                     </label>
                     <textarea
                       value={draftBody}
                       onChange={(e) => setDraftBody(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-olive-500 text-sm h-64 resize-vertical"
+                      className="w-full px-4 py-3 glass border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-liquid-500 focus:border-liquid-500 text-sm h-64 resize-vertical transition-all duration-200"
                       placeholder="Your email message will appear here. You can edit it before sending."
                     />
                   </div>
@@ -676,9 +679,9 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                   </div>
                   
                   {/* Preview Info */}
-                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                    <p className="text-xs text-blue-800">
-                      <strong>Preview:</strong> This is how your email will appear to the recipient. 
+                  <div className="mt-4 p-4 bg-gradient-to-r from-liquid-50 to-purple-50 border-2 border-liquid-200 rounded-xl shadow-sm">
+                    <p className="text-xs text-gray-700 font-medium">
+                      <strong className="liquid-gradient-text">Preview:</strong> This is how your email will appear to the recipient. 
                       The actual email will be sent via Gmail API.
                     </p>
                   </div>
@@ -686,16 +689,16 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
               )}
             </div>
 
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-              <p className="text-xs text-gray-500">
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200/50 bg-gradient-to-r from-gray-50/50 to-white/50">
+              <p className="text-xs text-gray-600 font-medium">
                 {activeProspect.draft_subject && activeProspect.draft_body
-                  ? 'Review and send your drafted email, or send via Pipeline.'
-                  : 'This is a DRAFT ONLY. To send emails, use the Pipeline → Send card.'}
+                  ? '✨ Review and send your drafted email, or send via Pipeline.'
+                  : '📝 This is a DRAFT ONLY. To send emails, use the Pipeline → Send card.'}
               </p>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <button
                   onClick={closeComposeModal}
-                  className="px-3 py-2 text-sm text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 glass hover:bg-white/80 rounded-xl transition-all duration-200 hover:shadow-md"
                 >
                   Close
                 </button>
@@ -703,7 +706,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                   <button
                     onClick={handleSendNow}
                     disabled={isSending}
-                    className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center space-x-2 px-5 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-xl hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg"
                   >
                     <Send className="w-4 h-4" />
                     <span>{isSending ? 'Sending...' : 'Send Now'}</span>
@@ -716,10 +719,10 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                     window.dispatchEvent(event)
                     closeComposeModal()
                   }}
-                  className="flex items-center space-x-2 px-4 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700"
+                  className="flex items-center space-x-2 px-5 py-2 liquid-gradient text-white rounded-xl hover:shadow-xl hover:scale-105 transition-all duration-200 font-semibold shadow-lg"
                 >
                   <Send className="w-4 h-4" />
-                  <span>Go to Pipeline to Send</span>
+                  <span>Go to Pipeline</span>
                 </button>
               </div>
             </div>

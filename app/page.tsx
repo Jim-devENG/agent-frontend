@@ -170,53 +170,59 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-olive-600 border-t-transparent mb-4"></div>
-          <div className="text-xl font-semibold text-gray-900">Loading dashboard...</div>
-          <div className="text-sm text-gray-600 mt-2">Connecting to backend...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20">
+        <div className="text-center animate-fade-in">
+          <div className="inline-block relative">
+            <div className="w-16 h-16 rounded-full border-4 border-liquid-200"></div>
+            <div className="absolute top-0 left-0 w-16 h-16 rounded-full border-4 border-t-liquid-500 border-r-purple-500 animate-spin"></div>
+          </div>
+          <div className="mt-6">
+            <h2 className="text-2xl font-bold liquid-gradient-text mb-2">Liquid Canvas</h2>
+            <div className="text-lg font-semibold text-gray-700">Loading your studio...</div>
+            <div className="text-sm text-gray-500 mt-2">Connecting to backend</div>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 flex">
       {/* Left Sidebar */}
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} tabs={tabs} />
 
       {/* Main Content Area */}
       <div className="flex-1 lg:ml-64 flex flex-col">
         {/* Top Header */}
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        <header className="glass border-b border-gray-200/50 sticky top-0 z-30 shadow-sm backdrop-blur-xl">
           <div className="px-4 sm:px-6 py-4 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">
+              <h2 className="text-xl font-bold liquid-gradient-text">
                 {tabs.find(t => t.id === activeTab)?.label || 'Dashboard'}
               </h2>
+              <p className="text-xs text-gray-500 mt-0.5">Liquid Canvas Outreach Studio</p>
             </div>
             <div className="flex items-center space-x-3">
               <button
                 onClick={refreshData}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition-colors text-sm"
+                className="flex items-center space-x-2 px-4 py-2 glass hover:bg-white/80 text-gray-700 rounded-xl transition-all duration-200 text-sm font-medium hover:shadow-md"
                 title="Refresh all data"
               >
                 <RefreshCw className="w-4 h-4" />
-                <span>Refresh All</span>
+                <span>Refresh</span>
               </button>
               <button
                 onClick={() => {
                   localStorage.removeItem('auth_token')
                   router.push('/login')
                 }}
-                className="flex items-center space-x-2 px-4 py-2 bg-olive-600 hover:bg-olive-700 text-white rounded-md transition-colors text-sm"
+                className="flex items-center space-x-2 px-4 py-2 liquid-gradient text-white rounded-xl transition-all duration-200 text-sm font-medium shadow-lg hover:shadow-xl hover:scale-105"
               >
                 <LogOutIcon className="w-4 h-4" />
                 <span>Logout</span>
               </button>
           </div>
         </div>
-      </header>
 
       {/* Connection Error Banner */}
       {connectionError && (

@@ -6,8 +6,8 @@ import NoAlertScript from './no-alert-script'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Art Outreach Automation',
-  description: 'Automated outreach system',
+  title: 'Liquid Canvas | Outreach Automation',
+  description: 'Beautiful outreach automation powered by Liquid Canvas - Transform your creative connections',
 }
 
 export default function RootLayout({

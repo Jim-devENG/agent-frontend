@@ -139,29 +139,32 @@ export default function WebsitesTable() {
 
   if (loading && websites.length === 0) {
     return (
-      <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
+      <div className="glass rounded-3xl shadow-xl p-8 animate-fade-in">
         <div className="text-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-olive-600" />
-          <p className="text-gray-500 mt-2">Loading websites...</p>
+          <div className="relative inline-block">
+            <div className="w-12 h-12 rounded-full border-4 border-liquid-200"></div>
+            <div className="absolute top-0 left-0 w-12 h-12 rounded-full border-4 border-t-liquid-500 border-r-purple-500 animate-spin"></div>
+          </div>
+          <p className="text-gray-600 mt-4 font-medium">Loading websites...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
+    <div className="glass rounded-3xl shadow-xl border border-white/20 p-6 animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Discovered Websites</h2>
-          <p className="text-sm text-gray-600 mt-1">
+          <h2 className="text-2xl font-bold liquid-gradient-text mb-1">Discovered Websites</h2>
+          <p className="text-sm text-gray-600">
             Websites found during discovery. Approve them to proceed with scraping.
           </p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-3">
           <button
             onClick={loadWebsites}
             disabled={loading}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md flex items-center space-x-2 disabled:opacity-50"
+            className="px-4 py-2 glass hover:bg-white/80 text-gray-700 rounded-xl flex items-center space-x-2 disabled:opacity-50 transition-all duration-200 font-medium hover:shadow-md"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
@@ -170,7 +173,7 @@ export default function WebsitesTable() {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+        <div className="mb-4 p-4 bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-300 rounded-xl text-red-700 text-sm font-medium animate-slide-up">
           {error}
         </div>
       )}
@@ -189,14 +192,14 @@ export default function WebsitesTable() {
       ) : (
         <>
           {selected.size > 0 && (
-            <div className="mb-4 p-4 bg-olive-50 border border-olive-200 rounded-lg flex items-center justify-between">
-              <p className="text-sm text-olive-900">
+            <div className="mb-4 p-4 bg-gradient-to-r from-liquid-50 to-purple-50 border-2 border-liquid-200 rounded-xl flex items-center justify-between shadow-md animate-slide-up">
+              <p className="text-sm font-semibold text-gray-700">
                 {selected.size} website{selected.size !== 1 ? 's' : ''} selected
               </p>
               <button
                 onClick={handleApprove}
                 disabled={actionLoading}
-                className="px-4 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 disabled:opacity-50 flex items-center space-x-2"
+                className="px-4 py-2 liquid-gradient text-white rounded-xl hover:shadow-xl hover:scale-105 transition-all duration-200 disabled:opacity-50 flex items-center space-x-2 font-semibold shadow-lg"
               >
                 {actionLoading ? (
                   <>
@@ -231,17 +234,17 @@ export default function WebsitesTable() {
                       className="w-4 h-4 text-olive-600"
                     />
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Domain</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Title</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Category</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Location</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Actions</th>
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Domain</th>
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Title</th>
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Category</th>
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Location</th>
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {websites.map(website => (
-                  <tr key={website.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={website.id} className="border-b border-gray-100 hover:bg-gradient-to-r hover:from-liquid-50/30 hover:to-purple-50/30 transition-all duration-200">
                     <td className="py-3 px-4">
                       <input
                         type="checkbox"
@@ -258,47 +261,47 @@ export default function WebsitesTable() {
                         className="w-4 h-4 text-olive-600"
                       />
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-4 px-6">
                       <div className="flex items-center space-x-2">
                         <a
                           href={website.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-olive-600 hover:text-olive-700 font-medium flex items-center space-x-1"
+                          className="liquid-gradient-text hover:underline font-semibold flex items-center space-x-1 transition-all duration-200"
                         >
                           <span>{website.domain}</span>
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-sm text-gray-700">{website.title}</td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{website.category}</td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{website.location}</td>
-                    <td className="py-3 px-4">
+                    <td className="py-4 px-6 text-sm text-gray-700 font-medium">{website.title}</td>
+                    <td className="py-4 px-6 text-sm text-gray-600">{website.category}</td>
+                    <td className="py-4 px-6 text-sm text-gray-600">{website.location}</td>
+                    <td className="py-4 px-6">
                       <div className="flex flex-col space-y-1">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          website.approval_status === 'approved' ? 'bg-green-100 text-green-800' :
-                          website.approval_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                          'bg-gray-100 text-gray-800'
+                        <span className={`px-3 py-1 rounded-lg text-xs font-semibold shadow-sm ${
+                          website.approval_status === 'approved' ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white' :
+                          website.approval_status === 'rejected' ? 'bg-gradient-to-r from-red-500 to-pink-600 text-white' :
+                          'bg-gray-200 text-gray-700'
                         }`}>
                           {website.approval_status || 'PENDING'}
                         </span>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          website.scrape_status === 'SCRAPED' || website.scrape_status === 'ENRICHED' ? 'bg-blue-100 text-blue-800' :
-                          website.scrape_status === 'NO_EMAIL_FOUND' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
+                        <span className={`px-3 py-1 rounded-lg text-xs font-semibold shadow-sm ${
+                          website.scrape_status === 'SCRAPED' || website.scrape_status === 'ENRICHED' ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white' :
+                          website.scrape_status === 'NO_EMAIL_FOUND' ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-white' :
+                          'bg-gray-200 text-gray-700'
                         }`}>
                           {website.scrape_status || 'NOT_STARTED'}
                         </span>
                       </div>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-4 px-6">
                       <div className="flex items-center space-x-2">
                         {website.approval_status !== 'approved' && (
                           <button
                             onClick={() => handleApproveSingle(website.id)}
                             disabled={actionLoading}
-                            className="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-xl transition-all duration-200 disabled:opacity-50 hover:scale-110"
                             title="Approve"
                           >
                             <CheckCircle2 className="w-4 h-4" />
@@ -308,7 +311,7 @@ export default function WebsitesTable() {
                           <button
                             onClick={() => handleReject(website.id)}
                             disabled={actionLoading}
-                            className="p-1 text-yellow-600 hover:bg-yellow-50 rounded disabled:opacity-50"
+                            className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-xl transition-all duration-200 disabled:opacity-50 hover:scale-110"
                             title="Reject"
                           >
                             <X className="w-4 h-4" />
@@ -317,7 +320,7 @@ export default function WebsitesTable() {
                         <button
                           onClick={() => handleDelete(website.id)}
                           disabled={actionLoading}
-                          className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-all duration-200 disabled:opacity-50 hover:scale-110"
                           title="Delete"
                         >
                           <Trash2 className="w-4 h-4" />

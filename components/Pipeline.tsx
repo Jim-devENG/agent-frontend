@@ -165,10 +165,13 @@ export default function Pipeline() {
 
   if (loading) {
     return (
-      <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
+      <div className="glass rounded-3xl shadow-xl p-8 animate-fade-in">
         <div className="text-center py-8">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-olive-600" />
-          <p className="text-gray-500 mt-2">Loading pipeline status...</p>
+          <div className="relative inline-block">
+            <div className="w-12 h-12 rounded-full border-4 border-liquid-200"></div>
+            <div className="absolute top-0 left-0 w-12 h-12 rounded-full border-4 border-t-liquid-500 border-r-purple-500 animate-spin"></div>
+          </div>
+          <p className="text-gray-600 mt-4 font-medium">Loading pipeline...</p>
         </div>
       </div>
     )
@@ -307,26 +310,33 @@ export default function Pipeline() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-fade-in">
       {/* Header */}
-      <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
+      <div className="glass rounded-3xl shadow-xl p-8 border border-white/20">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900">Lead Acquisition Pipeline</h2>
+          <div>
+            <h2 className="text-3xl font-bold liquid-gradient-text mb-2">Outreach Pipeline</h2>
+            <p className="text-gray-600 text-sm">
+              Transform prospects into connections with Liquid Canvas
+            </p>
+          </div>
           <button
             onClick={loadStatus}
-            className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md"
+            className="flex items-center space-x-2 px-4 py-2 glass hover:bg-white/80 text-gray-700 rounded-xl transition-all duration-200 font-medium hover:shadow-md"
           >
             <RefreshCw className="w-4 h-4" />
             <span>Refresh</span>
           </button>
         </div>
-        <p className="text-gray-600 text-sm">
-          Orchestrate your lead acquisition process step by step. Each stage must be completed before the next can begin.
-        </p>
+        <div className="mt-4 p-4 bg-gradient-to-r from-liquid-50 to-purple-50 rounded-xl border border-liquid-100">
+          <p className="text-sm text-gray-700">
+            <span className="font-semibold">Orchestrate your creative outreach</span> — Each stage builds on the previous, creating meaningful connections through art and creativity.
+          </p>
+        </div>
       </div>
 
       {/* Step Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {steps.map((step, index) => {
           const Icon = step.icon
           const isCompleted = step.status === 'completed'
@@ -336,33 +346,34 @@ export default function Pipeline() {
           return (
             <div
               key={step.id}
-              className={`bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 p-6 ${
+              className={`glass rounded-3xl shadow-xl p-6 border transition-all duration-300 hover:shadow-2xl hover:scale-105 animate-slide-up ${
                 isCompleted
-                  ? 'border-green-500'
+                  ? 'border-green-300 bg-gradient-to-br from-green-50/50 to-emerald-50/30'
                   : isLocked
-                  ? 'border-gray-300 opacity-60'
-                  : 'border-olive-600'
+                  ? 'border-gray-200 opacity-70'
+                  : 'border-liquid-200 bg-gradient-to-br from-liquid-50/50 to-purple-50/30'
               }`}
+              style={{ animationDelay: `${index * 100}ms` }}
             >
               <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-full ${
+                <div className={`p-4 rounded-2xl shadow-lg transition-all duration-300 ${
                   isCompleted
-                    ? 'bg-green-500 text-white'
+                    ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white'
                     : isLocked
                     ? 'bg-gray-300 text-gray-500'
-                    : 'bg-olive-600 text-white'
+                    : 'liquid-gradient text-white hover-glow'
                 }`}>
                   <Icon className="w-6 h-6" />
                 </div>
                 {isCompleted && (
-                  <CheckCircle2 className="w-6 h-6 text-green-500" />
+                  <CheckCircle2 className="w-6 h-6 text-green-500 animate-scale-in" />
                 )}
                 {isLocked && (
                   <Lock className="w-6 h-6 text-gray-400" />
                 )}
               </div>
 
-              <h3 className="text-lg font-bold text-gray-900 mb-2">{step.name}</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">{step.name}</h3>
               <p className="text-sm text-gray-600 mb-4">{step.description}</p>
 
               <div className="flex items-center justify-between mb-4">
@@ -416,12 +427,12 @@ export default function Pipeline() {
               <button
                 onClick={step.ctaAction}
                 disabled={isLocked}
-                className={`w-full px-4 py-2 rounded-md font-medium flex items-center justify-center space-x-2 ${
+                className={`w-full px-4 py-3 rounded-xl font-semibold flex items-center justify-center space-x-2 transition-all duration-200 ${
                   isLocked
                     ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                     : isCompleted
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-olive-600 text-white hover:bg-olive-700'
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-lg hover:scale-105'
+                    : 'liquid-gradient text-white hover:shadow-xl hover:scale-105'
                 }`}
               >
                 <span>{step.ctaText}</span>

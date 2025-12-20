@@ -50,18 +50,25 @@ export default function Sidebar({ activeTab, onTabChange, tabs }: SidebarProps) 
 
       {/* Sidebar */}
       <aside className={`
-        fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 shadow-lg z-40 flex flex-col
+        fixed left-0 top-0 h-full w-64 glass border-r border-gray-200/50 shadow-xl z-40 flex flex-col
         transform transition-transform duration-300 ease-in-out
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
       {/* Logo/Header Section */}
-      <div className="p-6 border-b border-gray-200">
-        <h1 className="text-xl font-bold text-black">
-          Art Outreach
-        </h1>
-        <p className="text-gray-600 text-xs mt-1">
-          Automation System
-        </p>
+      <div className="p-6 border-b border-gray-200/50 bg-gradient-to-br from-white to-gray-50">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-lg liquid-gradient flex items-center justify-center shadow-lg">
+            <span className="text-white text-xl font-bold">LC</span>
+          </div>
+          <div>
+            <h1 className="text-xl font-bold liquid-gradient-text">
+              Liquid Canvas
+            </h1>
+            <p className="text-gray-500 text-xs mt-0.5 font-medium">
+              Outreach Studio
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Navigation Items */}
@@ -78,15 +85,15 @@ export default function Sidebar({ activeTab, onTabChange, tabs }: SidebarProps) 
                   setMobileMenuOpen(false) // Close mobile menu when tab is selected
                 }}
                 className={`
-                  w-full flex items-center space-x-3 px-4 py-3 rounded-lg font-medium text-sm transition-all
+                  w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition-all duration-200
                   ${
                     isActive
-                      ? 'bg-gradient-to-r from-olive-600 to-olive-700 text-white shadow-md'
-                      : 'text-gray-700 hover:bg-olive-50 hover:text-olive-700'
+                      ? 'liquid-gradient text-white shadow-lg hover-glow transform scale-105'
+                      : 'text-gray-700 hover:bg-gradient-to-r hover:from-liquid-50 hover:to-purple-50 hover:text-liquid-600 hover:shadow-md'
                   }
                 `}
               >
-                <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-500'}`} />
+                <Icon className={`w-5 h-5 transition-colors ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-liquid-600'}`} />
                 <span>{tab.label}</span>
               </button>
             )
@@ -95,10 +102,17 @@ export default function Sidebar({ activeTab, onTabChange, tabs }: SidebarProps) 
       </nav>
 
       {/* Footer Section */}
-      <div className="p-4 border-t border-gray-200">
-        <div className="text-xs text-gray-500 text-center">
-          <p>Version 2.0</p>
-          <p className="mt-1">Snov.io Integration</p>
+      <div className="p-4 border-t border-gray-200/50 bg-gradient-to-t from-gray-50/50 to-transparent">
+        <div className="text-xs text-center">
+          <p className="text-gray-600 font-medium">Powered by</p>
+          <a 
+            href="https://liquidcanvas.art" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="liquid-gradient-text font-bold text-sm mt-1 inline-block hover:scale-105 transition-transform"
+          >
+            liquidcanvas.art
+          </a>
         </div>
       </div>
     </aside>
