@@ -218,7 +218,7 @@ export async function createDiscoveryJob(
   
   // Add cache-busting timestamp to ensure fresh requests
   const timestamp = Date.now()
-  const url = `${API_BASE}/jobs/discover?_t=${timestamp}`
+  const url = `${API_BASE}/pipeline/discover?_t=${timestamp}`
   
   // Prepare request payload
   const payload = {
