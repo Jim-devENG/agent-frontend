@@ -168,8 +168,8 @@ export default function Pipeline() {
       <div className="glass rounded-xl shadow-lg p-4 animate-fade-in">
         <div className="text-center py-4">
           <div className="relative inline-block">
-            <div className="w-8 h-8 rounded-full border-2 border-liquid-200"></div>
-            <div className="absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-t-liquid-500 border-r-purple-500 animate-spin"></div>
+            <div className="w-8 h-8 rounded-full border-2 border-olive-200"></div>
+            <div className="absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-t-olive-600 border-r-olive-500 animate-spin"></div>
           </div>
           <p className="text-gray-600 mt-2 text-sm font-medium">Loading pipeline...</p>
         </div>
@@ -312,23 +312,23 @@ export default function Pipeline() {
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Header */}
-      <div className="glass rounded-xl shadow-lg p-4 border border-liquid-200">
+      <div className="glass rounded-xl shadow-lg p-3 border border-olive-200">
         <div className="flex items-center justify-between mb-2">
           <div>
-            <h2 className="text-xl font-bold liquid-gradient-text mb-1">Outreach Pipeline</h2>
+            <h2 className="text-sm font-bold text-olive-700 mb-1">Outreach Pipeline</h2>
             <p className="text-gray-600 text-xs">
               Transform prospects into connections with Liquid Canvas
             </p>
           </div>
           <button
             onClick={loadStatus}
-            className="flex items-center space-x-1 px-2 py-1 liquid-gradient text-white rounded-lg transition-all duration-200 text-xs font-medium hover:shadow-md"
+            className="flex items-center space-x-1 px-2 py-1 bg-olive-600 text-white rounded-lg transition-all duration-200 text-xs font-medium hover:bg-olive-700 hover:shadow-md"
           >
             <RefreshCw className="w-3 h-3" />
             <span>Refresh</span>
           </button>
         </div>
-        <div className="mt-2 p-2 bg-gradient-to-r from-liquid-50 to-purple-50 rounded-lg border border-liquid-200">
+        <div className="mt-2 p-2 bg-gradient-to-r from-olive-50 to-olive-50 rounded-lg border border-olive-200">
           <p className="text-xs text-gray-700">
             <span className="font-semibold">Orchestrate your creative outreach</span> — Each stage builds on the previous, creating meaningful connections through art and creativity.
           </p>
@@ -348,25 +348,25 @@ export default function Pipeline() {
               key={step.id}
               className={`glass rounded-xl shadow-lg p-3 border transition-all duration-300 hover:shadow-xl hover:scale-102 animate-slide-up ${
                 isCompleted
-                  ? 'border-liquid-300 bg-gradient-to-br from-liquid-50/80 to-purple-50/50'
+                  ? 'border-olive-300 bg-gradient-to-br from-olive-50/80 to-olive-50/50'
                   : isLocked
                   ? 'border-gray-200 opacity-60'
-                  : 'border-liquid-300 bg-gradient-to-br from-liquid-50/80 to-purple-50/50'
+                  : 'border-olive-300 bg-gradient-to-br from-olive-50/80 to-olive-50/50'
               }`}
               style={{ animationDelay: `${index * 100}ms` }}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className={`p-2 rounded-lg shadow-md transition-all duration-300 ${
                   isCompleted
-                    ? 'liquid-gradient text-white'
+                    ? 'bg-olive-600 text-white'
                     : isLocked
                     ? 'bg-gray-300 text-gray-500'
-                    : 'liquid-gradient text-white hover-glow'
+                    : 'bg-olive-600 text-white hover-glow'
                 }`}>
                   <Icon className="w-4 h-4" />
                 </div>
                 {isCompleted && (
-                  <CheckCircle2 className="w-4 h-4 text-liquid-600 animate-scale-in" />
+                  <CheckCircle2 className="w-4 h-4 text-olive-600 animate-scale-in" />
                 )}
                 {isLocked && (
                   <Lock className="w-4 h-4 text-gray-400" />
@@ -378,7 +378,7 @@ export default function Pipeline() {
 
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <p className="text-lg font-bold liquid-gradient-text">{step.count}</p>
+                  <p className="text-lg font-bold text-olive-700">{step.count}</p>
                   <p className="text-xs text-gray-500">
                     {step.id === 1 && `${normalizedStatus.discovered} discovered`}
                     {step.id === 2 && `${normalizedStatus.scraped} scraped • ${normalizedStatus.email_found || 0} with emails`}
@@ -393,7 +393,7 @@ export default function Pipeline() {
                         Discovered: {normalizedStatus.discovered} • Scrape-ready: {normalizedStatus.scrape_ready_count}
                       </p>
                       {normalizedStatus.scrape_ready_count === 0 && (
-                        <p className="text-xs text-liquid-600">
+                        <p className="text-xs text-olive-600">
                           Blocked: No discovered websites yet. Run discovery first.
                         </p>
                       )}
@@ -405,7 +405,7 @@ export default function Pipeline() {
                         Email found: {normalizedStatus.email_found || 0} • Promoted to lead: {normalizedStatus.leads}
                       </p>
                       {normalizedStatus.leads === 0 && normalizedStatus.email_found > 0 && (
-                        <p className="text-xs text-liquid-600">
+                        <p className="text-xs text-olive-600">
                           {normalizedStatus.email_found} prospects with emails need promotion to lead
                         </p>
                       )}
@@ -414,8 +414,8 @@ export default function Pipeline() {
                 </div>
                 {step.jobStatus && (
                   <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                    step.jobStatus === 'completed' ? 'bg-liquid-100 text-liquid-800' :
-                    step.jobStatus === 'running' ? 'bg-liquid-100 text-liquid-800' :
+                    step.jobStatus === 'completed' ? 'bg-olive-100 text-olive-800' :
+                    step.jobStatus === 'running' ? 'bg-olive-100 text-olive-800' :
                     step.jobStatus === 'failed' ? 'bg-red-100 text-red-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
@@ -431,8 +431,8 @@ export default function Pipeline() {
                   isLocked
                     ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                     : isCompleted
-                    ? 'liquid-gradient text-white hover:shadow-md hover:scale-102'
-                    : 'liquid-gradient text-white hover:shadow-md hover:scale-102'
+                    ? 'bg-olive-600 text-white hover:bg-olive-700 hover:shadow-md hover:scale-102'
+                    : 'bg-olive-600 text-white hover:bg-olive-700 hover:shadow-md hover:scale-102'
                 }`}
               >
                 <span>{step.ctaText}</span>
@@ -530,7 +530,7 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
           </label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
             {availableCategories.map(cat => (
-              <label key={cat} className="flex items-center space-x-1.5 p-1.5 border border-liquid-200 rounded hover:bg-liquid-50 cursor-pointer">
+              <label key={cat} className="flex items-center space-x-1.5 p-1.5 border border-olive-200 rounded hover:bg-olive-50 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={categories.includes(cat)}
@@ -541,7 +541,7 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
                       setCategories(categories.filter(c => c !== cat))
                     }
                   }}
-                  className="accent-liquid-600"
+                  className="accent-olive-600"
                 />
                 <span className="text-xs">{cat}</span>
               </label>
@@ -555,7 +555,7 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
           </label>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
             {availableLocations.map(loc => (
-              <label key={loc} className="flex items-center space-x-1.5 p-1.5 border border-liquid-200 rounded hover:bg-liquid-50 cursor-pointer">
+              <label key={loc} className="flex items-center space-x-1.5 p-1.5 border border-olive-200 rounded hover:bg-olive-50 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={locations.includes(loc)}
@@ -566,7 +566,7 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
                       setLocations(locations.filter(l => l !== loc))
                     }
                   }}
-                  className="accent-liquid-600"
+                  className="accent-olive-600"
                 />
                 <span className="text-xs">{loc}</span>
               </label>
@@ -583,7 +583,7 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
             placeholder="e.g., contemporary art, abstract painting"
-            className="w-full px-2 py-1.5 text-xs border border-liquid-200 rounded-lg focus:ring-liquid-500 focus:border-liquid-500"
+            className="w-full px-2 py-1.5 text-xs border border-olive-200 rounded-lg focus:ring-olive-500 focus:border-olive-500"
           />
         </div>
 
@@ -594,7 +594,7 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
         )}
 
         {success && (
-          <div className="p-2 bg-liquid-50 border border-liquid-200 rounded text-liquid-700 text-xs">
+          <div className="p-2 bg-olive-50 border border-olive-200 rounded text-olive-700 text-xs">
             ✅ Discovery job started! Check the Websites tab to see results.
           </div>
         )}
@@ -602,7 +602,7 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
         <button
           onClick={handleDiscover}
           disabled={loading || categories.length === 0 || locations.length === 0}
-          className="w-full px-3 py-2 liquid-gradient text-white rounded-lg hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-xs font-semibold"
+          className="w-full px-3 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-xs font-semibold"
         >
           {loading ? (
             <>

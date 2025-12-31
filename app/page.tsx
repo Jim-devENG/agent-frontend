@@ -195,20 +195,20 @@ export default function Dashboard() {
       <div className="flex-1 lg:ml-64 flex flex-col">
         {/* Top Header */}
         <header className="glass border-b border-gray-200/50 sticky top-0 z-30 shadow-sm backdrop-blur-xl">
-          <div className="px-4 sm:px-6 py-4 flex items-center justify-between">
+          <div className="px-3 sm:px-4 py-2 flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold liquid-gradient-text">
+              <h2 className="text-sm font-bold text-olive-700">
                 {tabs.find(t => t.id === activeTab)?.label || 'Dashboard'}
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">Liquid Canvas Outreach Studio</p>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
               <button
                 onClick={refreshData}
-                className="flex items-center space-x-2 px-4 py-2 glass hover:bg-white/80 text-gray-700 rounded-xl transition-all duration-200 text-sm font-medium hover:shadow-md"
+                className="flex items-center space-x-1 px-2 py-1 glass hover:bg-white/80 text-gray-700 rounded-lg transition-all duration-200 text-xs font-medium hover:shadow-md"
                 title="Refresh all data"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-3 h-3" />
                 <span>Refresh</span>
               </button>
               <button
@@ -216,9 +216,9 @@ export default function Dashboard() {
                   localStorage.removeItem('auth_token')
                   router.push('/login')
                 }}
-                className="flex items-center space-x-2 px-4 py-2 liquid-gradient text-white rounded-xl transition-all duration-200 text-sm font-medium shadow-lg hover:shadow-xl hover:scale-105"
+                className="flex items-center space-x-1 px-2 py-1 bg-olive-600 text-white rounded-lg transition-all duration-200 text-xs font-medium shadow-md hover:bg-olive-700"
               >
-                <LogOutIcon className="w-4 h-4" />
+                <LogOutIcon className="w-3 h-3" />
                 <span>Logout</span>
               </button>
             </div>
@@ -227,14 +227,14 @@ export default function Dashboard() {
 
       {/* Connection Error Banner */}
       {connectionError && (
-          <div className="px-4 sm:px-6 py-4">
-          <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 shadow-sm">
+          <div className="px-3 sm:px-4 py-2">
+          <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-2 shadow-sm">
             <div className="flex items-center">
               <div>
-                <p className="text-sm font-medium text-red-800">
+                <p className="text-xs font-medium text-red-800">
                   Backend not connected
                 </p>
-                <p className="text-xs text-red-600 mt-1">
+                <p className="text-xs text-red-600 mt-0.5">
                   Unable to connect to API server. Please ensure the backend is running.
                 </p>
               </div>
@@ -244,14 +244,14 @@ export default function Dashboard() {
       )}
 
       {/* System Status Bar */}
-        <div className="px-4 sm:px-6 py-3">
+        <div className="px-3 sm:px-4 py-2">
         <SystemStatus jobs={jobs} loading={loading} />
       </div>
 
       {/* Main Content */}
-        <main className="flex-1 px-4 sm:px-6 py-4 overflow-y-auto">
+        <main className="flex-1 px-3 sm:px-4 py-2 overflow-y-auto">
         {activeTab === 'overview' && (
-          <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-3">
             {/* Stats Cards - Full Width */}
             <div className="lg:col-span-12">
               {stats ? <StatsCards stats={stats} /> : (
@@ -262,13 +262,13 @@ export default function Dashboard() {
             </div>
 
             {/* Left Column - Automation & Manual Scrape */}
-            <div className="lg:col-span-7 space-y-6">
+            <div className="lg:col-span-7 space-y-3">
               <AutomationControl />
               <ManualScrape />
             </div>
 
             {/* Right Column - Jobs & Activity */}
-            <div className="lg:col-span-5 space-y-6">
+            <div className="lg:col-span-5 space-y-3">
               {Array.isArray(jobs) && jobs.length > 0 ? (
                 <JobStatusPanel jobs={jobs} onRefresh={refreshData} />
               ) : (
@@ -318,16 +318,16 @@ export default function Dashboard() {
         )}
 
         {activeTab === 'settings' && (
-          <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="text-center py-8">
-              <Settings className="w-12 h-12 text-olive-600 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-gray-900 mb-2">System Settings</h2>
-              <p className="text-gray-600 mb-6">Configure and test all API integrations</p>
+          <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+            <div className="text-center py-4">
+              <Settings className="w-8 h-8 text-olive-600 mx-auto mb-2" />
+              <h2 className="text-sm font-bold text-gray-900 mb-1">System Settings</h2>
+              <p className="text-xs text-gray-600 mb-3">Configure and test all API integrations</p>
               <Link
                 href="/settings"
-                className="inline-flex items-center px-6 py-3 bg-olive-600 text-white rounded-md hover:bg-olive-700 transition-colors font-semibold"
+                className="inline-flex items-center px-3 py-1.5 bg-olive-600 text-white rounded-md hover:bg-olive-700 transition-colors text-xs font-semibold"
               >
-                <Settings className="w-5 h-5 mr-2" />
+                <Settings className="w-3 h-3 mr-1" />
                 Open Settings Page
               </Link>
             </div>
@@ -335,20 +335,20 @@ export default function Dashboard() {
         )}
 
         {activeTab === 'guide' && (
-          <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">User Guide</h2>
-              <p className="text-gray-600">Complete documentation on how to use the Art Outreach Automation</p>
+          <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+            <div className="text-center mb-3">
+              <h2 className="text-sm font-bold text-gray-900 mb-1">User Guide</h2>
+              <p className="text-xs text-gray-600">Complete documentation on how to use the Art Outreach Automation</p>
             </div>
             <div className="prose prose-sm max-w-none">
-              <p className="text-gray-700 mb-4">
+              <p className="text-xs text-gray-700 mb-2">
                 For the complete user guide, please visit the dedicated guide page.
               </p>
               <a
                 href="/guide"
-                className="inline-flex items-center px-4 py-2 bg-olive-600 text-white rounded-md hover:bg-olive-700 transition-colors"
+                className="inline-flex items-center px-3 py-1.5 bg-olive-600 text-white rounded-md hover:bg-olive-700 transition-colors text-xs"
               >
-                <BookOpen className="w-4 h-4 mr-2" />
+                <BookOpen className="w-3 h-3 mr-1" />
                 Open Full Guide
               </a>
             </div>
