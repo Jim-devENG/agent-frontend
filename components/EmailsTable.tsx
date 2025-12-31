@@ -11,6 +11,13 @@ export default function EmailsTable() {
   const [skip, setSkip] = useState(0)
   const [total, setTotal] = useState(0)
   const limit = 50
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+
+  // Available categories
+  const availableCategories = [
+    'Art Gallery', 'Museum', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
+    'Art Dealer', 'Art Consultant', 'Art Publisher', 'Art Magazine'
+  ]
 
   const loadSentEmails = async () => {
     try {
@@ -18,9 +25,24 @@ export default function EmailsTable() {
       setError(null)
       const response = await listProspects(skip, limit, 'sent')
       // Ensure data is always an array
-      const prospectsData = Array.isArray(response?.data) ? response.data : []
+      let prospectsData = Array.isArray(response?.data) ? response.data : []
+      
+      // Filter by category if selected
+      if (selectedCategory !== 'all') {
+        prospectsData = prospectsData.filter((p: Prospect) => 
+          p.discovery_category === selectedCategory || p.discovery_category?.toLowerCase() === selectedCategory.toLowerCase()
+        )
+      }
+      
+      // Sort by category in ascending order
+      prospectsData.sort((a: Prospect, b: Prospect) => {
+        const catA = a.discovery_category || ''
+        const catB = b.discovery_category || ''
+        return catA.localeCompare(catB)
+      })
+      
       setProspects(prospectsData)
-      setTotal(response?.total ?? 0)
+      setTotal(selectedCategory === 'all' ? (response?.total ?? 0) : prospectsData.length)
       // Clear error if we successfully got data (even if empty)
       // Empty data is not an error, it's a valid state
     } catch (error: any) {
@@ -54,7 +76,7 @@ export default function EmailsTable() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip])
+  }, [skip, selectedCategory])
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A'
@@ -65,13 +87,25 @@ export default function EmailsTable() {
     <div className="glass rounded-xl shadow-lg border border-white/20 p-3">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-bold text-gray-900">Sent Emails</h2>
-        <button
-          onClick={loadSentEmails}
-          className="flex items-center space-x-1 px-2 py-1.5 bg-olive-600 text-white rounded-lg hover:bg-olive-700 text-xs font-medium"
-        >
-          <RefreshCw className="w-3 h-3" />
-          <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
+          >
+            <option value="all">All Categories</option>
+            {availableCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          <button
+            onClick={loadSentEmails}
+            className="flex items-center space-x-1 px-2 py-1.5 bg-olive-600 text-white rounded-lg hover:bg-olive-700 text-xs font-medium"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+          </button>
+        </div>
       </div>
 
       {loading && prospects.length === 0 ? (
@@ -101,6 +135,7 @@ export default function EmailsTable() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-gray-700">Category</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-gray-700">Recipient</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-gray-700">Subject</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-gray-700">Status</th>
@@ -111,6 +146,9 @@ export default function EmailsTable() {
               <tbody>
                 {prospects.map((prospect) => (
                   <tr key={prospect.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-2 px-3">
+                      <span className="text-gray-700 text-xs font-medium">{prospect.discovery_category || 'N/A'}</span>
+                    </td>
                     <td className="py-2 px-3">
                       <div className="flex items-center space-x-1">
                         <Mail className="w-3 h-3 text-gray-400" />

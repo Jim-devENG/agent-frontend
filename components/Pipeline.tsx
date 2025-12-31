@@ -527,7 +527,7 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
   }, [])
 
   const availableCategories = [
-    'Art Gallery', 'Museum', 'Art Studio', 'Art School', 'Art Fair', 
+    'Art Gallery', 'Museum', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
     'Art Dealer', 'Art Consultant', 'Art Publisher', 'Art Magazine'
   ]
 

@@ -22,6 +22,13 @@ export default function DiscoveredWebsitesTable() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [total, setTotal] = useState(0)
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+
+  // Available categories
+  const availableCategories = [
+    'Art Gallery', 'Museum', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
+    'Art Dealer', 'Art Consultant', 'Art Publisher', 'Art Magazine'
+  ]
 
   const loadWebsites = async () => {
     try {
@@ -33,7 +40,7 @@ export default function DiscoveredWebsitesTable() {
       const allProspects = Array.isArray(response?.data) ? response.data : []
       
       // Filter to only discovered websites (not yet prospects - those appear after scraping)
-      const discovered = allProspects
+      let discovered = allProspects
         .filter((p: Prospect) => p.discovery_status === 'DISCOVERED')
         .map((p: Prospect) => ({
           id: p.id,
@@ -46,6 +53,20 @@ export default function DiscoveredWebsitesTable() {
           discovery_status: p.discovery_status,
           created_at: p.created_at
         }))
+      
+      // Filter by category if selected
+      if (selectedCategory !== 'all') {
+        discovered = discovered.filter((w: DiscoveredWebsite) => 
+          w.discovery_category === selectedCategory || w.discovery_category?.toLowerCase() === selectedCategory.toLowerCase()
+        )
+      }
+      
+      // Sort by category in ascending order
+      discovered.sort((a: DiscoveredWebsite, b: DiscoveredWebsite) => {
+        const catA = a.discovery_category || ''
+        const catB = b.discovery_category || ''
+        return catA.localeCompare(catB)
+      })
       
       setWebsites(discovered)
       setTotal(discovered.length)
@@ -81,7 +102,7 @@ export default function DiscoveredWebsitesTable() {
         window.removeEventListener('jobsCompleted', handleJobCompleted)
       }
     }
-  }, [])
+  }, [selectedCategory])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString()
@@ -143,13 +164,25 @@ export default function DiscoveredWebsitesTable() {
             </p>
           )}
         </div>
-        <button
-          onClick={loadWebsites}
-          className="flex items-center space-x-2 px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>Refresh</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
+          >
+            <option value="all">All Categories</option>
+            {availableCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          <button
+            onClick={loadWebsites}
+            className="flex items-center space-x-2 px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       {websites.length === 0 ? (

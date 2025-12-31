@@ -26,6 +26,13 @@ export default function WebsitesTable() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+
+  // Available categories
+  const availableCategories = [
+    'Art Gallery', 'Museum', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
+    'Art Dealer', 'Art Consultant', 'Art Publisher', 'Art Magazine'
+  ]
 
   const loadWebsites = async () => {
     try {
@@ -39,9 +46,25 @@ export default function WebsitesTable() {
         isArray: Array.isArray(response?.data)
       })
       if (response?.data && Array.isArray(response.data)) {
-      setWebsites(response.data)
-        setTotal(response.total ?? response.data.length)
-        console.log('✅ [WEBSITES] Set websites:', response.data.length)
+        let websitesData = response.data
+        
+        // Filter by category if selected
+        if (selectedCategory !== 'all') {
+          websitesData = websitesData.filter((w: Website) => 
+            w.category === selectedCategory || w.category?.toLowerCase() === selectedCategory.toLowerCase()
+          )
+        }
+        
+        // Sort by category in ascending order
+        websitesData.sort((a: Website, b: Website) => {
+          const catA = a.category || ''
+          const catB = b.category || ''
+          return catA.localeCompare(catB)
+        })
+        
+        setWebsites(websitesData)
+        setTotal(selectedCategory === 'all' ? (response.total ?? websitesData.length) : websitesData.length)
+        console.log('✅ [WEBSITES] Set websites:', websitesData.length)
       } else {
         console.warn('⚠️ [WEBSITES] Invalid response structure:', response)
         setWebsites([])
@@ -61,7 +84,7 @@ export default function WebsitesTable() {
     loadWebsites()
     const interval = setInterval(loadWebsites, 10000) // Refresh every 10 seconds
     return () => clearInterval(interval)
-  }, [skip])
+  }, [skip, selectedCategory])
 
   const handleApprove = async () => {
     if (selected.size === 0) {
@@ -160,7 +183,17 @@ export default function WebsitesTable() {
             Websites found during discovery. Approve them to proceed with scraping.
           </p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
+          >
+            <option value="all">All Categories</option>
+            {availableCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
           <button
             onClick={loadWebsites}
             disabled={loading}

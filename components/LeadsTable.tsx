@@ -32,6 +32,13 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
   const [manualSuccess, setManualSuccess] = useState<string | null>(null)
 
   const [error, setError] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+
+  // Available categories
+  const availableCategories = [
+    'Art Gallery', 'Museum', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
+    'Art Dealer', 'Art Consultant', 'Art Publisher', 'Art Magazine'
+  ]
 
   const loadProspects = async () => {
     try {
@@ -51,7 +58,22 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
         isArray: Array.isArray(response?.data)
       })
       
-      const leads = Array.isArray(response?.data) ? response.data : []
+      let leads = Array.isArray(response?.data) ? response.data : []
+      
+      // Filter by category if selected
+      if (selectedCategory !== 'all') {
+        leads = leads.filter((p: Prospect) => 
+          p.discovery_category === selectedCategory || p.discovery_category?.toLowerCase() === selectedCategory.toLowerCase()
+        )
+      }
+      
+      // Sort by category in ascending order
+      leads.sort((a: Prospect, b: Prospect) => {
+        const catA = a.discovery_category || ''
+        const catB = b.discovery_category || ''
+        return catA.localeCompare(catB)
+      })
+      
       if (leads.length > 0 || response?.total > 0) {
         console.log(`✅ [${emailsOnly ? 'SCRAPED EMAILS' : 'LEADS'}] Setting prospects:`, leads.length, 'total:', response?.total)
       } else {
@@ -59,7 +81,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
       }
       
       setProspects(leads)
-      setTotal(response.total ?? leads.length)
+      setTotal(selectedCategory === 'all' ? (response.total ?? leads.length) : leads.length)
       // Clear error if we successfully got data (even if empty)
       // Empty data is not an error, it's a valid state
     } catch (error: any) {
@@ -121,7 +143,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip, emailsOnly])
+  }, [skip, emailsOnly, selectedCategory])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString()
@@ -289,7 +311,18 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
           </h2>
           <p className="text-xs text-gray-500 mt-1">Liquid Canvas Outreach</p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
+          >
+            <option value="all">All Categories</option>
+            {availableCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          <div className="flex items-center space-x-2">
           <button
             onClick={() => setShowManualActions(!showManualActions)}
             className="flex items-center space-x-1 px-2 py-1 glass hover:bg-white/80 text-gray-700 rounded-lg transition-all duration-200 text-xs font-medium hover:shadow-md"
@@ -304,7 +337,8 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
         </button>
-      </div>
+          </div>
+        </div>
       </div>
 
       {/* Error/Success Message Display */}
@@ -440,6 +474,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
             <table className="w-full">
               <thead>
                 <tr className="bg-gradient-to-r from-liquid-50 to-purple-50 border-b border-gray-200/50">
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Category</th>
                   <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Domain</th>
                   <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Email</th>
                   <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
@@ -451,6 +486,9 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
               <tbody className="bg-white divide-y divide-gray-100">
                 {prospects.map((prospect) => (
                   <tr key={prospect.id} className="hover:bg-gradient-to-r hover:from-liquid-50/30 hover:to-purple-50/30 transition-all duration-200">
+                    <td className="py-2 px-3 text-xs">
+                      <span className="text-gray-700 font-medium">{prospect.discovery_category || 'N/A'}</span>
+                    </td>
                     <td className="py-2 px-3 text-xs">
                       <div className="flex items-center space-x-2">
                         <span className="font-semibold text-gray-900">{prospect.domain}</span>
@@ -477,9 +515,9 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                       )}
                     </td>
                     <td className="py-2 px-3 text-xs">
-                      <div className="flex flex-col space-y-1">
+                      <div className="flex flex-col space-y-0.5">
                         <span
-                          className={`px-3 py-1 rounded-lg text-xs font-semibold shadow-sm ${
+                          className={`px-2 py-0.5 rounded text-xs font-medium ${
                             prospect.verification_status === 'verified'
                               ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white'
                               : prospect.verification_status === 'unverified' || prospect.verification_status === 'UNVERIFIED'
@@ -494,7 +532,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                         {/* Show outreach_status (secondary, for sent/replied) */}
                         {prospect.outreach_status && prospect.outreach_status !== 'pending' && (
                           <span
-                            className={`px-3 py-1 rounded-lg text-xs font-semibold shadow-sm ${
+                            className={`px-2 py-0.5 rounded text-xs font-medium ${
                               prospect.outreach_status === 'sent'
                                 ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white'
                                 : prospect.outreach_status === 'replied'
