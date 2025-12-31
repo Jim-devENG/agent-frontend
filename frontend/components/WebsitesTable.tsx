@@ -152,10 +152,10 @@ export default function WebsitesTable() {
   }
 
   return (
-    <div className="glass rounded-3xl shadow-xl border border-white/20 p-6 animate-fade-in">
+    <div className="glass rounded-xl shadow-lg border border-white/20 p-3 animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold liquid-gradient-text mb-1">Discovered Websites</h2>
+          <h2 className="text-sm font-bold text-olive-700 mb-1">Discovered Websites</h2>
           <p className="text-sm text-gray-600">
             Websites found during discovery. Approve them to proceed with scraping.
           </p>
@@ -164,7 +164,7 @@ export default function WebsitesTable() {
           <button
             onClick={loadWebsites}
             disabled={loading}
-            className="px-4 py-2 glass hover:bg-white/80 text-gray-700 rounded-xl flex items-center space-x-2 disabled:opacity-50 transition-all duration-200 font-medium hover:shadow-md"
+            className="px-2 py-1 text-xs glass hover:bg-white/80 text-gray-700 rounded-lg flex items-center space-x-1 disabled:opacity-50 transition-all duration-200 font-medium hover:shadow-md"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
@@ -192,14 +192,14 @@ export default function WebsitesTable() {
       ) : (
         <>
           {selected.size > 0 && (
-            <div className="mb-4 p-4 bg-gradient-to-r from-liquid-50 to-purple-50 border-2 border-liquid-200 rounded-xl flex items-center justify-between shadow-md animate-slide-up">
+            <div className="mb-2 p-2 bg-gradient-to-r from-olive-50 to-olive-50 border border-olive-200 rounded-lg flex items-center justify-between shadow-sm animate-slide-up">
               <p className="text-sm font-semibold text-gray-700">
                 {selected.size} website{selected.size !== 1 ? 's' : ''} selected
               </p>
               <button
                 onClick={handleApprove}
                 disabled={actionLoading}
-                className="px-4 py-2 liquid-gradient text-white rounded-xl hover:shadow-xl hover:scale-105 transition-all duration-200 disabled:opacity-50 flex items-center space-x-2 font-semibold shadow-lg"
+                className="px-2 py-1 text-xs bg-olive-600 text-white rounded-lg hover:bg-olive-700 hover:shadow-md transition-all duration-200 disabled:opacity-50 flex items-center space-x-1 font-semibold shadow-sm"
               >
                 {actionLoading ? (
                   <>
@@ -234,18 +234,18 @@ export default function WebsitesTable() {
                       className="w-4 h-4 text-olive-600"
                     />
                   </th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Domain</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Title</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Category</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Location</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Domain</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Title</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Category</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Location</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {websites.map(website => (
                   <tr key={website.id} className="border-b border-gray-100 hover:bg-gradient-to-r hover:from-liquid-50/30 hover:to-purple-50/30 transition-all duration-200">
-                    <td className="py-3 px-4">
+                    <td className="py-2 px-3 text-xs">
                       <input
                         type="checkbox"
                         checked={selected.has(website.id)}
@@ -267,16 +267,16 @@ export default function WebsitesTable() {
                           href={website.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="liquid-gradient-text hover:underline font-semibold flex items-center space-x-1 transition-all duration-200"
+                          className="text-olive-700 hover:underline text-xs font-semibold flex items-center space-x-1 transition-all duration-200"
                         >
                           <span>{website.domain}</span>
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>
                     </td>
-                    <td className="py-4 px-6 text-sm text-gray-700 font-medium">{website.title}</td>
-                    <td className="py-4 px-6 text-sm text-gray-600">{website.category}</td>
-                    <td className="py-4 px-6 text-sm text-gray-600">{website.location}</td>
+                    <td className="py-2 px-3 text-xs text-gray-700 font-medium">{website.title}</td>
+                    <td className="py-2 px-3 text-xs text-gray-600">{website.category}</td>
+                    <td className="py-2 px-3 text-xs text-gray-600">{website.location}</td>
                     <td className="py-4 px-6">
                       <div className="flex flex-col space-y-1">
                         <span className={`px-3 py-1 rounded-lg text-xs font-semibold shadow-sm ${

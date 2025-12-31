@@ -22,7 +22,7 @@ export default function SystemStatus({ jobs, loading }: SystemStatusProps) {
     : []
 
   return (
-    <div className="glass rounded-2xl shadow-lg border border-white/20 p-4 animate-fade-in">
+    <div className="glass rounded-xl shadow-lg border border-white/20 p-2 animate-fade-in">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-6">
           <div className="flex items-center space-x-2">

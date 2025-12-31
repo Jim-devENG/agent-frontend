@@ -90,21 +90,21 @@ export default function JobStatusPanel({ jobs, expanded = false, onRefresh }: Jo
         {/* Summary Stats */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div className="glass rounded-xl p-3 border border-blue-200/50 shadow-sm">
+            <div className="glass rounded-xl p-2 border border-blue-200/50 shadow-sm">
               <div className="text-xs text-blue-600 font-semibold mb-1">Queries Executed</div>
-              <div className="text-xl font-bold liquid-gradient-text">{stats.queries_executed || 0}</div>
+              <div className="text-lg font-bold text-olive-700">{stats.queries_executed || 0}</div>
             </div>
-            <div className="glass rounded-xl p-3 border border-green-200/50 shadow-sm">
+            <div className="glass rounded-xl p-2 border border-green-200/50 shadow-sm">
               <div className="text-xs text-green-600 font-semibold mb-1">Results Found</div>
-              <div className="text-xl font-bold text-green-700">{stats.total_results_found || 0}</div>
+              <div className="text-lg font-bold text-green-700">{stats.total_results_found || 0}</div>
             </div>
-            <div className="glass rounded-xl p-3 border border-purple-200/50 shadow-sm">
+            <div className="glass rounded-xl p-2 border border-purple-200/50 shadow-sm">
               <div className="text-xs text-purple-600 font-semibold mb-1">Prospects Saved</div>
-              <div className="text-xl font-bold text-purple-700">{stats.results_saved || 0}</div>
+              <div className="text-lg font-bold text-purple-700">{stats.results_saved || 0}</div>
             </div>
-            <div className="glass rounded-xl p-3 border border-orange-200/50 shadow-sm">
+            <div className="glass rounded-xl p-2 border border-orange-200/50 shadow-sm">
               <div className="text-xs text-orange-600 font-semibold mb-1">Skipped</div>
-              <div className="text-xl font-bold text-orange-700">
+              <div className="text-lg font-bold text-orange-700">
                 {(stats.results_skipped_duplicate || 0) + (stats.results_skipped_existing || 0)}
               </div>
             </div>
@@ -113,7 +113,7 @@ export default function JobStatusPanel({ jobs, expanded = false, onRefresh }: Jo
 
         {/* Detailed Stats */}
         {stats && (
-          <div className="glass rounded-xl p-4 border border-gray-200/50 shadow-sm space-y-2 text-xs">
+          <div className="glass rounded-xl p-2 border border-gray-200/50 shadow-sm space-y-1 text-xs">
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <span className="text-gray-600">Successful Queries:</span>
@@ -206,7 +206,7 @@ export default function JobStatusPanel({ jobs, expanded = false, onRefresh }: Jo
 
         {/* Warning if no results */}
         {stats && stats.total_results_found === 0 && (
-          <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-xl p-4 shadow-sm">
+          <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-300 rounded-xl p-2 shadow-sm">
             <div className="text-xs text-yellow-800">
               <strong>⚠️ No websites found:</strong> The search queries didn&apos;t return any results from DataForSEO.
               This could mean:
@@ -227,8 +227,8 @@ export default function JobStatusPanel({ jobs, expanded = false, onRefresh }: Jo
   const displayJobs = expanded ? jobsArray : jobsArray.slice(0, 5)
 
   return (
-    <div className="glass rounded-3xl shadow-xl border border-white/20 p-6 animate-fade-in">
-      <h2 className="text-xl font-bold liquid-gradient-text mb-6">Recent Jobs</h2>
+    <div className="glass rounded-xl shadow-lg border border-white/20 p-3 animate-fade-in">
+      <h2 className="text-sm font-bold text-olive-700 mb-3">Recent Jobs</h2>
       {displayJobs.length === 0 ? (
         <p className="text-gray-500 text-sm">No jobs found</p>
       ) : (
@@ -238,7 +238,7 @@ export default function JobStatusPanel({ jobs, expanded = false, onRefresh }: Jo
             return (
               <div
                 key={job.id}
-                className="glass rounded-xl p-4 border border-white/20 hover:bg-white/60 hover:shadow-lg transition-all duration-200"
+                className="glass rounded-lg p-2 border border-white/20 hover:bg-white/60 hover:shadow-md transition-all duration-200"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center space-x-2">
@@ -297,21 +297,21 @@ export default function JobStatusPanel({ jobs, expanded = false, onRefresh }: Jo
       {/* Cancel Confirmation Modal */}
       {showCancelModal.show && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Cancel Job?</h3>
+          <div className="bg-white rounded-lg p-3 max-w-md w-full mx-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Cancel Job?</h3>
             <p className="text-gray-600 mb-6">
               Are you sure you want to cancel this job? This will stop the discovery process, but it will NOT delete any prospects that have already been saved.
             </p>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowCancelModal({ show: false, jobId: null })}
-                className="px-5 py-2 text-gray-700 glass hover:bg-white/80 rounded-xl transition-all duration-200 font-semibold"
+                className="px-3 py-1.5 text-xs text-gray-700 glass hover:bg-white/80 rounded-lg transition-all duration-200 font-semibold"
               >
                 No, Keep Running
               </button>
               <button
                 onClick={confirmCancelJob}
-                className="px-5 py-2 text-white bg-gradient-to-r from-red-500 to-pink-600 rounded-xl hover:shadow-xl hover:scale-105 transition-all duration-200 font-semibold shadow-lg"
+                className="px-3 py-1.5 text-xs text-white bg-gradient-to-r from-red-500 to-pink-600 rounded-lg hover:shadow-md hover:scale-102 transition-all duration-200 font-semibold shadow-md"
               >
                 Yes, Cancel Job
               </button>

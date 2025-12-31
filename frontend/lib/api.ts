@@ -218,7 +218,7 @@ export async function createDiscoveryJob(
   
   // Add cache-busting timestamp to ensure fresh requests
   const timestamp = Date.now()
-  const url = `${API_BASE}/jobs/discover?_t=${timestamp}`
+  const url = `${API_BASE}/pipeline/discover?_t=${timestamp}`
   
   // Prepare request payload
   const payload = {
@@ -479,8 +479,8 @@ export async function cancelJob(jobId: string): Promise<{ success: boolean; mess
   }
   
   try {
-    const res = await authenticatedFetch(`${API_BASE}/jobs/${jobId}/cancel`, {
-      method: 'PATCH',
+    const res = await authenticatedFetch(`${API_BASE}/jobs/cancel/${jobId}`, {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
