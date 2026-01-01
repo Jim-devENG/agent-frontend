@@ -14,12 +14,16 @@ const LOCATION_OPTIONS = [
 ]
 
 const CATEGORY_OPTIONS = [
-  { value: 'home_decor', label: 'Home decor' },
-  { value: 'holiday', label: 'Holiday' },
-  { value: 'parenting', label: 'Parenting' },
-  { value: 'audio_visuals', label: 'Audio visuals' },
-  { value: 'gift_guides', label: 'Gift guides' },
-  { value: 'tech_innovation', label: 'Tech innovation' },
+  { value: 'Art Gallery', label: 'Art Gallery' },
+  { value: 'Museum', label: 'Museum' },
+  { value: 'Museums', label: 'Museums' },
+  { value: 'Art Studio', label: 'Art Studio' },
+  { value: 'Art School', label: 'Art School' },
+  { value: 'Art Fair', label: 'Art Fair' },
+  { value: 'Art Dealer', label: 'Art Dealer' },
+  { value: 'Art Consultant', label: 'Art Consultant' },
+  { value: 'Art Publisher', label: 'Art Publisher' },
+  { value: 'Art Magazine', label: 'Art Magazine' },
 ]
 
 export default function ManualScrape() {
@@ -181,39 +185,39 @@ export default function ManualScrape() {
   }
 
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-gray-200/60 p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-gray-900">Manual Website Scrape</h2>
+    <div className="glass rounded-xl shadow-lg border border-white/20 p-3">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-bold text-gray-900">Manual Website Scrape</h2>
         {loading && (
-          <div className="flex items-center space-x-2 text-olive-600">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span className="text-sm font-medium">Starting job...</span>
+          <div className="flex items-center space-x-1 text-olive-600">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            <span className="text-xs font-medium">Starting job...</span>
           </div>
         )}
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-800">{error}</p>
+        <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-xs text-red-800">{error}</p>
         </div>
       )}
       {success && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-sm text-green-800 flex items-center">
-            <CheckCircle className="w-4 h-4 mr-2" />
+        <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg">
+          <p className="text-xs text-green-800 flex items-center">
+            <CheckCircle className="w-3 h-3 mr-1" />
             Discovery job started successfully! Check the &quot;Jobs&quot; tab for status.
           </p>
         </div>
       )}
 
-      <div className="space-y-6">
+      <div className="space-y-3">
         {/* Categories Section */}
         <div>
-          <label className="flex items-center space-x-2 text-sm font-semibold text-gray-700 mb-3">
-            <Tag className="w-4 h-4" />
+          <label className="flex items-center space-x-1 text-xs font-semibold text-gray-700 mb-2">
+            <Tag className="w-3 h-3" />
             <span>Select Categories (Recommended)</span>
           </label>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
             {CATEGORY_OPTIONS.map((cat) => {
               const isSelected = selectedCategories.includes(cat.value)
               return (
@@ -221,9 +225,9 @@ export default function ManualScrape() {
                   key={cat.value}
                   type="button"
                   onClick={() => toggleCategory(cat.value)}
-                  className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     isSelected
-                      ? 'bg-olive-600 text-white shadow-md transform scale-105'
+                      ? 'bg-olive-600 text-white shadow-md'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
                   }`}
                 >
@@ -233,7 +237,7 @@ export default function ManualScrape() {
             })}
           </div>
           {selectedCategories.length > 0 && (
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="mt-1.5 text-xs text-gray-500">
               {selectedCategories.length} categor{selectedCategories.length === 1 ? 'y' : 'ies'} selected
             </p>
           )}
@@ -241,8 +245,8 @@ export default function ManualScrape() {
 
         {/* Keywords Section */}
         <div>
-          <label className="flex items-center space-x-2 text-sm font-semibold text-gray-700 mb-2">
-            <Search className="w-4 h-4" />
+          <label className="flex items-center space-x-1 text-xs font-semibold text-gray-700 mb-1.5">
+            <Search className="w-3 h-3" />
             <span>Keywords (Optional)</span>
           </label>
           <input
@@ -254,7 +258,7 @@ export default function ManualScrape() {
               setSuccess(false)
             }}
             placeholder="e.g., art blog, creative agency, design studio"
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive-500 focus:border-transparent"
+            className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive-500 focus:border-transparent"
           />
           <p className="mt-1 text-xs text-gray-500">
             Leave empty if using categories only
@@ -263,11 +267,11 @@ export default function ManualScrape() {
 
         {/* Locations Section */}
         <div>
-          <label className="flex items-center space-x-2 text-sm font-semibold text-gray-700 mb-3">
-            <MapPin className="w-4 h-4" />
+          <label className="flex items-center space-x-1 text-xs font-semibold text-gray-700 mb-2">
+            <MapPin className="w-3 h-3" />
             <span>Locations (Required)</span>
           </label>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
             {LOCATION_OPTIONS.map((loc) => {
               const isSelected = selectedLocations.includes(loc.value)
               return (
@@ -275,9 +279,9 @@ export default function ManualScrape() {
                   key={loc.value}
                   type="button"
                   onClick={() => toggleLocation(loc.value)}
-                  className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     isSelected
-                      ? 'bg-blue-600 text-white shadow-md transform scale-105'
+                      ? 'bg-blue-600 text-white shadow-md'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
                   }`}
                 >
@@ -287,7 +291,7 @@ export default function ManualScrape() {
             })}
           </div>
           {selectedLocations.length > 0 && (
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="mt-1.5 text-xs text-gray-500">
               {selectedLocations.length} location{selectedLocations.length === 1 ? '' : 's'} selected
             </p>
           )}
@@ -295,7 +299,7 @@ export default function ManualScrape() {
 
         {/* Max Results */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
             Max Results (1-1000)
           </label>
           <input
@@ -304,29 +308,29 @@ export default function ManualScrape() {
             onChange={handleMaxResultsChange}
             min="1"
             max="1000"
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive-500 focus:border-transparent"
+            className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive-500 focus:border-transparent"
           />
         </div>
 
         {/* Action Button */}
-        <div className="pt-4 border-t border-gray-200">
+        <div className="pt-2 border-t border-gray-200">
           <button
             onClick={handleScrape}
             disabled={loading || !canStart()}
-            className={`w-full flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+            className={`w-full flex items-center justify-center space-x-1 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
               canStart() && !loading
-                ? 'bg-olive-600 text-white hover:bg-olive-700 shadow-md hover:shadow-lg transform hover:scale-105'
+                ? 'bg-olive-600 text-white hover:bg-olive-700 shadow-md'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
           >
             {loading ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="w-3 h-3 animate-spin" />
                 <span>Starting Scraping...</span>
               </>
             ) : (
               <>
-                <Play className="w-5 h-5" />
+                <Play className="w-3 h-3" />
                 <span>Start Manual Scraping</span>
               </>
             )}
