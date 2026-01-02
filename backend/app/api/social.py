@@ -116,9 +116,33 @@ async def discover_profiles(
         )
     except Exception as e:
         error_msg = str(e)
+        error_type = type(e).__name__
         logger.error(f"❌ [SOCIAL DISCOVERY] Error creating discovery job: {error_msg}", exc_info=True)
         
-        # Log the error but return a user-friendly message
+        # Check if this is a database schema error (table/column missing)
+        is_schema_error = (
+            "does not exist" in error_msg.lower() or
+            "relation" in error_msg.lower() or
+            "f405" in error_msg.lower() or
+            "UndefinedTableError" in error_type or
+            "ProgrammingError" in error_type or
+            "table" in error_msg.lower() and "not exist" in error_msg.lower()
+        )
+        
+        if is_schema_error:
+            # Schema error - return 200 with inactive status (not 500)
+            logger.warning(f"⚠️  [SOCIAL DISCOVERY] Database schema error detected: {error_msg}")
+            logger.warning("⚠️  Returning inactive status instead of 500 error")
+            return SocialDiscoveryResponse(
+                success=False,
+                job_id=None,
+                message=f"Social outreach feature is not available: database schema error",
+                profiles_count=0,
+                status="inactive",
+                reason="database schema error"
+            )
+        
+        # Other errors - return 500 (but never for schema issues)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to create discovery job: {error_msg}"
