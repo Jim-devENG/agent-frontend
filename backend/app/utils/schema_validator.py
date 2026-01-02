@@ -36,19 +36,29 @@ async def validate_social_tables_exist(engine: AsyncEngine) -> Tuple[bool, List[
     
     try:
         async with engine.begin() as conn:
-            result = await conn.execute(text("""
+            # Use IN clause instead of ANY for better compatibility
+            tables_list = list(required_tables)
+            placeholders = ','.join([f"'{t}'" for t in tables_list])
+            result = await conn.execute(text(f"""
                 SELECT table_name 
                 FROM information_schema.tables 
                 WHERE table_schema = 'public' 
-                AND table_name = ANY(:tables)
-            """), {"tables": list(required_tables)})
+                AND table_name IN ({placeholders})
+            """))
             
             existing_tables = {row[0] for row in result.fetchall()}
             missing_tables = required_tables - existing_tables
             
+            logger.info(f"📊 Social tables check: Found {len(existing_tables)}/{len(required_tables)} tables")
+            if missing_tables:
+                logger.warning(f"⚠️  Missing social tables: {', '.join(missing_tables)}")
+            
             return (len(missing_tables) == 0, list(missing_tables))
     except Exception as e:
-        logger.error(f"Failed to validate social tables: {e}", exc_info=True)
+        logger.error(f"❌ Failed to validate social tables: {e}", exc_info=True)
+        logger.error(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        logger.error(traceback.format_exc())
         # If we can't check, assume invalid (fail safe)
         return (False, list(required_tables))
 
@@ -71,19 +81,29 @@ async def validate_website_tables_exist(engine: AsyncEngine) -> Tuple[bool, List
     
     try:
         async with engine.begin() as conn:
-            result = await conn.execute(text("""
+            # Use IN clause instead of ANY for better compatibility
+            tables_list = list(required_tables)
+            placeholders = ','.join([f"'{t}'" for t in tables_list])
+            result = await conn.execute(text(f"""
                 SELECT table_name 
                 FROM information_schema.tables 
                 WHERE table_schema = 'public' 
-                AND table_name = ANY(:tables)
-            """), {"tables": list(required_tables)})
+                AND table_name IN ({placeholders})
+            """))
             
             existing_tables = {row[0] for row in result.fetchall()}
             missing_tables = required_tables - existing_tables
             
+            logger.info(f"📊 Website tables check: Found {len(existing_tables)}/{len(required_tables)} tables")
+            if missing_tables:
+                logger.warning(f"⚠️  Missing website tables: {', '.join(missing_tables)}")
+            
             return (len(missing_tables) == 0, list(missing_tables))
     except Exception as e:
-        logger.error(f"Failed to validate website tables: {e}", exc_info=True)
+        logger.error(f"❌ Failed to validate website tables: {e}", exc_info=True)
+        logger.error(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        logger.error(traceback.format_exc())
         return (False, list(required_tables))
 
 

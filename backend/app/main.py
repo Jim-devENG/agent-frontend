@@ -187,7 +187,11 @@ async def startup():
             try:
                 logger.info("🚀 Executing: alembic upgrade head")
                 logger.info("📝 This runs automatically on every backend startup")
+                logger.info("=" * 60)
+                
+                # Run migrations with detailed logging
                 command.upgrade(alembic_cfg, "head")
+                
                 logger.info("=" * 60)
                 logger.info("✅ Database migrations completed successfully")
                 logger.info("✅ All tables are up-to-date with latest schema")
@@ -198,9 +202,15 @@ async def startup():
                 logger.info("✅ Migrations completed - schema validation will run next")
             except Exception as migration_error:
                 logger.error("=" * 80)
-                logger.error(f"❌ CRITICAL: Migration failed: {migration_error}", exc_info=True)
-                logger.error("❌ alembic upgrade head failed - application will not start")
+                logger.error("❌ CRITICAL: Migration execution failed")
+                logger.error(f"❌ Error type: {type(migration_error).__name__}")
+                logger.error(f"❌ Error message: {str(migration_error)}")
                 logger.error("=" * 80)
+                logger.error("❌ Full traceback:")
+                import traceback
+                logger.error(traceback.format_exc())
+                logger.error("=" * 80)
+                logger.error("❌ alembic upgrade head failed - application will not start")
                 logger.error("❌ Fix migrations and restart")
                 logger.error("=" * 80)
                 # FAIL HARD - do not start server if migrations fail
