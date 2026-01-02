@@ -157,12 +157,16 @@ export default function EmailsTable() {
         <div className="flex items-center space-x-2">
           <select
             value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
+            onChange={(e) => {
+              // Only filter - never update categories
+              setSelectedCategory(e.target.value)
+            }}
             className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
+            title="Filter by category (does not update categories)"
           >
-            <option value="all">All Categories</option>
+            <option value="all">All Categories (Filter)</option>
             {availableCategories.map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
+              <option key={cat} value={cat}>{cat} (Filter)</option>
             ))}
           </select>
           {selectedProspects.size > 0 && (
