@@ -605,11 +605,22 @@ async def startup():
         except Exception as e:
             logger.error(f"Failed to check/add discovery_status column: {e}", exc_info=True)
     
-    # Run database setup in background (non-blocking)
-    # CRITICAL: Migrations run automatically via alembic upgrade head on every startup
-    asyncio.create_task(run_database_setup())
-    logger.info("✅ Database setup started in background")
+    # CRITICAL: Run migrations BLOCKING - server won't accept requests until migrations complete
+    # This ensures schema is ready before any API calls
+    logger.info("⏳ Waiting for database migrations to complete...")
     logger.info("📝 Alembic upgrade head runs automatically on every startup")
+    try:
+        await run_database_setup()
+        logger.info("✅ Database migrations completed - server is ready")
+    except Exception as migration_error:
+        logger.error("=" * 80)
+        logger.error("❌ CRITICAL: Database migrations failed during startup")
+        logger.error(f"❌ Error: {migration_error}")
+        logger.error("=" * 80)
+        logger.error("⚠️  Server will continue to start, but some features may not work")
+        logger.error("⚠️  Please check logs and run 'alembic upgrade head' manually if needed")
+        # Don't raise - allow server to start even if migrations fail
+        # This prevents deployment failures on Render
     
     # Start scheduler for periodic tasks (always start - scraper check runs every minute)
     try:
