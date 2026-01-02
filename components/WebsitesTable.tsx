@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ExternalLink, RefreshCw, Loader2, Globe, CheckCircle2, X, Trash2 } from 'lucide-react'
+import { ExternalLink, RefreshCw, Loader2, Globe, CheckCircle2, X, Trash2, Users } from 'lucide-react'
 import { listWebsites, pipelineApprove, updateProspectCategory, autoCategorizeAll, type Prospect } from '@/lib/api'
 
 interface Website {
