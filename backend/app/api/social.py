@@ -91,18 +91,18 @@ async def discover_profiles(
         error_msg = str(e)
         logger.error(f"❌ [SOCIAL DISCOVERY] Error creating discovery job: {error_msg}", exc_info=True)
         
-        # Check if it's a table doesn't exist error - FAIL FAST
+        # Schema errors should never reach here - startup validation ensures tables exist
+        # If we get a table error, it's a programming error, not a schema issue
         if "does not exist" in error_msg.lower() or "relation" in error_msg.lower() or "f405" in error_msg.lower() or "UndefinedTableError" in error_msg:
-            logger.error("=" * 80)
-            logger.error("❌ [SOCIAL DISCOVERY] CRITICAL: Social outreach tables do not exist")
-            logger.error("❌ [SOCIAL DISCOVERY] Database schema is incomplete - migrations have not been applied")
-            logger.error("=" * 80)
+            logger.critical("=" * 80)
+            logger.critical("❌ [SOCIAL DISCOVERY] CRITICAL PROGRAMMING ERROR")
+            logger.critical("❌ Tables should exist - startup validation should have caught this")
+            logger.critical("❌ This indicates a bug in startup validation or migration execution")
+            logger.critical("=" * 80)
+            # Return 500 - this is a server fault, not a user error
             raise HTTPException(
-                status_code=503,  # Service Unavailable - schema not ready
-                detail=(
-                    "Social outreach tables do not exist. Database migrations have not been applied. "
-                    "Please run: alembic upgrade head"
-                )
+                status_code=500,
+                detail="Internal server error: Database schema validation failed. Please contact support."
             )
         
         raise HTTPException(
@@ -215,18 +215,16 @@ async def list_profiles(
         error_msg = str(e)
         logger.error(f"❌ [SOCIAL PROFILES] Error listing social profiles: {error_msg}", exc_info=True)
         
-        # Check if it's a table doesn't exist error - FAIL FAST
+        # Schema errors should never reach here - startup validation ensures tables exist
         if "does not exist" in error_msg.lower() or "relation" in error_msg.lower() or "f405" in error_msg.lower() or "UndefinedTableError" in error_msg:
-            logger.error("=" * 80)
-            logger.error("❌ [SOCIAL PROFILES] CRITICAL: Social outreach tables do not exist")
-            logger.error("❌ [SOCIAL PROFILES] Database schema is incomplete - migrations have not been applied")
-            logger.error("=" * 80)
+            logger.critical("=" * 80)
+            logger.critical("❌ [SOCIAL PROFILES] CRITICAL PROGRAMMING ERROR")
+            logger.critical("❌ Tables should exist - startup validation should have caught this")
+            logger.critical("=" * 80)
+            # Return 500 - this is a server fault
             raise HTTPException(
-                status_code=503,  # Service Unavailable - schema not ready
-                detail=(
-                    "Social outreach tables do not exist. Database migrations have not been applied. "
-                    "Please run: alembic upgrade head"
-                )
+                status_code=500,
+                detail="Internal server error: Database schema validation failed. Please contact support."
             )
         
         raise HTTPException(status_code=500, detail=f"Failed to list profiles: {error_msg}")

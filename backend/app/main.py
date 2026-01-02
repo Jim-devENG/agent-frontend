@@ -609,18 +609,48 @@ async def startup():
     # This ensures schema is ready before any API calls
     logger.info("⏳ Waiting for database migrations to complete...")
     logger.info("📝 Alembic upgrade head runs automatically on every startup")
+    
     try:
         await run_database_setup()
-        logger.info("✅ Database migrations completed - server is ready")
+        logger.info("✅ Database migrations completed")
     except Exception as migration_error:
         logger.error("=" * 80)
         logger.error("❌ CRITICAL: Database migrations failed during startup")
         logger.error(f"❌ Error: {migration_error}")
         logger.error("=" * 80)
-        logger.error("⚠️  Server will continue to start, but some features may not work")
-        logger.error("⚠️  Please check logs and run 'alembic upgrade head' manually if needed")
-        # Don't raise - allow server to start even if migrations fail
-        # This prevents deployment failures on Render
+        logger.error("❌ APPLICATION WILL NOT START")
+        logger.error("❌ Fix migrations and restart")
+        logger.error("=" * 80)
+        # FAIL HARD - do not start server if migrations fail
+        import sys
+        sys.exit(1)
+    
+    # CRITICAL: Validate ALL tables exist after migrations
+    # FAIL HARD if any tables are missing
+    try:
+        from app.utils.schema_validator import validate_all_tables_exist, SchemaValidationError
+        await validate_all_tables_exist(engine)
+        logger.info("✅ Database schema validated - All required tables present")
+    except SchemaValidationError as schema_error:
+        logger.error("=" * 80)
+        logger.error("❌ CRITICAL: Schema validation failed")
+        logger.error(f"❌ Error: {schema_error}")
+        logger.error("=" * 80)
+        logger.error("❌ APPLICATION WILL NOT START")
+        logger.error("=" * 80)
+        import sys
+        sys.exit(1)
+    except Exception as validation_error:
+        logger.error("=" * 80)
+        logger.error("❌ CRITICAL: Schema validation check failed")
+        logger.error(f"❌ Error: {validation_error}")
+        logger.error("=" * 80)
+        logger.error("❌ APPLICATION WILL NOT START")
+        logger.error("=" * 80)
+        import sys
+        sys.exit(1)
+    
+    logger.info("✅ Server is ready - All validations passed")
     
     # Start scheduler for periodic tasks (always start - scraper check runs every minute)
     try:

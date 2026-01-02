@@ -3,7 +3,8 @@ Social Media Outreach Models
 
 Separate from Website Outreach - parallel system with no shared logic.
 """
-from sqlalchemy import Column, String, Text, Integer, Boolean, JSON, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, String, Text, Integer, Boolean, JSON, DateTime, ForeignKey, Enum as SQLEnum, Float
+import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -60,17 +61,19 @@ class SocialProfile(Base):
 
 
 class SocialDiscoveryJob(Base):
-    """Discovery job for social profiles"""
+    """Discovery job for social profiles (social_jobs)"""
     __tablename__ = "social_discovery_jobs"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     platform = Column(SQLEnum(SocialPlatform), nullable=False, index=True)
-    filters = Column(JSON)  # Search filters: keywords, location, hashtags, etc.
+    filters = Column(JSON, nullable=True)  # Search filters: keywords, location, hashtags, etc.
+    payload = Column(JSON, nullable=True)  # payload (JSON) - alias for filters
     status = Column(String, nullable=False, default="pending", index=True)  # pending, running, completed, failed
     results_count = Column(Integer, default=0)
-    error_message = Column(Text)
+    error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)  # completed_at (TIMESTAMP, nullable)
     
     # Relationships
     profiles = relationship("SocialProfile", back_populates="discovery_job")
@@ -100,10 +103,11 @@ class SocialMessage(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     profile_id = Column(UUID(as_uuid=True), ForeignKey("social_profiles.id"), nullable=False, index=True)
     platform = Column(SQLEnum(SocialPlatform), nullable=False)
-    message_body = Column(Text, nullable=False)
+    message_body = Column(Text, nullable=False)  # content (TEXT)
+    message_type = Column(String, nullable=True, server_default='initial', index=True)  # message_type (ENUM: draft, followup, initial)
     status = Column(SQLEnum(MessageStatus), nullable=False, server_default=MessageStatus.PENDING.value, index=True)
-    sent_at = Column(DateTime(timezone=True))
-    error_message = Column(Text)
+    sent_at = Column(DateTime(timezone=True), nullable=True)  # sent_at (TIMESTAMP, nullable)
+    error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
