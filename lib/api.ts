@@ -1498,10 +1498,15 @@ export interface SocialProfileListResponse {
 }
 
 export async function discoverSocialProfiles(request: SocialDiscoveryRequest): Promise<SocialDiscoveryResponse> {
-  return await apiRequest<SocialDiscoveryResponse>('/social/discover', {
+  const res = await authenticatedFetch(`${API_BASE}/social/discover`, {
     method: 'POST',
     body: JSON.stringify(request),
   })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to discover social profiles' }))
+    throw new Error(error.detail || 'Failed to discover social profiles')
+  }
+  return await res.json()
 }
 
 export async function listSocialProfiles(
@@ -1514,26 +1519,46 @@ export async function listSocialProfiles(
   if (platform) params.append('platform', platform)
   if (qualification_status) params.append('qualification_status', qualification_status)
   
-  return await apiRequest<SocialProfileListResponse>(`/social/profiles?${params.toString()}`)
+  const res = await authenticatedFetch(`${API_BASE}/social/profiles?${params.toString()}`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to list social profiles' }))
+    throw new Error(error.detail || 'Failed to list social profiles')
+  }
+  return await res.json()
 }
 
 export async function createSocialDrafts(request: { profile_ids: string[]; is_followup?: boolean }): Promise<{ success: boolean; drafts_created: number; message: string }> {
-  return await apiRequest('/social/drafts', {
+  const res = await authenticatedFetch(`${API_BASE}/social/drafts`, {
     method: 'POST',
     body: JSON.stringify(request),
   })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to create social drafts' }))
+    throw new Error(error.detail || 'Failed to create social drafts')
+  }
+  return await res.json()
 }
 
 export async function sendSocialMessages(request: { profile_ids: string[] }): Promise<{ success: boolean; messages_sent: number; message: string }> {
-  return await apiRequest('/social/send', {
+  const res = await authenticatedFetch(`${API_BASE}/social/send`, {
     method: 'POST',
     body: JSON.stringify(request),
   })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to send social messages' }))
+    throw new Error(error.detail || 'Failed to send social messages')
+  }
+  return await res.json()
 }
 
 export async function createSocialFollowups(request: { profile_ids: string[] }): Promise<{ success: boolean; drafts_created: number; message: string }> {
-  return await apiRequest('/social/followup', {
+  const res = await authenticatedFetch(`${API_BASE}/social/followup`, {
     method: 'POST',
     body: JSON.stringify(request),
   })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to create social followups' }))
+    throw new Error(error.detail || 'Failed to create social followups')
+  }
+  return await res.json()
 }
