@@ -504,16 +504,37 @@ export default function WebsitesTable() {
                   </div>
                 )}
               </div>
-              <select
-                value={updateCategory}
-                onChange={(e) => setUpdateCategory(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
-              >
-                <option value="">Select Category to Assign</option>
-                {availableCategories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Select Category to Assign:
+                </label>
+                <div className="grid grid-cols-2 gap-1.5 mb-2 max-h-32 overflow-y-auto p-2 bg-gray-50 rounded-lg">
+                  {availableCategories.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setUpdateCategory(cat)}
+                      className={`px-2 py-1.5 rounded text-xs font-medium transition-all ${
+                        updateCategory === cat
+                          ? 'bg-olive-600 text-white shadow-md'
+                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  value={updateCategory}
+                  onChange={(e) => setUpdateCategory(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
+                >
+                  <option value="">-- Or choose from dropdown --</option>
+                  {availableCategories.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => {
