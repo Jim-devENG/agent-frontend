@@ -36,15 +36,18 @@ async def validate_social_tables_exist(engine: AsyncEngine) -> Tuple[bool, List[
     
     try:
         async with engine.begin() as conn:
-            # Use IN clause instead of ANY for better compatibility
-            tables_list = list(required_tables)
-            placeholders = ','.join([f"'{t}'" for t in tables_list])
-            result = await conn.execute(text(f"""
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                AND table_name IN ({placeholders})
-            """))
+            # Use parameterized query with tuple unpacking for safety
+            # Table names are from our code, but still use proper parameterization
+            tables_tuple = tuple(required_tables)
+            result = await conn.execute(
+                text("""
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = ANY(:tables)
+                """),
+                {"tables": tables_tuple}
+            )
             
             existing_tables = {row[0] for row in result.fetchall()}
             missing_tables = required_tables - existing_tables
@@ -81,15 +84,17 @@ async def validate_website_tables_exist(engine: AsyncEngine) -> Tuple[bool, List
     
     try:
         async with engine.begin() as conn:
-            # Use IN clause instead of ANY for better compatibility
-            tables_list = list(required_tables)
-            placeholders = ','.join([f"'{t}'" for t in tables_list])
-            result = await conn.execute(text(f"""
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                AND table_name IN ({placeholders})
-            """))
+            # Use parameterized query with tuple unpacking for safety
+            tables_tuple = tuple(required_tables)
+            result = await conn.execute(
+                text("""
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = ANY(:tables)
+                """),
+                {"tables": tables_tuple}
+            )
             
             existing_tables = {row[0] for row in result.fetchall()}
             missing_tables = required_tables - existing_tables
