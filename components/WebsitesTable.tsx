@@ -237,6 +237,21 @@ export default function WebsitesTable() {
               Update Category ({selected.size})
             </button>
           )}
+          {websites.filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A').length > 0 && (
+            <button
+              onClick={() => {
+                // Select all uncategorized websites
+                const uncategorized = websites
+                  .filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A')
+                  .map(w => w.id)
+                setSelected(new Set(uncategorized))
+                setShowCategoryUpdate(true)
+              }}
+              className="px-2 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+            >
+              Categorize All ({websites.filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A').length})
+            </button>
+          )}
           <button
             onClick={loadWebsites}
             disabled={loading}
@@ -272,23 +287,46 @@ export default function WebsitesTable() {
               <p className="text-sm font-semibold text-gray-700">
                 {selected.size} website{selected.size !== 1 ? 's' : ''} selected
               </p>
-              <button
-                onClick={handleApprove}
-                disabled={actionLoading}
-                className="px-2 py-1 text-xs bg-olive-600 text-white rounded-lg hover:bg-olive-700 hover:shadow-md transition-all duration-200 disabled:opacity-50 flex items-center space-x-1 font-semibold shadow-sm"
-              >
-                {actionLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Approving...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Approve Selected</span>
-                  </>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowCategoryUpdate(true)}
+                  className="px-2 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Update Category ({selected.size})
+                </button>
+                {websites.filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A').length > 0 && (
+                  <button
+                    onClick={() => {
+                      // Select all uncategorized websites
+                      const uncategorized = websites
+                        .filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A')
+                        .map(w => w.id)
+                      setSelected(new Set(uncategorized))
+                      setShowCategoryUpdate(true)
+                    }}
+                    className="px-2 py-1 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+                  >
+                    Categorize All ({websites.filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A').length})
+                  </button>
                 )}
-              </button>
+                <button
+                  onClick={handleApprove}
+                  disabled={actionLoading}
+                  className="px-2 py-1 text-xs bg-olive-600 text-white rounded-lg hover:bg-olive-700 hover:shadow-md transition-all duration-200 disabled:opacity-50 flex items-center space-x-1 font-semibold shadow-sm"
+                >
+                  {actionLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Approving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Approve Selected</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
 
@@ -455,12 +493,23 @@ export default function WebsitesTable() {
               <p className="text-xs text-gray-600">
                 Update category for {selected.size} selected website(s)
               </p>
+              <div className="text-xs text-gray-500 mb-2">
+                {selected.size > 0 && (
+                  <div>
+                    Current categories: {Array.from(new Set(
+                      websites
+                        .filter(w => selected.has(w.id))
+                        .map(w => w.category || 'N/A')
+                    )).join(', ')}
+                  </div>
+                )}
+              </div>
               <select
                 value={updateCategory}
                 onChange={(e) => setUpdateCategory(e.target.value)}
                 className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
               >
-                <option value="">Select Category</option>
+                <option value="">Select Category to Assign</option>
                 {availableCategories.map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}

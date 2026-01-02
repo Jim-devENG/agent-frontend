@@ -142,6 +142,21 @@ export default function EmailsTable() {
               Update Category ({selectedProspects.size})
             </button>
           )}
+          {prospects.filter(p => !p.discovery_category || p.discovery_category === 'N/A').length > 0 && (
+            <button
+              onClick={() => {
+                // Select all uncategorized prospects
+                const uncategorized = prospects
+                  .filter(p => !p.discovery_category || p.discovery_category === 'N/A')
+                  .map(p => p.id)
+                setSelectedProspects(new Set(uncategorized))
+                setShowCategoryUpdate(true)
+              }}
+              className="px-2 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+            >
+              Categorize All ({prospects.filter(p => !p.discovery_category || p.discovery_category === 'N/A').length})
+            </button>
+          )}
           <button
             onClick={loadSentEmails}
             className="flex items-center space-x-1 px-2 py-1.5 bg-olive-600 text-white rounded-lg hover:bg-olive-700 text-xs font-medium"
@@ -296,12 +311,23 @@ export default function EmailsTable() {
               <p className="text-xs text-gray-600">
                 Update category for {selectedProspects.size} selected email(s)
               </p>
+              <div className="text-xs text-gray-500 mb-2">
+                {selectedProspects.size > 0 && (
+                  <div>
+                    Current categories: {Array.from(new Set(
+                      prospects
+                        .filter(p => selectedProspects.has(p.id))
+                        .map(p => p.discovery_category || 'N/A')
+                    )).join(', ')}
+                  </div>
+                )}
+              </div>
               <select
                 value={updateCategory}
                 onChange={(e) => setUpdateCategory(e.target.value)}
                 className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
               >
-                <option value="">Select Category</option>
+                <option value="">Select Category to Assign</option>
                 {availableCategories.map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
