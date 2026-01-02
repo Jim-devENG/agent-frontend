@@ -25,7 +25,9 @@ from app.models.social import (
     SocialDraft,
     SocialMessage,
     SocialPlatform,
-    QualificationStatus,
+    DiscoveryStatus,
+    OutreachStatus,
+    MessageType,
     MessageStatus,
 )
 
@@ -67,21 +69,7 @@ async def discover_profiles(
     Returns 200 with status="inactive" if social tables are missing (not 500).
     """
     # Feature-scoped schema check - only checks social tables
-    # CRITICAL: Wrap in try/except to ensure it never raises exceptions
-    try:
-        schema_status = await check_social_schema_ready(engine)
-    except Exception as schema_check_error:
-        # If schema check itself fails, treat as inactive (not a 500 error)
-        logger.warning(f"⚠️  [SOCIAL DISCOVERY] Schema check failed: {schema_check_error}")
-        logger.warning("⚠️  Treating as inactive instead of raising 500")
-        return SocialDiscoveryResponse(
-            success=False,
-            job_id=None,
-            message="Social outreach feature is not available: schema check failed",
-            profiles_count=0,
-            status="inactive",
-            reason="schema check failed"
-        )
+    schema_status = await check_social_schema_ready(engine)
     
     if not schema_status["ready"]:
         logger.warning(f"⚠️  [SOCIAL DISCOVERY] Social schema not ready: {schema_status['reason']}")
@@ -195,7 +183,7 @@ async def list_profiles(
     skip: int = 0,
     limit: int = 50,
     platform: Optional[str] = None,
-    qualification_status: Optional[str] = None,
+    discovery_status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[str] = Depends(get_current_user_optional)
 ):
@@ -221,7 +209,7 @@ async def list_profiles(
         )
     
     try:
-        logger.info(f"📊 [SOCIAL PROFILES] Request: skip={skip}, limit={limit}, platform={platform}, qualification_status={qualification_status}")
+        logger.info(f"📊 [SOCIAL PROFILES] Request: skip={skip}, limit={limit}, platform={platform}, discovery_status={discovery_status}")
         
         query = select(SocialProfile)
         
@@ -247,10 +235,10 @@ async def list_profiles(
                 count_query = count_query.where(SocialProfile.platform == platform_enum)
             except ValueError:
                 pass
-        if qualification_status:
+        if discovery_status:
             try:
-                status_enum = QualificationStatus(qualification_status.lower())
-                count_query = count_query.where(SocialProfile.qualification_status == status_enum)
+                status_enum = DiscoveryStatus(discovery_status.lower())
+                count_query = count_query.where(SocialProfile.discovery_status == status_enum)
             except ValueError:
                 pass
         
@@ -278,7 +266,8 @@ async def list_profiles(
                     "followers_count": p.followers_count or 0,
                     "location": p.location,
                     "is_business": p.is_business or False,
-                    "qualification_status": p.qualification_status.value,
+                    "discovery_status": p.discovery_status.value,
+                    "outreach_status": p.outreach_status.value,
                     "created_at": p.created_at.isoformat() if p.created_at else None,
                 }
                 for p in profiles

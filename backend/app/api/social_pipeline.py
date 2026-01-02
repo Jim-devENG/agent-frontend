@@ -136,7 +136,7 @@ async def get_social_pipeline_status(
                 )
             )
         )
-        followup_ready_count = len(followup_ready_result.scalars().all())
+        followup_ready_count = followup_ready_result.scalar() or 0
         
         logger.info(
             f"📊 [SOCIAL PIPELINE] Status: "
