@@ -1,0 +1,217 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { RefreshCw, ExternalLink, CheckCircle, XCircle } from 'lucide-react'
+import { listSocialProfiles, createSocialDrafts, sendSocialMessages } from '@/lib/api'
+
+interface SocialProfile {
+  id: string
+  platform: string
+  handle: string
+  profile_url: string
+  display_name?: string
+  bio?: string
+  followers_count: number
+  location?: string
+  is_business: boolean
+  qualification_status: string
+  created_at: string
+}
+
+export default function SocialProfilesTable() {
+  const [profiles, setProfiles] = useState<SocialProfile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [actionLoading, setActionLoading] = useState(false)
+
+  const loadProfiles = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await listSocialProfiles()
+      setProfiles(response.data || [])
+    } catch (err: any) {
+      setError(err.message || 'Failed to load profiles')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadProfiles()
+  }, [])
+
+  const handleSelect = (id: string) => {
+    const newSelected = new Set(selected)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelected(newSelected)
+  }
+
+  const handleCreateDrafts = async () => {
+    if (selected.size === 0) {
+      setError('Please select at least one profile')
+      return
+    }
+
+    setActionLoading(true)
+    setError(null)
+    try {
+      await createSocialDrafts({ profile_ids: Array.from(selected) })
+      setSelected(new Set())
+      await loadProfiles()
+    } catch (err: any) {
+      setError(err.message || 'Failed to create drafts')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleSend = async () => {
+    if (selected.size === 0) {
+      setError('Please select at least one profile')
+      return
+    }
+
+    setActionLoading(true)
+    setError(null)
+    try {
+      await sendSocialMessages({ profile_ids: Array.from(selected) })
+      setSelected(new Set())
+      await loadProfiles()
+    } catch (err: any) {
+      setError(err.message || 'Failed to send messages')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow p-6 text-center">
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto text-olive-600" />
+        <p className="text-xs text-gray-600 mt-2">Loading profiles...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900">Social Profiles</h2>
+        <div className="flex items-center gap-2">
+          {selected.size > 0 && (
+            <>
+              <button
+                onClick={handleCreateDrafts}
+                disabled={actionLoading}
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                Create Drafts ({selected.size})
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={actionLoading}
+                className="px-3 py-1.5 text-xs bg-olive-600 text-white rounded-lg hover:bg-olive-700 disabled:opacity-50"
+              >
+                Send ({selected.size})
+              </button>
+            </>
+          )}
+          <button
+            onClick={loadProfiles}
+            className="px-3 py-1.5 text-xs bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-1"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+          {error}
+        </div>
+      )}
+
+      {profiles.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-sm text-gray-600">No profiles found. Start discovering to find profiles.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-2 px-3">
+                  <input
+                    type="checkbox"
+                    checked={selected.size === profiles.length && profiles.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelected(new Set(profiles.map(p => p.id)))
+                      } else {
+                        setSelected(new Set())
+                      }
+                    }}
+                  />
+                </th>
+                <th className="text-left py-2 px-3">Platform</th>
+                <th className="text-left py-2 px-3">Handle</th>
+                <th className="text-left py-2 px-3">Name</th>
+                <th className="text-left py-2 px-3">Followers</th>
+                <th className="text-left py-2 px-3">Status</th>
+                <th className="text-left py-2 px-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {profiles.map((profile) => (
+                <tr key={profile.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-2 px-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(profile.id)}
+                      onChange={() => handleSelect(profile.id)}
+                    />
+                  </td>
+                  <td className="py-2 px-3 capitalize">{profile.platform}</td>
+                  <td className="py-2 px-3 font-medium">@{profile.handle}</td>
+                  <td className="py-2 px-3">{profile.display_name || '-'}</td>
+                  <td className="py-2 px-3">{profile.followers_count.toLocaleString()}</td>
+                  <td className="py-2 px-3">
+                    {profile.qualification_status === 'qualified' ? (
+                      <span className="inline-flex items-center gap-1 text-green-600">
+                        <CheckCircle className="w-3 h-3" />
+                        Qualified
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-gray-600">
+                        <XCircle className="w-3 h-3" />
+                        Pending
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 px-3">
+                    <a
+                      href={profile.profile_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-olive-600 hover:text-olive-700"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
