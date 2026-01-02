@@ -90,6 +90,14 @@ export default function SocialPage() {
             </div>
           )}
         </div>
+        
+        {/* Debug Info - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
+            <p>Active View: {activeView}</p>
+            <p>Component: {activeView === 'discover' ? 'SocialDiscovery' : activeView === 'profiles' ? 'SocialProfilesTable' : 'Placeholder'}</p>
+          </div>
+        )}
       </div>
     </div>
   )
