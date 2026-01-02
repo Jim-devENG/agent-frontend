@@ -565,8 +565,6 @@ async def startup():
     else:
         logger.warning("⚠️  Server is starting with validation issues - some features may not work")
     
-    logger.info("✅ Server is ready - All validations passed")
-    
     # Start scheduler for periodic tasks (always start - scraper check runs every minute)
     try:
         from app.scheduler import start_scheduler
