@@ -115,6 +115,8 @@ async def list_profiles(
 ):
     """List discovered social profiles"""
     try:
+        logger.info(f"📊 [SOCIAL PROFILES] Request: skip={skip}, limit={limit}, platform={platform}, qualification_status={qualification_status}")
+        
         query = select(SocialProfile)
         
         if platform:
@@ -149,12 +151,16 @@ async def list_profiles(
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
         
+        logger.info(f"📊 [SOCIAL PROFILES] RAW COUNT (before pagination): {total} social profiles")
+        
         # Get paginated results
         query = query.order_by(SocialProfile.created_at.desc()).offset(skip).limit(limit)
         result = await db.execute(query)
         profiles = result.scalars().all()
         
-        return {
+        logger.info(f"📊 [SOCIAL PROFILES] QUERY RESULT: Found {len(profiles)} profiles from database query (total available: {total})")
+        
+        response_data = {
             "data": [
                 {
                     "id": p.id,
@@ -175,8 +181,13 @@ async def list_profiles(
             "skip": skip,
             "limit": limit
         }
+        
+        logger.info(f"✅ [SOCIAL PROFILES] Returning {len(response_data['data'])} profiles (total: {total})")
+        return response_data
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"❌ Error listing social profiles: {e}", exc_info=True)
+        logger.error(f"❌ [SOCIAL PROFILES] Error listing social profiles: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to list profiles: {str(e)}")
 
 

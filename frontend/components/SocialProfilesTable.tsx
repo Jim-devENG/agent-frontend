@@ -29,10 +29,46 @@ export default function SocialProfilesTable() {
     try {
       setLoading(true)
       setError(null)
+      console.log('📊 [SOCIAL PROFILES] Loading social profiles...')
       const response = await listSocialProfiles()
+      console.log('📊 [SOCIAL PROFILES] API Response:', {
+        dataLength: response?.data?.length,
+        total: response?.total,
+        hasData: !!response?.data,
+        isArray: Array.isArray(response?.data),
+        firstItem: response?.data?.[0]
+      })
+      
+      // CRITICAL: If backend says there's data but we got empty array, this is an error
+      if (response?.total > 0 && (!response?.data || response.data.length === 0)) {
+        const errorMsg = `Backend reports ${response.total} social profiles but returned empty data array. This indicates a data visibility issue.`
+        console.error(`❌ [SOCIAL PROFILES] ${errorMsg}`)
+        setError(errorMsg)
+        setProfiles([])
+        return
+      }
+      
       setProfiles(response.data || [])
+      console.log(`✅ [SOCIAL PROFILES] Loaded ${response.data?.length || 0} profiles (total: ${response.total || 0})`)
     } catch (err: any) {
-      setError(err.message || 'Failed to load profiles')
+      // CRITICAL: Do not suppress errors - log them clearly
+      console.error('❌ [SOCIAL PROFILES] Failed to load profiles:', err)
+      console.error('❌ [SOCIAL PROFILES] Error details:', {
+        message: err?.message,
+        stack: err?.stack,
+        response: err?.response,
+        status: err?.status
+      })
+      
+      let errorMessage = err?.message || 'Failed to load social profiles. Check if backend is running.'
+      
+      // In development, show full error
+      if (process.env.NODE_ENV === 'development') {
+        errorMessage = `${errorMessage} (Full error: ${err?.message || 'Unknown error'})`
+      }
+      
+      setError(errorMessage)
+      setProfiles([])
     } finally {
       setLoading(false)
     }

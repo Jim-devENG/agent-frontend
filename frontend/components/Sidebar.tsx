@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   LayoutDashboard, 
   Globe, 
@@ -19,6 +20,7 @@ interface Tab {
   id: string
   label: string
   icon: LucideIcon
+  route?: string
 }
 
 interface SidebarProps {
@@ -29,6 +31,7 @@ interface SidebarProps {
 
 export default function Sidebar({ activeTab, onTabChange, tabs }: SidebarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const router = useRouter()
 
   return (
     <>
@@ -81,7 +84,13 @@ export default function Sidebar({ activeTab, onTabChange, tabs }: SidebarProps) 
               <button
                 key={tab.id}
                 onClick={() => {
-                  onTabChange(tab.id as 'overview' | 'leads' | 'scraped_emails' | 'emails' | 'jobs' | 'websites' | 'settings' | 'guide')
+                  // If tab has a route, navigate to it
+                  if (tab.route) {
+                    router.push(tab.route)
+                  } else {
+                    // Otherwise, use the normal tab change
+                    onTabChange(tab.id as 'overview' | 'leads' | 'scraped_emails' | 'emails' | 'jobs' | 'websites' | 'settings' | 'guide')
+                  }
                   setMobileMenuOpen(false) // Close mobile menu when tab is selected
                 }}
                 className={`
