@@ -48,7 +48,8 @@ export default function EmailsTable() {
       
       setProspects(prospectsData)
       setTotal(selectedCategory === 'all' ? (response?.total ?? 0) : prospectsData.length)
-      // Clear error if we successfully got data (even if empty)
+      // Clear error on successful load (even if empty data)
+      setError(null)
       // Empty data is not an error, it's a valid state
     } catch (error: any) {
       console.error('Failed to load sent emails:', error)

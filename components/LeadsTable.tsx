@@ -87,7 +87,8 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
       
       setProspects(leads)
       setTotal(selectedCategory === 'all' ? (response.total ?? leads.length) : leads.length)
-      // Clear error if we successfully got data (even if empty)
+      // Clear error on successful load (even if empty data)
+      setError(null)
       // Empty data is not an error, it's a valid state
     } catch (error: any) {
       console.error(`❌ [${emailsOnly ? 'SCRAPED EMAILS' : 'LEADS'}] Failed to load:`, error)
