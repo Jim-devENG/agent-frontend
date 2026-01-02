@@ -97,10 +97,18 @@ async def discover_profiles(
             
             # Try to create tables on-the-fly as a fallback
             try:
-                from sqlalchemy import create_engine, text
-                from app.models.social import SocialProfile, SocialDiscoveryJob, SocialDraft, SocialMessage
+                from sqlalchemy import create_engine
                 from app.db.database import Base
                 import os
+                
+                # Import social models to register them with Base.metadata
+                # This must happen before create_all
+                from app.models.social import (
+                    SocialProfile,
+                    SocialDiscoveryJob,
+                    SocialDraft,
+                    SocialMessage
+                )
                 
                 # Get sync database URL
                 database_url = os.getenv("DATABASE_URL")
@@ -119,20 +127,20 @@ async def discover_profiles(
                     sync_engine.dispose()
                     logger.info("✅ [SOCIAL DISCOVERY] Social tables created successfully on-the-fly")
                     
-                    # Retry the operation
-                    job = SocialDiscoveryJob(
+                    # Retry the operation - SocialDiscoveryJob is now imported and available
+                    retry_job = SocialDiscoveryJob(
                         platform=platform,
                         filters=request.filters,
                         status="pending",
                         results_count=0
                     )
-                    db.add(job)
+                    db.add(retry_job)
                     await db.commit()
-                    await db.refresh(job)
+                    await db.refresh(retry_job)
                     
                     return SocialDiscoveryResponse(
                         success=True,
-                        job_id=job.id,
+                        job_id=retry_job.id,
                         message=f"Discovery job created for {platform.value}",
                         profiles_count=0
                     )
