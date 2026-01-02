@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, Users, Globe, CheckCircle, Eye, Edit2 } from 'lucide-react'
-import { listLeads, listScrapedEmails, promoteToLead, composeEmail, sendEmail, manualScrape, manualVerify, updateProspectCategory, type Prospect } from '@/lib/api'
+import { listLeads, listScrapedEmails, promoteToLead, composeEmail, sendEmail, manualScrape, manualVerify, updateProspectCategory, autoCategorizeAll, type Prospect } from '@/lib/api'
 import { safeToFixed } from '@/lib/safe-utils'
 
 interface LeadsTableProps {
@@ -37,10 +37,11 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
   const [showCategoryUpdate, setShowCategoryUpdate] = useState(false)
   const [updateCategory, setUpdateCategory] = useState<string>('')
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
+  const [isAutoCategorizing, setIsAutoCategorizing] = useState(false)
 
   // Available categories
   const availableCategories = [
-    'Art Gallery', 'Museum', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
+    'Art Gallery', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
     'Art Dealer', 'Art Consultant', 'Art Publisher', 'Art Magazine'
   ]
 
@@ -381,6 +382,23 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
               Categorize All ({prospects.filter(p => !p.discovery_category || p.discovery_category === 'N/A').length})
             </button>
           )}
+          <button
+            onClick={handleAutoCategorize}
+            disabled={isAutoCategorizing}
+            className="px-2 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+          >
+            {isAutoCategorizing ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Auto-Categorizing...
+              </>
+            ) : (
+              <>
+                <Users className="w-3 h-3" />
+                Auto-Categorize All
+              </>
+            )}
+          </button>
           <div className="flex items-center space-x-2">
           <button
             onClick={() => setShowManualActions(!showManualActions)}

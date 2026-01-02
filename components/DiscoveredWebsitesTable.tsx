@@ -26,7 +26,7 @@ export default function DiscoveredWebsitesTable() {
 
   // Available categories
   const availableCategories = [
-    'Art Gallery', 'Museum', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
+    'Art Gallery', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
     'Art Dealer', 'Art Consultant', 'Art Publisher', 'Art Magazine'
   ]
 

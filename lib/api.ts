@@ -1362,6 +1362,23 @@ export async function updateProspectCategory(request: UpdateCategoryRequest): Pr
   return res.json()
 }
 
+export interface AutoCategorizeResponse {
+  success: boolean
+  categorized_count: number
+  message: string
+}
+
+export async function autoCategorizeAll(): Promise<AutoCategorizeResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/auto_categorize`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to auto-categorize' }))
+    throw new Error(error.detail || 'Failed to auto-categorize')
+  }
+  return res.json()
+}
+
 // ============================================
 // MASTER SWITCH & AUTOMATION CONTROL
 // ============================================

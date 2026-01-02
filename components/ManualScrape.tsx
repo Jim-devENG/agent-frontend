@@ -15,7 +15,6 @@ const LOCATION_OPTIONS = [
 
 const CATEGORY_OPTIONS = [
   { value: 'Art Gallery', label: 'Art Gallery' },
-  { value: 'Museum', label: 'Museum' },
   { value: 'Museums', label: 'Museums' },
   { value: 'Art Studio', label: 'Art Studio' },
   { value: 'Art School', label: 'Art School' },

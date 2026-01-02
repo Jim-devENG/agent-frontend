@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ExternalLink, RefreshCw, Loader2, Globe, CheckCircle2, X, Trash2 } from 'lucide-react'
-import { listWebsites, pipelineApprove, updateProspectCategory, type Prospect } from '@/lib/api'
+import { listWebsites, pipelineApprove, updateProspectCategory, autoCategorizeAll, type Prospect } from '@/lib/api'
 
 interface Website {
   id: string
@@ -30,10 +30,11 @@ export default function WebsitesTable() {
   const [showCategoryUpdate, setShowCategoryUpdate] = useState(false)
   const [updateCategory, setUpdateCategory] = useState<string>('')
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
+  const [isAutoCategorizing, setIsAutoCategorizing] = useState(false)
 
   // Available categories
   const availableCategories = [
-    'Art Gallery', 'Museum', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
+    'Art Gallery', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
     'Art Dealer', 'Art Consultant', 'Art Publisher', 'Art Magazine'
   ]
 
@@ -195,6 +196,23 @@ export default function WebsitesTable() {
     }
   }
 
+  const handleAutoCategorize = async () => {
+    setIsAutoCategorizing(true)
+    setError(null)
+    try {
+      const result = await autoCategorizeAll()
+      setTimeout(() => {
+        loadWebsites().catch(err => console.error('Error reloading websites:', err))
+      }, 500)
+      setError(`✅ ${result.message}`)
+      setTimeout(() => setError(null), 5000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to auto-categorize')
+    } finally {
+      setIsAutoCategorizing(false)
+    }
+  }
+
   if (loading && websites.length === 0) {
     return (
       <div className="glass rounded-3xl shadow-xl p-8 animate-fade-in">
@@ -252,6 +270,23 @@ export default function WebsitesTable() {
               Categorize All ({websites.filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A').length})
             </button>
           )}
+          <button
+            onClick={handleAutoCategorize}
+            disabled={isAutoCategorizing}
+            className="px-2 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+          >
+            {isAutoCategorizing ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Auto-Categorizing...
+              </>
+            ) : (
+              <>
+                <Users className="w-3 h-3" />
+                Auto-Categorize All
+              </>
+            )}
+          </button>
           <button
             onClick={loadWebsites}
             disabled={loading}

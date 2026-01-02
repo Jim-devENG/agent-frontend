@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Mail, CheckCircle, XCircle, Clock, RefreshCw, X } from 'lucide-react'
-import { listProspects, updateProspectCategory, type Prospect } from '@/lib/api'
+import { Mail, CheckCircle, XCircle, Clock, RefreshCw, X, Loader2, Users } from 'lucide-react'
+import { listProspects, updateProspectCategory, autoCategorizeAll, type Prospect } from '@/lib/api'
 
 export default function EmailsTable() {
   const [prospects, setProspects] = useState<Prospect[]>([])
@@ -16,10 +16,11 @@ export default function EmailsTable() {
   const [showCategoryUpdate, setShowCategoryUpdate] = useState(false)
   const [updateCategory, setUpdateCategory] = useState<string>('')
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
+  const [isAutoCategorizing, setIsAutoCategorizing] = useState(false)
 
   // Available categories
   const availableCategories = [
-    'Art Gallery', 'Museum', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
+    'Art Gallery', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
     'Art Dealer', 'Art Consultant', 'Art Publisher', 'Art Magazine'
   ]
 
@@ -119,6 +120,23 @@ export default function EmailsTable() {
     }
   }
 
+  const handleAutoCategorize = async () => {
+    setIsAutoCategorizing(true)
+    setError(null)
+    try {
+      const result = await autoCategorizeAll()
+      setTimeout(() => {
+        loadSentEmails().catch(err => console.error('Error reloading emails:', err))
+      }, 500)
+      setError(`✅ ${result.message}`)
+      setTimeout(() => setError(null), 5000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to auto-categorize')
+    } finally {
+      setIsAutoCategorizing(false)
+    }
+  }
+
   return (
     <div className="glass rounded-xl shadow-lg border border-white/20 p-3">
       <div className="flex items-center justify-between mb-3">
@@ -157,6 +175,23 @@ export default function EmailsTable() {
               Categorize All ({prospects.filter(p => !p.discovery_category || p.discovery_category === 'N/A').length})
             </button>
           )}
+          <button
+            onClick={handleAutoCategorize}
+            disabled={isAutoCategorizing}
+            className="px-2 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+          >
+            {isAutoCategorizing ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Auto-Categorizing...
+              </>
+            ) : (
+              <>
+                <Users className="w-3 h-3" />
+                Auto-Categorize All
+              </>
+            )}
+          </button>
           <button
             onClick={loadSentEmails}
             className="flex items-center space-x-1 px-2 py-1.5 bg-olive-600 text-white rounded-lg hover:bg-olive-700 text-xs font-medium"
