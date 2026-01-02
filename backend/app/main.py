@@ -109,6 +109,7 @@ app.include_router(scraper.router, prefix="/api/scraper", tags=["scraper"])
 app.include_router(pipeline.router, tags=["pipeline"])  # Already has /api/pipeline prefix
 app.include_router(manual.router, tags=["manual"])  # Already has /api/manual prefix
 app.include_router(health.router, tags=["health"])  # Health check endpoints
+app.include_router(social.router, tags=["social"])  # Social outreach - separate from website outreach
 
 # Webhook routes
 from app.api import webhooks
