@@ -158,6 +158,7 @@ export default function Dashboard() {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { id: 'social', label: 'Social Outreach', icon: AtSign, route: '/social' },
     { id: 'pipeline', label: 'Pipeline', icon: Activity },
     { id: 'websites', label: 'Websites', icon: Globe },
     { id: 'leads', label: 'Leads', icon: Users },
