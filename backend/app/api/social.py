@@ -63,27 +63,46 @@ async def discover_profiles(
     
     logger.info(f"🔍 [SOCIAL DISCOVERY] Starting discovery for {platform.value}")
     
-    # Create discovery job
-    job = SocialDiscoveryJob(
-        platform=platform,
-        filters=request.filters,
-        status="pending",
-        results_count=0
-    )
-    
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-    
-    # TODO: Start background task for discovery
-    # For now, return job created
-    
-    return SocialDiscoveryResponse(
-        success=True,
-        job_id=job.id,
-        message=f"Discovery job created for {platform.value}",
-        profiles_count=0
-    )
+    try:
+        # Create discovery job
+        job = SocialDiscoveryJob(
+            platform=platform,
+            filters=request.filters,
+            status="pending",
+            results_count=0
+        )
+        
+        db.add(job)
+        await db.commit()
+        await db.refresh(job)
+        
+        logger.info(f"✅ [SOCIAL DISCOVERY] Job created: {job.id}")
+        
+        # TODO: Start background task for discovery
+        # For now, return job created
+        
+        return SocialDiscoveryResponse(
+            success=True,
+            job_id=job.id,
+            message=f"Discovery job created for {platform.value}",
+            profiles_count=0
+        )
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"❌ [SOCIAL DISCOVERY] Error creating discovery job: {error_msg}", exc_info=True)
+        
+        # Check if it's a table doesn't exist error
+        if "does not exist" in error_msg.lower() or "relation" in error_msg.lower() or "f405" in error_msg.lower():
+            logger.error("❌ [SOCIAL DISCOVERY] Social tables do not exist. Migration may not have run.")
+            raise HTTPException(
+                status_code=500,
+                detail="Social outreach tables do not exist. Please run database migrations: alembic upgrade head"
+            )
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create discovery job: {error_msg}"
+        )
 
 
 # ============================================
