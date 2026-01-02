@@ -193,132 +193,24 @@ async def startup():
                 logger.info("✅ All tables are up-to-date with latest schema")
                 logger.info("=" * 60)
                 
-                # CRITICAL: Validate schema after migrations
-                # FAIL FAST if schema doesn't match model
-                try:
-                    from app.utils.schema_validator import validate_prospect_schema, ensure_prospect_schema, SchemaMismatchError
-                    
-                    logger.info("🔍 Validating website outreach schema after migrations...")
-                    is_valid, missing_columns = await validate_prospect_schema(engine, Base)
-                    
-                    if not is_valid:
-                        logger.error("=" * 80)
-                        logger.error(f"❌ SCHEMA MISMATCH DETECTED: Missing columns: {missing_columns}")
-                        logger.error("=" * 80)
-                        logger.error("❌ Attempting to fix schema automatically...")
-                        
-                        # Try to fix automatically
-                        fixed = await ensure_prospect_schema(engine)
-                        
-                        if not fixed:
-                            logger.error("=" * 80)
-                            logger.error("❌ CRITICAL: Could not fix schema mismatch automatically")
-                            logger.error("❌ Application will refuse to start to prevent silent failures")
-                            logger.error("❌ Please run migrations manually or fix schema manually")
-                            logger.error("=" * 80)
-                            raise SchemaMismatchError(
-                                f"Schema mismatch: Missing columns {missing_columns}. "
-                                "Run migrations or fix schema manually before starting application."
-                            )
-                        
-                        # Re-validate after fix
-                        is_valid, still_missing = await validate_prospect_schema(engine, Base)
-                        if not is_valid:
-                            logger.error("=" * 80)
-                            logger.error(f"❌ Schema still invalid after fix attempt. Missing: {still_missing}")
-                            logger.error("=" * 80)
-                            raise SchemaMismatchError(
-                                f"Schema still invalid after fix attempt. Missing: {still_missing}"
-                            )
-                        
-                        logger.info("✅ Schema fixed automatically - validation passed")
-                    else:
-                        logger.info("✅ Website outreach schema validation passed: ORM model matches database")
-                    
-                    # Also validate social tables exist and create if missing
-                    logger.info("🔍 Validating social outreach schema...")
-                    from sqlalchemy import text
-                    async with engine.begin() as conn:
-                        # Check if social tables exist
-                        tables_check = await conn.execute(text("""
-                            SELECT table_name 
-                            FROM information_schema.tables 
-                            WHERE table_schema = 'public' 
-                            AND table_name IN ('social_profiles', 'social_discovery_jobs', 'social_drafts', 'social_messages')
-                        """))
-                        existing_tables = {row[0] for row in tables_check.fetchall()}
-                        required_tables = {'social_profiles', 'social_discovery_jobs', 'social_drafts', 'social_messages'}
-                        missing_tables = required_tables - existing_tables
-                        
-                        if missing_tables:
-                            logger.error("=" * 80)
-                            logger.error(f"❌ CRITICAL: Social tables missing: {missing_tables}")
-                            logger.error("❌ Database migrations have not been applied correctly")
-                            logger.error("=" * 80)
-                            logger.error("⚠️  Social outreach tables are missing after migrations")
-                            logger.error("⚠️  This indicates the migration 'add_social_tables' may not have run")
-                            logger.error("⚠️  Please verify migrations ran successfully and check migration chain")
-                            logger.error("=" * 80)
-                            # DO NOT create tables at runtime - fail fast
-                            # This ensures production safety and explicit schema management
-                            # The application will continue to start, but social endpoints will return 503
-                        else:
-                            logger.info("✅ All social tables exist")
-                        
-                except SchemaMismatchError as schema_err:
-                    # FAIL FAST - don't start application with broken schema
-                    logger.error("=" * 80)
-                    logger.error("❌ CRITICAL SCHEMA MISMATCH - APPLICATION WILL NOT START")
-                    logger.error("=" * 80)
-                    logger.error(f"Error: {schema_err}")
-                    logger.error("=" * 80)
-                    raise  # Re-raise to prevent startup
-                except Exception as verify_err:
-                    logger.error(f"❌ Error during schema validation: {verify_err}", exc_info=True)
-                    # CRITICAL: Still try to fix schema even if validation had errors
-                    logger.warning("⚠️  Schema validation had errors, attempting to fix schema anyway...")
-                    try:
-                        from app.utils.schema_validator import ensure_prospect_schema
-                        fixed = await ensure_prospect_schema(engine)
-                        if fixed:
-                            logger.info("✅ Schema fixed despite validation errors")
-                        else:
-                            logger.error("❌ Could not fix schema after validation errors")
-                    except Exception as fix_err:
-                        logger.error(f"❌ Failed to fix schema: {fix_err}", exc_info=True)
+                # Schema validation is now handled by validate_all_tables_exist() after migrations
+                # This ensures all tables (website + social) are validated together
+                logger.info("✅ Migrations completed - schema validation will run next")
             except Exception as migration_error:
                 logger.error("=" * 80)
-                logger.error(f"❌ Migration failed: {migration_error}", exc_info=True)
-                logger.error("❌ alembic upgrade head failed - this should not happen in production")
+                logger.error(f"❌ CRITICAL: Migration failed: {migration_error}", exc_info=True)
+                logger.error("❌ alembic upgrade head failed - application will not start")
                 logger.error("=" * 80)
-                # CRITICAL: Even if migrations fail, try to fix schema
-                logger.warning("⚠️  Migrations failed, attempting to fix schema directly...")
-                try:
-                    from app.utils.schema_validator import ensure_prospect_schema
-                    fixed = await ensure_prospect_schema(engine)
-                    if fixed:
-                        logger.info("✅ Schema fixed directly (migrations failed but schema is now correct)")
-                    else:
-                        logger.error("❌ Could not fix schema after migration failure")
-                except Exception as fix_err:
-                    logger.error(f"❌ Failed to fix schema after migration failure: {fix_err}", exc_info=True)
-                
-                # Try to create tables directly if migrations fail (first deploy)
-                try:
-                    async with engine.begin() as conn:
-                        await conn.run_sync(Base.metadata.create_all)
-                    logger.info("✅ Created database tables directly (first deploy)")
-                except Exception as create_error:
-                    logger.error(f"❌ Failed to create tables: {create_error}", exc_info=True)
+                logger.error("❌ Fix migrations and restart")
+                logger.error("=" * 80)
+                # FAIL HARD - do not start server if migrations fail
+                raise  # Re-raise to trigger exit in outer handler
         except Exception as e:
-            logger.error(f"❌ Migration setup failed: {e}", exc_info=True)
-            # Fallback: create tables directly
-            try:
-                async with engine.begin() as conn:
-                    await conn.run_sync(Base.metadata.create_all)
-                logger.info("✅ Created database tables directly (fallback)")
-            except Exception as create_error:
-                logger.error(f"❌ Failed to create tables: {create_error}", exc_info=True)
+            logger.error("=" * 80)
+            logger.error(f"❌ CRITICAL: Migration setup failed: {e}", exc_info=True)
+            logger.error("❌ Application will exit to prevent broken state")
+            logger.error("=" * 80)
+            raise  # Re-raise to trigger exit
         
         # Add a small delay after migrations
         await asyncio.sleep(1)
