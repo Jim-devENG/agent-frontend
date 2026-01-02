@@ -1384,26 +1384,112 @@ async def auto_categorize_prospect(prospect: Prospect, db: AsyncSession) -> Opti
     url_lower = (prospect.page_url or '').lower()
     combined_text = f"{domain_lower} {title_lower} {url_lower}"
     
-    # Category detection patterns
+    # Extract domain without TLD for better matching
+    domain_parts = domain_lower.replace('www.', '').split('.')
+    domain_base = domain_parts[0] if domain_parts else domain_lower
+    
+    # Comprehensive category detection patterns
+    # Order matters - more specific patterns first
     category_patterns = {
-        'Art Gallery': ['gallery', 'art gallery', 'contemporary art', 'fine art gallery'],
-        'Museums': ['museum', 'museums', 'art museum', 'gallery museum'],
-        'Art Studio': ['studio', 'art studio', 'artist studio', 'creative studio'],
-        'Art School': ['school', 'art school', 'academy', 'art academy', 'institute', 'art institute'],
-        'Art Fair': ['fair', 'art fair', 'exhibition', 'art exhibition', 'art show'],
-        'Art Dealer': ['dealer', 'art dealer', 'art broker', 'art trader'],
-        'Art Consultant': ['consultant', 'art consultant', 'art advisor', 'art advisory'],
-        'Art Publisher': ['publisher', 'art publisher', 'publishing', 'art press'],
-        'Art Magazine': ['magazine', 'art magazine', 'publication', 'art publication', 'art journal']
+        'Museums': [
+            # Domain patterns
+            'museum', 'museums', 'museo', 'museu', 'muse', 'museet',
+            # Title/URL patterns
+            'art museum', 'gallery museum', 'contemporary museum', 'modern museum',
+            'museum of art', 'art collection', 'permanent collection'
+        ],
+        'Art Gallery': [
+            # Domain patterns
+            'gallery', 'galleries', 'galerie', 'galeria', 'galerija',
+            # Title/URL patterns
+            'art gallery', 'contemporary art', 'fine art gallery', 'art space',
+            'exhibition space', 'art showroom', 'gallery space', 'art room',
+            'contemporary gallery', 'modern gallery', 'fine art', 'art display'
+        ],
+        'Art Studio': [
+            # Domain patterns
+            'studio', 'studios', 'atelier', 'ateliers',
+            # Title/URL patterns
+            'art studio', 'artist studio', 'creative studio', 'painting studio',
+            'sculpture studio', 'artists studio', 'working studio', 'art workshop'
+        ],
+        'Art School': [
+            # Domain patterns
+            'school', 'academy', 'academie', 'academia', 'institute', 'institution',
+            'college', 'university', 'univ', 'edu',
+            # Title/URL patterns
+            'art school', 'art academy', 'art institute', 'art education',
+            'art college', 'art program', 'art courses', 'art classes',
+            'art training', 'art degree', 'fine arts', 'visual arts school'
+        ],
+        'Art Fair': [
+            # Domain patterns
+            'fair', 'fairs', 'expo', 'exhibition', 'exhibitions', 'show', 'shows',
+            # Title/URL patterns
+            'art fair', 'art exhibition', 'art show', 'art expo', 'art market',
+            'art event', 'art festival', 'biennale', 'biennial', 'art week'
+        ],
+        'Art Dealer': [
+            # Domain patterns
+            'dealer', 'dealers', 'broker', 'brokers', 'trader', 'traders',
+            'auction', 'auctions', 'sotheby', 'christie', 'bonham',
+            # Title/URL patterns
+            'art dealer', 'art broker', 'art trader', 'art sales', 'art buying',
+            'art selling', 'art investment', 'art collector', 'art collection'
+        ],
+        'Art Consultant': [
+            # Domain patterns
+            'consultant', 'consultants', 'advisor', 'advisors', 'advisory',
+            'curator', 'curators', 'curation',
+            # Title/URL patterns
+            'art consultant', 'art advisor', 'art advisory', 'art curation',
+            'art curating', 'art management', 'art services'
+        ],
+        'Art Publisher': [
+            # Domain patterns
+            'publisher', 'publishers', 'publishing', 'press', 'books', 'book',
+            'edition', 'editions', 'print', 'prints',
+            # Title/URL patterns
+            'art publisher', 'art publishing', 'art press', 'art book',
+            'art books', 'art print', 'art prints', 'art edition'
+        ],
+        'Art Magazine': [
+            # Domain patterns
+            'magazine', 'magazines', 'journal', 'journals', 'review', 'reviews',
+            'publication', 'publications', 'media', 'news', 'blog',
+            # Title/URL patterns
+            'art magazine', 'art journal', 'art publication', 'art review',
+            'art news', 'art media', 'art blog', 'art writing', 'art critic'
+        ]
     }
     
-    # Check each category pattern
+    # Check domain base first (most reliable indicator)
+    for category, patterns in category_patterns.items():
+        for pattern in patterns:
+            # Check domain base (without TLD)
+            if pattern in domain_base:
+                logger.info(f"✅ [AUTO CATEGORIZE] Detected category '{category}' from domain base '{domain_base}' (pattern: '{pattern}') for {prospect.domain}")
+                return category
+            # Check full domain
+            if pattern in domain_lower:
+                logger.info(f"✅ [AUTO CATEGORIZE] Detected category '{category}' from domain '{domain_lower}' (pattern: '{pattern}') for {prospect.domain}")
+                return category
+    
+    # Then check title and URL (less reliable but still useful)
+    for category, patterns in category_patterns.items():
+        for pattern in patterns:
+            if pattern in title_lower or pattern in url_lower:
+                logger.info(f"✅ [AUTO CATEGORIZE] Detected category '{category}' from title/URL (pattern: '{pattern}') for {prospect.domain}")
+                return category
+    
+    # Finally check combined text as fallback
     for category, patterns in category_patterns.items():
         for pattern in patterns:
             if pattern in combined_text:
-                logger.info(f"✅ [AUTO CATEGORIZE] Detected category '{category}' from pattern matching for {prospect.domain}")
+                logger.info(f"✅ [AUTO CATEGORIZE] Detected category '{category}' from combined text (pattern: '{pattern}') for {prospect.domain}")
                 return category
     
+    logger.debug(f"⚠️  [AUTO CATEGORIZE] Could not determine category for {prospect.domain} (domain: {domain_lower}, title: {title_lower[:50] if title_lower else 'N/A'})")
     return None
 
 
