@@ -103,12 +103,15 @@ async def discover_profiles(
                 
                 # Import social models to register them with Base.metadata
                 # This must happen before create_all
+                # Note: Models are already imported at top, but we import again to ensure they're registered
                 from app.models.social import (
                     SocialProfile,
-                    SocialDiscoveryJob,
                     SocialDraft,
                     SocialMessage
                 )
+                # SocialDiscoveryJob is already imported at module level, just ensure it's registered
+                # by importing the module
+                import app.models.social as social_models
                 
                 # Get sync database URL
                 database_url = os.getenv("DATABASE_URL")
@@ -127,7 +130,7 @@ async def discover_profiles(
                     sync_engine.dispose()
                     logger.info("✅ [SOCIAL DISCOVERY] Social tables created successfully on-the-fly")
                     
-                    # Retry the operation - SocialDiscoveryJob is now imported and available
+                    # Retry the operation - use SocialDiscoveryJob from module-level import
                     retry_job = SocialDiscoveryJob(
                         platform=platform,
                         filters=request.filters,
