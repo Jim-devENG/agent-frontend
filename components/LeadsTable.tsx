@@ -339,6 +339,23 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     }
   }
 
+  const handleAutoCategorize = async () => {
+    setIsAutoCategorizing(true)
+    setError(null)
+    try {
+      const result = await autoCategorizeAll()
+      setTimeout(() => {
+        loadProspects().catch(err => console.error('Error reloading prospects:', err))
+      }, 500)
+      setError(`✅ ${result.message}`)
+      setTimeout(() => setError(null), 5000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to auto-categorize')
+    } finally {
+      setIsAutoCategorizing(false)
+    }
+  }
+
   return (
     <div className="glass rounded-xl shadow-lg border border-white/20 p-3 animate-fade-in">
       <div className="flex items-center justify-between mb-4">
