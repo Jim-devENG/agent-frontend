@@ -253,22 +253,47 @@ async def startup():
                             
                             # Try to create social tables directly using SQLAlchemy metadata
                             try:
-                                from app.models import social
-                                # Import all social models to register them with Base
+                                # CRITICAL: Import social models to register them with Base.metadata
+                                # This must happen BEFORE calling create_all
                                 from app.models.social import (
                                     SocialProfile,
                                     SocialDiscoveryJob,
                                     SocialDraft,
                                     SocialMessage
                                 )
+                                logger.info("✅ Social models imported successfully")
                                 
-                                # Create tables for social models
-                                async with engine.begin() as conn:
-                                    await conn.run_sync(Base.metadata.create_all)
-                                logger.info("✅ Social tables created successfully")
+                                # Now create tables - Base.metadata will include social models
+                                # We need to use a sync connection for create_all
+                                from sqlalchemy import create_engine, text
+                                import os
+                                
+                                # Get sync database URL
+                                database_url = os.getenv("DATABASE_URL")
+                                if database_url:
+                                    # Convert to sync URL
+                                    if database_url.startswith("postgresql+asyncpg://"):
+                                        sync_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
+                                    elif database_url.startswith("postgresql://"):
+                                        sync_url = database_url
+                                    else:
+                                        sync_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
+                                    
+                                    # Create sync engine for table creation
+                                    sync_engine = create_engine(sync_url)
+                                    Base.metadata.create_all(sync_engine)
+                                    sync_engine.dispose()
+                                    logger.info("✅ Social tables created successfully")
+                                else:
+                                    logger.error("❌ DATABASE_URL not set, cannot create tables")
                             except Exception as create_err:
                                 logger.error(f"❌ Failed to create social tables: {create_err}", exc_info=True)
                                 logger.warning("⚠️  Social tables will need to be created manually via: alembic upgrade head")
+                                # Don't raise - allow app to continue
+                            except Exception as create_err:
+                                logger.error(f"❌ Failed to create social tables: {create_err}", exc_info=True)
+                                logger.warning("⚠️  Social tables will need to be created manually via: alembic upgrade head")
+                                # Don't raise - allow app to continue
                                 logger.warning("⚠️  Or restart the backend to trigger automatic migration")
                         else:
                             logger.info("✅ All social tables exist")
