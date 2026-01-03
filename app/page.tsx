@@ -187,10 +187,15 @@ export default function Dashboard() {
     )
   }
 
+  // Wrapper function to handle type compatibility with Sidebar component
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab as 'overview' | 'pipeline' | 'leads' | 'scraped_emails' | 'emails' | 'jobs' | 'websites' | 'settings' | 'guide')
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-liquid-50 to-white flex">
       {/* Left Sidebar */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} tabs={tabs} />
+      <Sidebar activeTab={activeTab} onTabChange={handleTabChange} tabs={tabs} />
 
       {/* Main Content Area */}
       <div className="flex-1 lg:ml-64 flex flex-col">
