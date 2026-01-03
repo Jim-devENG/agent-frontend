@@ -1,6 +1,7 @@
 """
 DataForSEO API client for website discovery and on-page crawling
 Fully validated, diagnostic-enabled, and debugged implementation
+Includes rate limiting to prevent cost overruns and API bans.
 """
 import httpx
 import base64
@@ -12,6 +13,7 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 import logging
+from app.utils.rate_limiter import get_rate_limiter
 
 load_dotenv()
 
@@ -243,6 +245,10 @@ class DataForSEOClient:
             logger.info(f"🔵 Keyword: '{keyword}', Location: {location_code}, Language: '{language_code}', Device: '{device}'")
             
             url = f"{self.BASE_URL}/serp/google/organic/task_post"
+            
+            # Rate limiting: Wait if needed to prevent cost overruns and API bans
+            limiter = get_rate_limiter()
+            await limiter.wait_if_needed("dataforseo")
             
             # Store request for diagnostics
             self._last_request = {

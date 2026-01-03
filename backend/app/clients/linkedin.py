@@ -3,12 +3,14 @@ LinkedIn API Client
 
 Uses LinkedIn API v2 to discover profiles.
 Requires LinkedIn Developer account and OAuth credentials.
+Includes rate limiting to prevent API bans.
 """
 import httpx
 import os
 import logging
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
+from app.utils.rate_limiter import get_rate_limiter
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -83,6 +85,10 @@ class LinkedInClient:
         }
         
         try:
+            # Rate limiting: Wait if needed to prevent API ban
+            limiter = get_rate_limiter()
+            await limiter.wait_if_needed("linkedin")
+            
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, headers=self.headers, params=params)
                 
@@ -114,6 +120,10 @@ class LinkedInClient:
         url = f"{self.BASE_URL}/people/(id:{profile_id})"
         
         try:
+            # Rate limiting: Wait if needed to prevent API ban
+            limiter = get_rate_limiter()
+            await limiter.wait_if_needed("linkedin")
+            
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, headers=self.headers)
                 

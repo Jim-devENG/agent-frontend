@@ -3,12 +3,14 @@ Instagram Graph API Client
 
 Uses Instagram Graph API (Meta) to discover profiles.
 Requires Meta Developer account, app creation, and App Review.
+Includes rate limiting to prevent API bans.
 """
 import httpx
 import os
 import logging
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
+from app.utils.rate_limiter import get_rate_limiter
 
 load_dotenv()
 logger = logging.getLogger(__name__)

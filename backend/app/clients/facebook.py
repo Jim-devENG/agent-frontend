@@ -3,12 +3,14 @@ Facebook Graph API Client
 
 Uses Facebook Graph API to discover pages and profiles.
 Requires Meta Developer account and app creation.
+Includes rate limiting to prevent API bans.
 """
 import httpx
 import os
 import logging
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
+from app.utils.rate_limiter import get_rate_limiter
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -72,6 +74,10 @@ class FacebookClient:
         }
         
         try:
+            # Rate limiting: Wait if needed to prevent API ban
+            limiter = get_rate_limiter()
+            await limiter.wait_if_needed("facebook")
+            
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, params=params)
                 
