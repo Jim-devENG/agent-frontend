@@ -80,17 +80,19 @@ export default function SocialDiscovery() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">Discover Social Profiles</h2>
+    <div className="glass rounded-xl shadow-lg border border-olive-200 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-bold text-olive-700">Social Profile Discovery</h3>
+      </div>
       
-      <form onSubmit={handleDiscover} className="space-y-4">
+      <form onSubmit={handleDiscover} className="space-y-3">
         {/* Platform Selection */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Platform *</label>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Platform (Required) *</label>
           <select
             value={platform}
             onChange={(e) => setPlatform(e.target.value as any)}
-            className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500"
+            className="w-full px-2 py-1.5 text-xs border border-olive-200 rounded-lg focus:ring-olive-500 focus:border-olive-500"
           >
             <option value="linkedin">LinkedIn</option>
             <option value="instagram">Instagram</option>
@@ -101,95 +103,88 @@ export default function SocialDiscovery() {
 
         {/* Categories */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Categories *</label>
-          <div className="flex flex-wrap gap-2">
-            {availableCategories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => handleCategoryToggle(cat)}
-                className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
-                  categories.includes(cat)
-                    ? 'bg-olive-600 text-white border-olive-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-olive-500'
-                }`}
-              >
-                {cat}
-              </button>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Categories (Required) *
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+            {availableCategories.map(cat => (
+              <label key={cat} className="flex items-center space-x-1.5 p-1.5 border border-olive-200 rounded hover:bg-olive-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={categories.includes(cat)}
+                  onChange={() => handleCategoryToggle(cat)}
+                  className="accent-olive-600"
+                />
+                <span className="text-xs">{cat}</span>
+              </label>
             ))}
           </div>
-          {categories.length === 0 && (
-            <p className="text-xs text-gray-500 mt-1">Select at least one category</p>
-          )}
         </div>
 
         {/* Locations */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Locations *</label>
-          <div className="flex flex-wrap gap-2">
-            {availableLocations.map((loc) => (
-              <button
-                key={loc}
-                type="button"
-                onClick={() => handleLocationToggle(loc)}
-                className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
-                  locations.includes(loc)
-                    ? 'bg-olive-600 text-white border-olive-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-olive-500'
-                }`}
-              >
-                {loc}
-              </button>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Locations (Required) *
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
+            {availableLocations.map(loc => (
+              <label key={loc} className="flex items-center space-x-1.5 p-1.5 border border-olive-200 rounded hover:bg-olive-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={locations.includes(loc)}
+                  onChange={() => handleLocationToggle(loc)}
+                  className="accent-olive-600"
+                />
+                <span className="text-xs">{loc}</span>
+              </label>
             ))}
           </div>
-          {locations.length === 0 && (
-            <p className="text-xs text-gray-500 mt-1">Select at least one location</p>
-          )}
         </div>
 
         {/* Keywords */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Keywords (optional, comma-separated)</label>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Keywords (Optional)
+          </label>
           <input
             type="text"
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
-            placeholder="art gallery, museum, artist"
-            className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500"
+            placeholder="e.g., contemporary art, abstract painting"
+            className="w-full px-2 py-1.5 text-xs border border-olive-200 rounded-lg focus:ring-olive-500 focus:border-olive-500"
           />
         </div>
 
-        {/* Submit */}
+        {error && (
+          <div className="p-2 bg-red-50 border border-red-200 rounded text-red-700 text-xs">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="p-2 bg-olive-50 border border-olive-200 rounded text-olive-700 text-xs">
+            ✅ {success}
+          </div>
+        )}
+
         <button
-          type="submit"
+          onClick={handleDiscover}
           disabled={loading || categories.length === 0 || locations.length === 0}
-          className="w-full px-4 py-2 bg-olive-600 text-white text-xs font-medium rounded-lg hover:bg-olive-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full px-3 py-2 bg-olive-600 text-white rounded-lg hover:bg-olive-700 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 text-xs font-semibold"
         >
           {loading ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Starting Discovery...
+              <Loader2 className="w-3 h-3 animate-spin" />
+              <span>Starting Discovery...</span>
             </>
           ) : (
             <>
-              <Search className="w-4 h-4" />
-              Start Discovery
+              <Search className="w-3 h-3" />
+              <span>Discover Profiles</span>
             </>
           )}
         </button>
       </form>
-
-      {/* Messages */}
-      {error && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700">
-          {success}
-        </div>
-      )}
     </div>
   )
 }
