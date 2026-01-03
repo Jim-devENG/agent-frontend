@@ -43,6 +43,7 @@ router = APIRouter(prefix="/api/social/pipeline", tags=["social-pipeline"])
 
 @router.get("/status")
 async def get_social_pipeline_status(
+    platform: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[str] = Depends(get_current_user_optional)
 ):
@@ -103,6 +104,23 @@ async def get_social_pipeline_status(
         # Wrap in try-catch in case the column access itself fails
         try:
             social_filter = Prospect.source_type == 'social'
+            
+            # Add platform filter if specified
+            if platform:
+                platform_lower = platform.lower()
+                valid_platforms = ['linkedin', 'instagram', 'facebook', 'tiktok']
+                if platform_lower not in valid_platforms:
+                    return {
+                        "discovered": 0,
+                        "reviewed": 0,
+                        "qualified": 0,
+                        "drafted": 0,
+                        "sent": 0,
+                        "followup_ready": 0,
+                        "status": "inactive",
+                        "message": f"Invalid platform: {platform}"
+                    }
+                social_filter = and_(social_filter, Prospect.source_platform == platform_lower)
         except Exception as filter_err:
             # If accessing source_type fails, return safe response
             logger.error(f"❌ [SOCIAL PIPELINE] Error accessing source_type column: {filter_err}")

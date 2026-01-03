@@ -244,6 +244,189 @@ async def list_profiles(
 
 
 # ============================================
+# STATS
+# ============================================
+
+@router.get("/stats")
+async def get_social_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
+):
+    """
+    Get social outreach statistics.
+    
+    Returns platform-specific counts and overall stats.
+    Filters by source_type='social'.
+    """
+    try:
+        # Check if source_type column exists
+        column_exists = False
+        try:
+            from sqlalchemy import text
+            column_check = await db.execute(
+                text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'prospects' 
+                    AND column_name = 'source_type'
+                """)
+            )
+            column_exists = column_check.fetchone() is not None
+        except Exception:
+            column_exists = False
+        
+        if not column_exists:
+            # Return empty stats if column doesn't exist
+            return {
+                "total_profiles": 0,
+                "discovered": 0,
+                "drafted": 0,
+                "sent": 0,
+                "pending": 0,
+                "jobs_running": 0,
+                "linkedin_total": 0,
+                "linkedin_discovered": 0,
+                "linkedin_drafted": 0,
+                "linkedin_sent": 0,
+                "instagram_total": 0,
+                "instagram_discovered": 0,
+                "instagram_drafted": 0,
+                "instagram_sent": 0,
+                "facebook_total": 0,
+                "facebook_discovered": 0,
+                "facebook_drafted": 0,
+                "facebook_sent": 0,
+                "tiktok_total": 0,
+                "tiktok_discovered": 0,
+                "tiktok_drafted": 0,
+                "tiktok_sent": 0,
+            }
+        
+        # Base filter: only social prospects
+        social_filter = Prospect.source_type == 'social'
+        
+        # Overall counts
+        total_profiles = await db.execute(
+            select(func.count(Prospect.id)).where(social_filter)
+        )
+        total_profiles_count = total_profiles.scalar() or 0
+        
+        discovered = await db.execute(
+            select(func.count(Prospect.id)).where(
+                and_(social_filter, Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value)
+            )
+        )
+        discovered_count = discovered.scalar() or 0
+        
+        drafted = await db.execute(
+            select(func.count(Prospect.id)).where(
+                and_(social_filter, Prospect.draft_status == 'drafted')
+            )
+        )
+        drafted_count = drafted.scalar() or 0
+        
+        sent = await db.execute(
+            select(func.count(Prospect.id)).where(
+                and_(social_filter, Prospect.send_status == 'sent')
+            )
+        )
+        sent_count = sent.scalar() or 0
+        
+        pending = await db.execute(
+            select(func.count(Prospect.id)).where(
+                and_(social_filter, Prospect.outreach_status == 'pending')
+            )
+        )
+        pending_count = pending.scalar() or 0
+        
+        # Platform-specific counts
+        platforms = ['linkedin', 'instagram', 'facebook', 'tiktok']
+        platform_stats = {}
+        
+        for platform in platforms:
+            platform_filter = and_(
+                social_filter,
+                Prospect.source_platform == platform
+            )
+            
+            platform_total = await db.execute(
+                select(func.count(Prospect.id)).where(platform_filter)
+            )
+            platform_stats[f"{platform}_total"] = platform_total.scalar() or 0
+            
+            platform_discovered = await db.execute(
+                select(func.count(Prospect.id)).where(
+                    and_(platform_filter, Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value)
+                )
+            )
+            platform_stats[f"{platform}_discovered"] = platform_discovered.scalar() or 0
+            
+            platform_drafted = await db.execute(
+                select(func.count(Prospect.id)).where(
+                    and_(platform_filter, Prospect.draft_status == 'drafted')
+                )
+            )
+            platform_stats[f"{platform}_drafted"] = platform_drafted.scalar() or 0
+            
+            platform_sent = await db.execute(
+                select(func.count(Prospect.id)).where(
+                    and_(platform_filter, Prospect.send_status == 'sent')
+                )
+            )
+            platform_stats[f"{platform}_sent"] = platform_sent.scalar() or 0
+        
+        # Count running jobs (social-related)
+        from app.models.job import Job
+        running_jobs = await db.execute(
+            select(func.count(Job.id)).where(
+                and_(
+                    Job.status.in_(['pending', 'running']),
+                    Job.job_type.in_(['social_discover', 'social_draft', 'social_send'])
+                )
+            )
+        )
+        jobs_running_count = running_jobs.scalar() or 0
+        
+        return {
+            "total_profiles": total_profiles_count,
+            "discovered": discovered_count,
+            "drafted": drafted_count,
+            "sent": sent_count,
+            "pending": pending_count,
+            "jobs_running": jobs_running_count,
+            **platform_stats
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ [SOCIAL STATS] Error computing stats: {e}", exc_info=True)
+        # Return empty stats on error
+        return {
+            "total_profiles": 0,
+            "discovered": 0,
+            "drafted": 0,
+            "sent": 0,
+            "pending": 0,
+            "jobs_running": 0,
+            "linkedin_total": 0,
+            "linkedin_discovered": 0,
+            "linkedin_drafted": 0,
+            "linkedin_sent": 0,
+            "instagram_total": 0,
+            "instagram_discovered": 0,
+            "instagram_drafted": 0,
+            "instagram_sent": 0,
+            "facebook_total": 0,
+            "facebook_discovered": 0,
+            "facebook_drafted": 0,
+            "facebook_sent": 0,
+            "tiktok_total": 0,
+            "tiktok_discovered": 0,
+            "tiktok_drafted": 0,
+            "tiktok_sent": 0,
+        }
+
+
+# ============================================
 # DRAFTS
 # ============================================
 
