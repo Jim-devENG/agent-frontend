@@ -92,8 +92,12 @@ class SocialDraftingService:
         prompt = self._build_initial_prompt(platform, context, profile)
         
         try:
-            # Use Gemini to generate message
-            gemini_result = await self._call_gemini(prompt, platform)
+            # Use GeminiClient to generate message (same client as website outreach)
+            gemini_result = await self.gemini_client.compose_social_message(
+                platform=platform,
+                prompt=prompt,
+                is_followup=False
+            )
             
             if gemini_result.get("success"):
                 return {
@@ -186,7 +190,12 @@ class SocialDraftingService:
         prompt = self._build_followup_prompt(platform, context, message_history, profile)
         
         try:
-            gemini_result = await self._call_gemini(prompt, platform, is_followup=True)
+            # Use GeminiClient to generate follow-up message (same client as website outreach)
+            gemini_result = await self.gemini_client.compose_social_message(
+                platform=platform,
+                prompt=prompt,
+                is_followup=True
+            )
             
             if gemini_result.get("success"):
                 return {
