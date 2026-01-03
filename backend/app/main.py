@@ -171,10 +171,40 @@ async def startup():
             logger.info("🔄 Running database migrations on startup (CRITICAL: must run before queries)...")
             logger.info("=" * 60)
             
-            # Get the backend directory path
+            # Get the backend directory path - try multiple locations
             import os
-            backend_dir = os.path.dirname(os.path.dirname(__file__))
-            alembic_cfg = Config(os.path.join(backend_dir, "alembic.ini"))
+            import glob
+            
+            # Try to find alembic.ini in common locations
+            possible_paths = [
+                os.path.join(os.path.dirname(os.path.dirname(__file__)), "alembic.ini"),  # backend/alembic.ini
+                os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini"),  # backend/alembic.ini (alternative)
+                "alembic.ini",  # Current directory
+                "/app/alembic.ini",  # Render /app directory
+                "/app/backend/alembic.ini",  # Render /app/backend directory
+            ]
+            
+            alembic_ini_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    alembic_ini_path = path
+                    logger.info(f"✅ Found alembic.ini at: {path}")
+                    break
+            
+            if not alembic_ini_path:
+                # Last resort: search for it
+                logger.warning("⚠️  alembic.ini not found in expected locations, searching...")
+                found = glob.glob("**/alembic.ini", recursive=True)
+                if found:
+                    alembic_ini_path = found[0]
+                    logger.info(f"✅ Found alembic.ini at: {alembic_ini_path}")
+                else:
+                    logger.error(f"❌ CRITICAL: alembic.ini not found anywhere")
+                    logger.error(f"❌ Current directory: {os.getcwd()}")
+                    logger.error(f"❌ Searched paths: {possible_paths}")
+                    raise FileNotFoundError("alembic.ini not found in any expected location")
+            
+            alembic_cfg = Config(alembic_ini_path)
             
             # Get database URL and set in config
             database_url = os.getenv("DATABASE_URL")
@@ -190,25 +220,19 @@ async def startup():
             try:
                 logger.info("🚀 Executing: alembic upgrade head")
                 logger.info("📝 This runs automatically on every backend startup")
+                logger.info(f"📁 Using alembic.ini: {alembic_ini_path}")
+                logger.info(f"📁 Database URL configured: {'Yes' if database_url else 'No'}")
                 logger.info("=" * 60)
                 
-                # Verify alembic.ini exists
-                if not os.path.exists(alembic_cfg.config_file_name):
-                    logger.error(f"❌ CRITICAL: alembic.ini not found at {alembic_cfg.config_file_name}")
-                    logger.error(f"❌ Current directory: {os.getcwd()}")
-                    logger.error(f"❌ Backend dir: {backend_dir}")
-                    # Try to find it
-                    import glob
-                    found = glob.glob("**/alembic.ini", recursive=True)
-                    if found:
-                        logger.error(f"❌ Found alembic.ini at: {found}")
-                    raise FileNotFoundError(f"alembic.ini not found at {alembic_cfg.config_file_name}")
-                
-                # Run migrations with detailed logging
-                logger.info(f"📁 Using alembic.ini: {alembic_cfg.config_file_name}")
-                logger.info(f"📁 Database URL configured: {'Yes' if database_url else 'No'}")
-                
-                command.upgrade(alembic_cfg, "head")
+                # Change to the directory containing alembic.ini for better compatibility
+                alembic_dir = os.path.dirname(os.path.abspath(alembic_ini_path))
+                original_cwd = os.getcwd()
+                try:
+                    os.chdir(alembic_dir)
+                    logger.info(f"📁 Changed to directory: {alembic_dir}")
+                    command.upgrade(alembic_cfg, "head")
+                finally:
+                    os.chdir(original_cwd)
                 
                 logger.info("=" * 60)
                 logger.info("✅ Database migrations completed successfully")
@@ -232,7 +256,7 @@ async def startup():
                 logger.error("=" * 80)
                 logger.error("⚠️  APPLICATION WILL CONTINUE TO START")
                 logger.error("⚠️  Some features may not work until migrations are fixed")
-                logger.error("⚠️  Use /api/health/migrate endpoint to retry migrations")
+                logger.error("⚠️  Use /health/migrate endpoint to retry migrations")
                 logger.error("=" * 80)
                 # Don't fail hard - allow app to start but log the error
                 # This prevents deployment failures while still alerting to the issue
