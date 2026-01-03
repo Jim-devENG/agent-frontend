@@ -608,16 +608,14 @@ async def startup():
                 logger.error(f"❌ Failed to initialize social tables: {init_error}", exc_info=True)
                 schema_valid = False
         except Exception as validation_error:
-        logger.error("=" * 80)
-        logger.error("❌ CRITICAL: Schema validation failed")
-        logger.error(f"❌ Error: {schema_error}")
-        logger.error("=" * 80)
-        logger.error("⚠️  APPLICATION WILL CONTINUE TO START")
-        logger.error("⚠️  Some features may not work until schema is fixed")
-        logger.error("⚠️  Run 'alembic upgrade head' manually to fix")
-        logger.error("=" * 80)
-        schema_valid = False
-    except Exception as validation_error:
+            logger.error("=" * 80)
+            logger.error("❌ CRITICAL: Schema validation check failed")
+            logger.error(f"❌ Error: {validation_error}")
+            logger.error("=" * 80)
+            logger.error("⚠️  APPLICATION WILL CONTINUE TO START")
+            logger.error("⚠️  Some features may not work until schema is fixed")
+            logger.error("=" * 80)
+            schema_valid = False
         logger.error("=" * 80)
         logger.error("❌ CRITICAL: Schema validation check failed")
         logger.error(f"❌ Error: {validation_error}")
