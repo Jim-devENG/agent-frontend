@@ -280,7 +280,7 @@ async def startup():
             # TASK: Log database connection info and data count
             try:
                 from sqlalchemy import text
-            async with engine.begin() as conn:
+                async with engine.begin() as conn:
                 # Log current database and server address
                 db_info_result = await conn.execute(
                     text("SELECT current_database(), inet_server_addr()")
