@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { Users, Mail, CheckCircle, Clock, TrendingUp, AlertCircle, Linkedin, Instagram, Facebook, Music, FileText } from 'lucide-react'
-import { getSocialStats, getSocialPipelineStatus, type SocialStats } from '@/lib/api'
+import { getSocialStats, getSocialPipelineStatus, listJobs, type SocialStats, type Job } from '@/lib/api'
+import JobStatusPanel from '@/components/JobStatusPanel'
+import ActivityFeed from '@/components/ActivityFeed'
 
 interface StatCard {
   title: string
@@ -26,17 +28,30 @@ interface PlatformStat {
 export default function SocialOverview() {
   const [stats, setStats] = useState<SocialStats | null>(null)
   const [pipelineStatus, setPipelineStatus] = useState<any>(null)
+  const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
+  const [jobsLoading, setJobsLoading] = useState(true)
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [statsData, pipelineData] = await Promise.all([
+        const [statsData, pipelineData, jobsData] = await Promise.all([
           getSocialStats().catch(() => null),
-          getSocialPipelineStatus().catch(() => null)
+          getSocialPipelineStatus().catch(() => null),
+          listJobs(0, 50).catch(() => [])
         ])
         setStats(statsData)
         setPipelineStatus(pipelineData)
+        
+        // Filter for social-related jobs
+        const socialJobs = Array.isArray(jobsData) ? jobsData.filter((job: Job) => 
+          job.job_type?.includes('social') || 
+          job.job_type === 'social_discover' ||
+          job.job_type === 'social_draft' ||
+          job.job_type === 'social_send'
+        ) : []
+        setJobs(socialJobs)
+        setJobsLoading(false)
       } catch (error) {
         console.error('Failed to load social overview data:', error)
       } finally {
@@ -257,6 +272,35 @@ export default function SocialOverview() {
           </div>
         </div>
       )}
+
+      {/* Jobs & Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {jobsLoading ? (
+          <div className="glass rounded-xl shadow-lg border border-olive-200 p-6">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-olive-600"></div>
+              <p className="text-gray-500 text-xs mt-2">Loading jobs...</p>
+            </div>
+          </div>
+        ) : jobs.length > 0 ? (
+          <JobStatusPanel jobs={jobs} onRefresh={async () => {
+            const jobsData = await listJobs(0, 50).catch(() => [])
+            const socialJobs = Array.isArray(jobsData) ? jobsData.filter((job: Job) => 
+              job.job_type?.includes('social') || 
+              job.job_type === 'social_discover' ||
+              job.job_type === 'social_draft' ||
+              job.job_type === 'social_send'
+            ) : []
+            setJobs(socialJobs)
+          }} />
+        ) : (
+          <div className="glass rounded-xl shadow-lg border border-olive-200 p-6">
+            <p className="text-gray-500 text-sm">No social jobs found.</p>
+            <p className="text-gray-400 text-xs mt-1">Start a discovery job to see it here.</p>
+          </div>
+        )}
+        <ActivityFeed limit={15} autoRefresh={true} />
+      </div>
     </div>
   )
 }

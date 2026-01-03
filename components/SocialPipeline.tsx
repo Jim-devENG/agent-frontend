@@ -192,7 +192,9 @@ export default function SocialPipeline() {
     )
   }
 
-  if (!status || status.status === 'inactive') {
+  // Only show inactive message if status explicitly says inactive AND has a reason
+  // If status is null or missing, show loading or default state
+  if (status && status.status === 'inactive' && status.reason) {
     return (
       <div className="glass rounded-xl shadow-lg p-6 border border-olive-200">
         <div className="flex items-center space-x-2 text-amber-600 mb-2">
@@ -200,8 +202,23 @@ export default function SocialPipeline() {
           <h3 className="font-semibold text-sm">Social Outreach Not Available</h3>
         </div>
         <p className="text-xs text-gray-600">
-          {status?.reason || 'Social outreach feature is not initialized. Please run database migrations.'}
+          {status.reason}
         </p>
+      </div>
+    )
+  }
+  
+  // If status is null, show loading
+  if (!status) {
+    return (
+      <div className="glass rounded-xl shadow-lg p-4 animate-fade-in">
+        <div className="text-center py-4">
+          <div className="relative inline-block">
+            <div className="w-8 h-8 rounded-full border-2 border-olive-200"></div>
+            <div className="absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-t-olive-600 border-r-olive-500 animate-spin"></div>
+          </div>
+          <p className="text-gray-600 mt-2 text-sm font-medium">Loading pipeline...</p>
+        </div>
       </div>
     )
   }
