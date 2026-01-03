@@ -242,6 +242,116 @@ Do not include any text before or after the JSON. Return ONLY the JSON object.""
                 "domain": domain
             }
     
+    async def compose_social_message(
+        self,
+        platform: str,
+        prompt: str,
+        is_followup: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Compose a social media message using Gemini API.
+        
+        This is a generic method for social platforms that accepts a custom prompt.
+        Used by SocialDraftingService for platform-specific message generation.
+        
+        Args:
+            platform: Platform name (linkedin, instagram, tiktok, facebook)
+            prompt: The prompt to send to Gemini
+            is_followup: Whether this is a follow-up message (affects temperature)
+        
+        Returns:
+            Dictionary with 'success', 'body', and optionally 'error'
+        """
+        url = f"{self.BASE_URL}/models/gemini-2.0-flash-exp:generateContent?key={self.api_key}"
+        
+        payload = {
+            "contents": [{
+                "parts": [{
+                    "text": prompt
+                }]
+            }],
+            "generationConfig": {
+                "temperature": 0.8 if is_followup else 0.7,  # Higher temperature for follow-ups
+                "topK": 40,
+                "topP": 0.95,
+                "maxOutputTokens": 1024,
+                "responseMimeType": "application/json"
+            }
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                logger.info(f"Calling Gemini API to compose {platform} {'follow-up' if is_followup else 'initial'} message")
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                
+                # Extract content from Gemini response
+                if result.get("candidates") and len(result["candidates"]) > 0:
+                    candidate = result["candidates"][0]
+                    if candidate.get("content") and candidate["content"].get("parts"):
+                        parts = candidate["content"]["parts"]
+                        if parts and isinstance(parts, list) and len(parts) > 0:
+                            text_content = parts[0].get("text", "") if isinstance(parts[0], dict) else ""
+                        else:
+                            text_content = ""
+                        
+                        # Parse JSON response
+                        try:
+                            message_data = json.loads(text_content)
+                            body = message_data.get("body", "")
+                            
+                            if not body:
+                                return {
+                                    "success": False,
+                                    "error": "Empty message body from Gemini",
+                                    "body": None
+                                }
+                            
+                            logger.info(f"✅ Gemini composed {platform} message ({len(body)} chars)")
+                            
+                            return {
+                                "success": True,
+                                "body": body,
+                                "error": None
+                            }
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Failed to parse Gemini JSON response: {e}")
+                            logger.error(f"Response text: {text_content[:200]}")
+                            return {
+                                "success": False,
+                                "error": f"Failed to parse JSON: {e}",
+                                "body": None
+                            }
+                    else:
+                        return {
+                            "success": False,
+                            "error": "No content in Gemini response",
+                            "body": None
+                        }
+                else:
+                    error_msg = result.get("error", {}).get("message", "Unknown error")
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "body": None
+                    }
+        
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Gemini API HTTP error for {platform}: {e.response.status_code} - {e.response.text}")
+            return {
+                "success": False,
+                "error": f"HTTP {e.response.status_code}: {e.response.text}",
+                "body": None
+            }
+        except Exception as e:
+            logger.error(f"Gemini API call failed for {platform}: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "body": None
+            }
+    
     def _extract_from_text(self, text: str, domain: str) -> Dict[str, Any]:
         """
         Fallback: Extract subject and body from text if JSON parsing fails
@@ -451,5 +561,115 @@ Do not include any text before or after the JSON. Return ONLY the JSON object.""
                 "success": False,
                 "error": str(e),
                 "domain": domain
+            }
+    
+    async def compose_social_message(
+        self,
+        platform: str,
+        prompt: str,
+        is_followup: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Compose a social media message using Gemini API.
+        
+        This is a generic method for social platforms that accepts a custom prompt.
+        Used by SocialDraftingService for platform-specific message generation.
+        
+        Args:
+            platform: Platform name (linkedin, instagram, tiktok, facebook)
+            prompt: The prompt to send to Gemini
+            is_followup: Whether this is a follow-up message (affects temperature)
+        
+        Returns:
+            Dictionary with 'success', 'body', and optionally 'error'
+        """
+        url = f"{self.BASE_URL}/models/gemini-2.0-flash-exp:generateContent?key={self.api_key}"
+        
+        payload = {
+            "contents": [{
+                "parts": [{
+                    "text": prompt
+                }]
+            }],
+            "generationConfig": {
+                "temperature": 0.8 if is_followup else 0.7,  # Higher temperature for follow-ups
+                "topK": 40,
+                "topP": 0.95,
+                "maxOutputTokens": 1024,
+                "responseMimeType": "application/json"
+            }
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                logger.info(f"Calling Gemini API to compose {platform} {'follow-up' if is_followup else 'initial'} message")
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                
+                # Extract content from Gemini response
+                if result.get("candidates") and len(result["candidates"]) > 0:
+                    candidate = result["candidates"][0]
+                    if candidate.get("content") and candidate["content"].get("parts"):
+                        parts = candidate["content"]["parts"]
+                        if parts and isinstance(parts, list) and len(parts) > 0:
+                            text_content = parts[0].get("text", "") if isinstance(parts[0], dict) else ""
+                        else:
+                            text_content = ""
+                        
+                        # Parse JSON response
+                        try:
+                            message_data = json.loads(text_content)
+                            body = message_data.get("body", "")
+                            
+                            if not body:
+                                return {
+                                    "success": False,
+                                    "error": "Empty message body from Gemini",
+                                    "body": None
+                                }
+                            
+                            logger.info(f"✅ Gemini composed {platform} message ({len(body)} chars)")
+                            
+                            return {
+                                "success": True,
+                                "body": body,
+                                "error": None
+                            }
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Failed to parse Gemini JSON response: {e}")
+                            logger.error(f"Response text: {text_content[:200]}")
+                            return {
+                                "success": False,
+                                "error": f"Failed to parse JSON: {e}",
+                                "body": None
+                            }
+                    else:
+                        return {
+                            "success": False,
+                            "error": "No content in Gemini response",
+                            "body": None
+                        }
+                else:
+                    error_msg = result.get("error", {}).get("message", "Unknown error")
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "body": None
+                    }
+        
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Gemini API HTTP error for {platform}: {e.response.status_code} - {e.response.text}")
+            return {
+                "success": False,
+                "error": f"HTTP {e.response.status_code}: {e.response.text}",
+                "body": None
+            }
+        except Exception as e:
+            logger.error(f"Gemini API call failed for {platform}: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "body": None
             }
 
