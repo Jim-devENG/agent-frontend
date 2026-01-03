@@ -218,7 +218,7 @@ async def startup():
             # Run migrations FIRST - AUTOMATIC ON EVERY STARTUP
             # This is CRITICAL: Migrations MUST run before any database queries
             try:
-                logger.info("🚀 Executing: alembic upgrade head")
+                logger.info("🚀 Executing: alembic upgrade heads")
                 logger.info("📝 This runs automatically on every backend startup")
                 logger.info(f"📁 Using alembic.ini: {alembic_ini_path}")
                 logger.info(f"📁 Database URL configured: {'Yes' if database_url else 'No'}")
@@ -230,7 +230,8 @@ async def startup():
                 try:
                     os.chdir(alembic_dir)
                     logger.info(f"📁 Changed to directory: {alembic_dir}")
-                    command.upgrade(alembic_cfg, "head")
+                    # Use 'heads' instead of 'head' to upgrade all migration branches
+                    command.upgrade(alembic_cfg, "heads")
                 finally:
                     os.chdir(original_cwd)
                 

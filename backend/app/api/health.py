@@ -134,9 +134,10 @@ async def run_migrations(
                 alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
                 logger.info("✅ Converted asyncpg URL to psycopg2 format for Alembic")
         
-        # Run migrations
-        logger.info("🚀 Executing: alembic upgrade head")
-        command.upgrade(alembic_cfg, "head")
+        # Run migrations - use 'heads' to upgrade all branches
+        logger.info("🚀 Executing: alembic upgrade heads")
+        # Use 'heads' instead of 'head' to upgrade all migration branches
+        command.upgrade(alembic_cfg, "heads")
         
         logger.info("=" * 60)
         logger.info("✅ Database migrations completed successfully")
