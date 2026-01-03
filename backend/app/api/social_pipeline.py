@@ -192,13 +192,45 @@ async def discover_profiles(
     Always unlocked - this is the entry point.
     Creates a discovery job and starts background processing.
     """
-    # Feature-scoped schema check
+    # Feature-scoped schema check - graceful degradation
     schema_status = await check_social_schema_ready(engine)
     if not schema_status["ready"]:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Social outreach feature is not available: {schema_status['reason']}"
-        )
+        # Try to create tables automatically as a safety net
+        logger.warning(f"⚠️  [SOCIAL DISCOVERY] Schema not ready: {schema_status['reason']}")
+        logger.warning("⚠️  Attempting to create missing tables...")
+        
+        try:
+            from app.utils.social_schema_init import ensure_social_tables_exist
+            social_success, social_missing = await ensure_social_tables_exist(engine)
+            if not social_success:
+                # Tables still missing - return empty response instead of 503
+                logger.error(f"❌ [SOCIAL DISCOVERY] Could not create tables: {', '.join(social_missing)}")
+                logger.error("❌ Returning empty response - feature not available")
+                return SocialDiscoveryResponse(
+                    success=False,
+                    job_id=None,
+                    message=f"Social outreach feature is not available: {schema_status['reason']}",
+                    profiles_count=0
+                )
+            else:
+                logger.info("✅ [SOCIAL DISCOVERY] Tables created successfully - retrying...")
+                # Re-check schema
+                schema_status = await check_social_schema_ready(engine)
+                if not schema_status["ready"]:
+                    return SocialDiscoveryResponse(
+                        success=False,
+                        job_id=None,
+                        message=f"Social outreach feature is not available: {schema_status['reason']}",
+                        profiles_count=0
+                    )
+        except Exception as init_error:
+            logger.error(f"❌ [SOCIAL DISCOVERY] Failed to initialize tables: {init_error}", exc_info=True)
+            return SocialDiscoveryResponse(
+                success=False,
+                job_id=None,
+                message=f"Social outreach feature is not available: {str(init_error)}",
+                profiles_count=0
+            )
     
     # Validate platform
     try:
@@ -278,13 +310,45 @@ async def review_profiles(
     Unlocked when discovered_count > 0.
     Manual review step - user decides which profiles to qualify.
     """
-    # Feature-scoped schema check
+    # Feature-scoped schema check - graceful degradation
     schema_status = await check_social_schema_ready(engine)
     if not schema_status["ready"]:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Social outreach feature is not available: {schema_status['reason']}"
-        )
+        # Try to create tables automatically as a safety net
+        logger.warning(f"⚠️  [SOCIAL DISCOVERY] Schema not ready: {schema_status['reason']}")
+        logger.warning("⚠️  Attempting to create missing tables...")
+        
+        try:
+            from app.utils.social_schema_init import ensure_social_tables_exist
+            social_success, social_missing = await ensure_social_tables_exist(engine)
+            if not social_success:
+                # Tables still missing - return empty response instead of 503
+                logger.error(f"❌ [SOCIAL REVIEW] Could not create tables: {', '.join(social_missing)}")
+                logger.error("❌ Returning empty response - feature not available")
+                return {
+                    "success": False,
+                    "updated": 0,
+                    "action": request.action,
+                    "message": f"Social outreach feature is not available: {schema_status['reason']}"
+                }
+            else:
+                logger.info("✅ [SOCIAL REVIEW] Tables created successfully - retrying...")
+                # Re-check schema
+                schema_status = await check_social_schema_ready(engine)
+                if not schema_status["ready"]:
+                    return {
+                        "success": False,
+                        "updated": 0,
+                        "action": request.action,
+                        "message": f"Social outreach feature is not available: {schema_status['reason']}"
+                    }
+        except Exception as init_error:
+            logger.error(f"❌ [SOCIAL REVIEW] Failed to initialize tables: {init_error}", exc_info=True)
+            return {
+                "success": False,
+                "updated": 0,
+                "action": request.action,
+                "message": f"Social outreach feature is not available: {str(init_error)}"
+            }
     
     if request.action not in ["qualify", "reject"]:
         raise HTTPException(status_code=400, detail="Action must be 'qualify' or 'reject'")
@@ -349,13 +413,45 @@ async def create_drafts(
     Unlocked when qualified_count > 0.
     Drafts are saved but not sent.
     """
-    # Feature-scoped schema check
+    # Feature-scoped schema check - graceful degradation
     schema_status = await check_social_schema_ready(engine)
     if not schema_status["ready"]:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Social outreach feature is not available: {schema_status['reason']}"
-        )
+        # Try to create tables automatically as a safety net
+        logger.warning(f"⚠️  [SOCIAL DISCOVERY] Schema not ready: {schema_status['reason']}")
+        logger.warning("⚠️  Attempting to create missing tables...")
+        
+        try:
+            from app.utils.social_schema_init import ensure_social_tables_exist
+            social_success, social_missing = await ensure_social_tables_exist(engine)
+            if not social_success:
+                # Tables still missing - return empty response instead of 503
+                logger.error(f"❌ [SOCIAL DISCOVERY] Could not create tables: {', '.join(social_missing)}")
+                logger.error("❌ Returning empty response - feature not available")
+                return SocialDiscoveryResponse(
+                    success=False,
+                    job_id=None,
+                    message=f"Social outreach feature is not available: {schema_status['reason']}",
+                    profiles_count=0
+                )
+            else:
+                logger.info("✅ [SOCIAL DISCOVERY] Tables created successfully - retrying...")
+                # Re-check schema
+                schema_status = await check_social_schema_ready(engine)
+                if not schema_status["ready"]:
+                    return SocialDiscoveryResponse(
+                        success=False,
+                        job_id=None,
+                        message=f"Social outreach feature is not available: {schema_status['reason']}",
+                        profiles_count=0
+                    )
+        except Exception as init_error:
+            logger.error(f"❌ [SOCIAL DISCOVERY] Failed to initialize tables: {init_error}", exc_info=True)
+            return SocialDiscoveryResponse(
+                success=False,
+                job_id=None,
+                message=f"Social outreach feature is not available: {str(init_error)}",
+                profiles_count=0
+            )
     
     if not request.profile_ids:
         raise HTTPException(status_code=400, detail="At least one profile ID is required")
@@ -491,18 +587,47 @@ async def send_messages(
     Requires draft to exist for each profile.
     Sending happens only from this stage.
     """
-    # Feature-scoped schema check
+    # Feature-scoped schema check - graceful degradation
     schema_status = await check_social_schema_ready(engine)
     if not schema_status["ready"]:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Social outreach feature is not available: {schema_status['reason']}"
-        )
+        # Try to create tables automatically as a safety net
+        logger.warning(f"⚠️  [SOCIAL DISCOVERY] Schema not ready: {schema_status['reason']}")
+        logger.warning("⚠️  Attempting to create missing tables...")
+        
+        try:
+            from app.utils.social_schema_init import ensure_social_tables_exist
+            social_success, social_missing = await ensure_social_tables_exist(engine)
+            if not social_success:
+                # Tables still missing - return empty response instead of 503
+                logger.error(f"❌ [SOCIAL DRAFT] Could not create tables: {', '.join(social_missing)}")
+                logger.error("❌ Returning empty response - feature not available")
+                return {
+                    "success": False,
+                    "drafts_created": 0,
+                    "message": f"Social outreach feature is not available: {schema_status['reason']}"
+                }
+            else:
+                logger.info("✅ [SOCIAL DRAFT] Tables created successfully - retrying...")
+                # Re-check schema
+                schema_status = await check_social_schema_ready(engine)
+                if not schema_status["ready"]:
+                    return {
+                        "success": False,
+                        "drafts_created": 0,
+                        "message": f"Social outreach feature is not available: {schema_status['reason']}"
+                    }
+        except Exception as init_error:
+            logger.error(f"❌ [SOCIAL DRAFT] Failed to initialize tables: {init_error}", exc_info=True)
+            return {
+                "success": False,
+                "drafts_created": 0,
+                "message": f"Social outreach feature is not available: {str(init_error)}"
+            }
     
     if not request.profile_ids:
         raise HTTPException(status_code=400, detail="At least one profile ID is required")
     
-    logger.info(f"📤 [SOCIAL PIPELINE STAGE 4] Sending messages to {len(request.profile_ids)} profiles")
+    logger.info(f"📝 [SOCIAL PIPELINE STAGE 3] Creating drafts for {len(request.profile_ids)} profiles")
     
     try:
         messages_sent = 0
@@ -576,13 +701,42 @@ async def create_followups(
     Unlocked when sent_count > 0.
     Automatically generates follow-up using Gemini (humorous, clever, non-repetitive).
     """
-    # Feature-scoped schema check
+    # Feature-scoped schema check - graceful degradation
     schema_status = await check_social_schema_ready(engine)
     if not schema_status["ready"]:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Social outreach feature is not available: {schema_status['reason']}"
-        )
+        # Try to create tables automatically as a safety net
+        logger.warning(f"⚠️  [SOCIAL DISCOVERY] Schema not ready: {schema_status['reason']}")
+        logger.warning("⚠️  Attempting to create missing tables...")
+        
+        try:
+            from app.utils.social_schema_init import ensure_social_tables_exist
+            social_success, social_missing = await ensure_social_tables_exist(engine)
+            if not social_success:
+                # Tables still missing - return empty response instead of 503
+                logger.error(f"❌ [SOCIAL FOLLOWUP] Could not create tables: {', '.join(social_missing)}")
+                logger.error("❌ Returning empty response - feature not available")
+                return {
+                    "success": False,
+                    "followups_created": 0,
+                    "message": f"Social outreach feature is not available: {schema_status['reason']}"
+                }
+            else:
+                logger.info("✅ [SOCIAL FOLLOWUP] Tables created successfully - retrying...")
+                # Re-check schema
+                schema_status = await check_social_schema_ready(engine)
+                if not schema_status["ready"]:
+                    return {
+                        "success": False,
+                        "followups_created": 0,
+                        "message": f"Social outreach feature is not available: {schema_status['reason']}"
+                    }
+        except Exception as init_error:
+            logger.error(f"❌ [SOCIAL FOLLOWUP] Failed to initialize tables: {init_error}", exc_info=True)
+            return {
+                "success": False,
+                "followups_created": 0,
+                "message": f"Social outreach feature is not available: {str(init_error)}"
+            }
     
     if not request.profile_ids:
         raise HTTPException(status_code=400, detail="At least one profile ID is required")
