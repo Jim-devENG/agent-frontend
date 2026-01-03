@@ -307,236 +307,186 @@ async def startup():
             try:
                 from sqlalchemy import text
                 async with engine.begin() as conn:
-                # Check if column exists
-                result = await conn.execute(
-                    text("""
-                        SELECT column_name 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'prospects' 
-                        AND column_name = 'discovery_query_id'
-                    """)
-                )
-                column_exists = result.fetchone() is not None
-                
-                if not column_exists:
-                    logger.warning("⚠️  Missing discovery_query_id column - adding it now...")
-                    # Add column
-                    await conn.execute(
-                        text("ALTER TABLE prospects ADD COLUMN discovery_query_id UUID")
+                    # Check if column exists
+                    result = await conn.execute(
+                        text("""
+                            SELECT column_name 
+                            FROM information_schema.columns 
+                            WHERE table_name = 'prospects' 
+                            AND column_name = 'discovery_query_id'
+                        """)
                     )
-                    # Create index
-                    await conn.execute(
-                        text("CREATE INDEX IF NOT EXISTS ix_prospects_discovery_query_id ON prospects(discovery_query_id)")
-                    )
-                    # Check if discovery_queries table exists and add FK
-                    table_check = await conn.execute(
-                        text("SELECT 1 FROM information_schema.tables WHERE table_name = 'discovery_queries'")
-                    )
-                    if table_check.fetchone():
-                        fk_check = await conn.execute(
-                            text("""
-                                SELECT 1 FROM information_schema.table_constraints 
-                                WHERE constraint_name = 'fk_prospects_discovery_query_id'
-                            """)
+                    column_exists = result.fetchone() is not None
+                    
+                    if not column_exists:
+                        logger.warning("⚠️  Missing discovery_query_id column - adding it now...")
+                        # Add column
+                        await conn.execute(
+                            text("ALTER TABLE prospects ADD COLUMN discovery_query_id UUID")
                         )
-                        if not fk_check.fetchone():
-                            await conn.execute(
+                        # Create index
+                        await conn.execute(
+                            text("CREATE INDEX IF NOT EXISTS ix_prospects_discovery_query_id ON prospects(discovery_query_id)")
+                        )
+                        # Check if discovery_queries table exists and add FK
+                        table_check = await conn.execute(
+                            text("SELECT 1 FROM information_schema.tables WHERE table_name = 'discovery_queries'")
+                        )
+                        if table_check.fetchone():
+                            fk_check = await conn.execute(
                                 text("""
-                                    ALTER TABLE prospects
-                                    ADD CONSTRAINT fk_prospects_discovery_query_id
-                                    FOREIGN KEY (discovery_query_id)
-                                    REFERENCES discovery_queries(id)
-                                    ON DELETE SET NULL
+                                    SELECT 1 FROM information_schema.table_constraints 
+                                    WHERE constraint_name = 'fk_prospects_discovery_query_id'
                                 """)
                             )
-                    logger.info("✅ Added discovery_query_id column, index, and foreign key")
-                else:
-                    logger.info("✅ discovery_query_id column already exists")
-                
-                # Check and add serp_intent columns if missing
-                serp_intent_check = await conn.execute(
-                    text("""
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_name = 'prospects' AND column_name = 'serp_intent'
-                    """)
-                )
-                serp_intent_exists = serp_intent_check.fetchone() is not None
-                
-                if not serp_intent_exists:
-                    logger.warning("⚠️  Missing serp_intent columns - adding them now...")
-                    # Add serp_intent column
-                    await conn.execute(
-                        text("ALTER TABLE prospects ADD COLUMN serp_intent VARCHAR")
-                    )
-                    # Add serp_confidence column
-                    await conn.execute(
-                        text("ALTER TABLE prospects ADD COLUMN serp_confidence NUMERIC(3, 2)")
-                    )
-                    # Add serp_signals column (JSON)
-                    await conn.execute(
-                        text("ALTER TABLE prospects ADD COLUMN serp_signals JSONB")
-                    )
-                    logger.info("✅ Added serp_intent, serp_confidence, and serp_signals columns")
-                else:
-                    logger.info("✅ serp_intent columns already exist")
-                
-                # Ensure discovery metadata columns exist (required for /api/pipeline/websites)
-                discovery_metadata_columns = [
-                    ("discovery_category", "VARCHAR"),
-                    ("discovery_location", "VARCHAR"),
-                    ("discovery_keywords", "TEXT"),
-                ]
-                
-                for column_name, sql_type in discovery_metadata_columns:
-                    column_check = await conn.execute(
-                        text("""
-                            SELECT column_name
-                            FROM information_schema.columns 
-                            WHERE table_name = 'prospects' 
-                            AND column_name = :column_name
-                        """),
-                        {"column_name": column_name}
-                    )
-                    if not column_check.fetchone():
-                        logger.warning(f"⚠️  Missing {column_name} column - adding it now...")
-                        await conn.execute(
-                            text(f"ALTER TABLE prospects ADD COLUMN {column_name} {sql_type}")
-                        )
-                        logger.info(f"✅ Added {column_name} column")
+                            if not fk_check.fetchone():
+                                await conn.execute(
+                                    text("""
+                                        ALTER TABLE prospects
+                                        ADD CONSTRAINT fk_prospects_discovery_query_id
+                                        FOREIGN KEY (discovery_query_id)
+                                        REFERENCES discovery_queries(id)
+                                        ON DELETE SET NULL
+                                    """)
+                                )
+                        logger.info("✅ Added discovery_query_id column, index, and foreign key")
                     else:
-                        logger.info(f"✅ {column_name} column already exists")
-                
-                # Ensure scraping and verification metadata columns exist (required for pipeline queries)
-                metadata_columns = [
-                    ("scrape_payload", "JSONB"),
-                    ("scrape_source_url", "TEXT"),
-                    ("verification_confidence", "NUMERIC(5, 2)"),
-                    ("verification_payload", "JSONB"),
-                    ("dataforseo_payload", "JSONB"),
-                    ("snov_payload", "JSONB"),
-                ]
-                
-                for column_name, sql_type in metadata_columns:
-                    column_check = await conn.execute(
-                        text("""
-                            SELECT column_name
-                            FROM information_schema.columns 
-                            WHERE table_name = 'prospects' 
-                            AND column_name = :column_name
-                        """),
-                        {"column_name": column_name}
-                    )
-                    if not column_check.fetchone():
-                        logger.warning(f"⚠️  Missing {column_name} column - adding it now...")
-                        await conn.execute(
-                            text(f"ALTER TABLE prospects ADD COLUMN {column_name} {sql_type}")
-                        )
-                        logger.info(f"✅ Added {column_name} column")
-                    else:
-                        logger.info(f"✅ {column_name} column already exists")
-                
-                # BULLETPROOF FIX: Ensure ALL pipeline status columns exist
-                # Required columns for /api/pipeline/status and pipeline endpoints to work without 500 errors
-                # Format: (column_name, sql_type, default_value, should_be_not_null)
-                # These columns are CRITICAL - missing any causes UndefinedColumnError
-                required_pipeline_columns = [
-                    ("discovery_status", "VARCHAR", "NEW", True),
-                    ("scrape_status", "VARCHAR", "DISCOVERED", True),
-                    ("approval_status", "VARCHAR", "PENDING", True),
-                    ("verification_status", "VARCHAR", "UNVERIFIED", True),
-                    ("draft_status", "VARCHAR", "pending", True),  # pending, drafted, failed
-                    ("send_status", "VARCHAR", "pending", True),  # pending, sent, failed
-                    ("stage", "VARCHAR", "DISCOVERED", True),  # Canonical pipeline stage: DISCOVERED, SCRAPED, LEAD, VERIFIED, DRAFTED, SENT
-                ]
-                
-                for column_name, sql_type, default_value, should_be_not_null in required_pipeline_columns:
-                    # Check if column exists
-                    column_check = await conn.execute(
-                        text("""
-                            SELECT column_name, is_nullable, column_default
-                            FROM information_schema.columns 
-                            WHERE table_name = 'prospects' 
-                            AND column_name = :column_name
-                        """),
-                        {"column_name": column_name}
-                    )
-                    column_row = column_check.fetchone()
+                        logger.info("✅ discovery_query_id column already exists")
                     
-                    if not column_row:
-                        logger.warning(f"⚠️  Missing {column_name} column - adding it now...")
-                        # Step 1: Add column as nullable first (safe for existing rows)
+                    # Check and add serp_intent columns if missing
+                    serp_intent_check = await conn.execute(
+                        text("""
+                            SELECT 1 FROM information_schema.columns 
+                            WHERE table_name = 'prospects' AND column_name = 'serp_intent'
+                        """)
+                    )
+                    serp_intent_exists = serp_intent_check.fetchone() is not None
+                    
+                    if not serp_intent_exists:
+                        logger.warning("⚠️  Missing serp_intent columns - adding them now...")
+                        # Add serp_intent column
                         await conn.execute(
-                            text(f"ALTER TABLE prospects ADD COLUMN {column_name} {sql_type}")
+                            text("ALTER TABLE prospects ADD COLUMN serp_intent VARCHAR")
                         )
-                        # Step 2: Backfill existing rows with default value
+                        # Add serp_confidence column
                         await conn.execute(
-                            text(f"UPDATE prospects SET {column_name} = :default_value WHERE {column_name} IS NULL"),
-                            {"default_value": default_value}
+                            text("ALTER TABLE prospects ADD COLUMN serp_confidence NUMERIC(3, 2)")
                         )
-                        # Step 3: Set default (use string formatting for ALTER TABLE)
+                        # Add serp_signals column (JSON)
                         await conn.execute(
-                            text(f"ALTER TABLE prospects ALTER COLUMN {column_name} SET DEFAULT '{default_value}'")
+                            text("ALTER TABLE prospects ADD COLUMN serp_signals JSONB")
                         )
-                        # Step 4: Make NOT NULL if required (safe now that all rows have values)
-                        if should_be_not_null:
-                            await conn.execute(
-                                text(f"ALTER TABLE prospects ALTER COLUMN {column_name} SET NOT NULL")
-                            )
-                        # Step 5: Create index for performance
-                        await conn.execute(
-                            text(f"CREATE INDEX IF NOT EXISTS ix_prospects_{column_name} ON prospects({column_name})")
-                        )
-                        logger.info(f"✅ Added {column_name} column ({'NOT NULL' if should_be_not_null else 'NULLABLE'}, DEFAULT '{default_value}') with index")
-                        
-                        # Special handling for stage column: backfill based on email presence
-                        if column_name == "stage":
-                            logger.info("🔄 Backfilling stage column based on email presence...")
-                            # Prospects with emails → LEAD
-                            await conn.execute(
-                                text("UPDATE prospects SET stage = 'LEAD' WHERE contact_email IS NOT NULL AND contact_email != '' AND stage = 'DISCOVERED'")
-                            )
-                            # Prospects with scrape_status=SCRAPED but no email → SCRAPED
-                            await conn.execute(
-                                text("UPDATE prospects SET stage = 'SCRAPED' WHERE scrape_status = 'SCRAPED' AND (contact_email IS NULL OR contact_email = '') AND stage = 'DISCOVERED'")
-                            )
-                            # Prospects with scrape_status=ENRICHED → LEAD (they have emails)
-                            await conn.execute(
-                                text("UPDATE prospects SET stage = 'LEAD' WHERE scrape_status = 'ENRICHED' AND stage = 'DISCOVERED'")
-                            )
-                            logger.info("✅ Stage column backfilled based on email presence")
+                        logger.info("✅ Added serp_intent, serp_confidence, and serp_signals columns")
                     else:
-                        # Column exists - check if it needs to be fixed
-                        is_nullable = column_row[1] == 'YES'
-                        current_default = column_row[2]
-                        default_str = f"'{default_value}'"
+                        logger.info("✅ serp_intent columns already exist")
+                    
+                    # Ensure discovery metadata columns exist (required for /api/pipeline/websites)
+                    discovery_metadata_columns = [
+                        ("discovery_category", "VARCHAR"),
+                        ("discovery_location", "VARCHAR"),
+                        ("discovery_keywords", "TEXT"),
+                    ]
+                    
+                    for column_name, sql_type in discovery_metadata_columns:
+                        column_check = await conn.execute(
+                            text("""
+                                SELECT column_name
+                                FROM information_schema.columns 
+                                WHERE table_name = 'prospects' 
+                                AND column_name = :column_name
+                            """),
+                            {"column_name": column_name}
+                        )
+                        if not column_check.fetchone():
+                            logger.warning(f"⚠️  Missing {column_name} column - adding it now...")
+                            await conn.execute(
+                                text(f"ALTER TABLE prospects ADD COLUMN {column_name} {sql_type}")
+                            )
+                            logger.info(f"✅ Added {column_name} column")
+                        else:
+                            logger.info(f"✅ {column_name} column already exists")
+                    
+                    # Ensure scraping and verification metadata columns exist (required for pipeline queries)
+                    metadata_columns = [
+                        ("scrape_payload", "JSONB"),
+                        ("scrape_source_url", "TEXT"),
+                        ("verification_confidence", "NUMERIC(5, 2)"),
+                        ("verification_payload", "JSONB"),
+                        ("dataforseo_payload", "JSONB"),
+                        ("snov_payload", "JSONB"),
+                    ]
+                    
+                    for column_name, sql_type in metadata_columns:
+                        column_check = await conn.execute(
+                            text("""
+                                SELECT column_name
+                                FROM information_schema.columns 
+                                WHERE table_name = 'prospects' 
+                                AND column_name = :column_name
+                            """),
+                            {"column_name": column_name}
+                        )
+                        if not column_check.fetchone():
+                            logger.warning(f"⚠️  Missing {column_name} column - adding it now...")
+                            await conn.execute(
+                                text(f"ALTER TABLE prospects ADD COLUMN {column_name} {sql_type}")
+                            )
+                            logger.info(f"✅ Added {column_name} column")
+                        else:
+                            logger.info(f"✅ {column_name} column already exists")
+                    
+                    # BULLETPROOF FIX: Ensure ALL pipeline status columns exist
+                    # Required columns for /api/pipeline/status and pipeline endpoints to work without 500 errors
+                    # Format: (column_name, sql_type, default_value, should_be_not_null)
+                    # These columns are CRITICAL - missing any causes UndefinedColumnError
+                    required_pipeline_columns = [
+                        ("discovery_status", "VARCHAR", "NEW", True),
+                        ("scrape_status", "VARCHAR", "DISCOVERED", True),
+                        ("approval_status", "VARCHAR", "PENDING", True),
+                        ("verification_status", "VARCHAR", "UNVERIFIED", True),
+                        ("draft_status", "VARCHAR", "pending", True),  # pending, drafted, failed
+                        ("send_status", "VARCHAR", "pending", True),  # pending, sent, failed
+                        ("stage", "VARCHAR", "DISCOVERED", True),  # Canonical pipeline stage: DISCOVERED, SCRAPED, LEAD, VERIFIED, DRAFTED, SENT
+                    ]
+                    
+                    for column_name, sql_type, default_value, should_be_not_null in required_pipeline_columns:
+                        # Check if column exists
+                        column_check = await conn.execute(
+                            text("""
+                                SELECT column_name, is_nullable, column_default
+                                FROM information_schema.columns 
+                                WHERE table_name = 'prospects' 
+                                AND column_name = :column_name
+                            """),
+                            {"column_name": column_name}
+                        )
+                        column_row = column_check.fetchone()
                         
-                        needs_fix = False
-                        if should_be_not_null and is_nullable:
-                            needs_fix = True
-                        if current_default and default_str not in str(current_default):
-                            needs_fix = True
-                        
-                        if needs_fix:
-                            logger.warning(f"⚠️  {column_name} column exists but needs fixing (nullable={is_nullable}, default={current_default})")
-                            # Backfill NULL values
+                        if not column_row:
+                            logger.warning(f"⚠️  Missing {column_name} column - adding it now...")
+                            # Step 1: Add column as nullable first (safe for existing rows)
+                            await conn.execute(
+                                text(f"ALTER TABLE prospects ADD COLUMN {column_name} {sql_type}")
+                            )
+                            # Step 2: Backfill existing rows with default value
                             await conn.execute(
                                 text(f"UPDATE prospects SET {column_name} = :default_value WHERE {column_name} IS NULL"),
                                 {"default_value": default_value}
                             )
-                            # Update default if needed
-                            if not current_default or default_str not in str(current_default):
-                                await conn.execute(
-                                    text(f"ALTER TABLE prospects ALTER COLUMN {column_name} DROP DEFAULT")
-                                )
-                                await conn.execute(
-                                    text(f"ALTER TABLE prospects ALTER COLUMN {column_name} SET DEFAULT '{default_value}'")
-                                )
-                            # Make NOT NULL if required and currently nullable
-                            if should_be_not_null and is_nullable:
+                            # Step 3: Set default (use string formatting for ALTER TABLE)
+                            await conn.execute(
+                                text(f"ALTER TABLE prospects ALTER COLUMN {column_name} SET DEFAULT '{default_value}'")
+                            )
+                            # Step 4: Make NOT NULL if required (safe now that all rows have values)
+                            if should_be_not_null:
                                 await conn.execute(
                                     text(f"ALTER TABLE prospects ALTER COLUMN {column_name} SET NOT NULL")
                                 )
-                            logger.info(f"✅ Fixed {column_name} column (now {'NOT NULL' if should_be_not_null else 'NULLABLE'} with DEFAULT '{default_value}')")
+                            # Step 5: Create index for performance
+                            await conn.execute(
+                                text(f"CREATE INDEX IF NOT EXISTS ix_prospects_{column_name} ON prospects({column_name})")
+                            )
+                            logger.info(f"✅ Added {column_name} column ({'NOT NULL' if should_be_not_null else 'NULLABLE'}, DEFAULT '{default_value}') with index")
                             
                             # Special handling for stage column: backfill based on email presence
                             if column_name == "stage":
@@ -555,7 +505,57 @@ async def startup():
                                 )
                                 logger.info("✅ Stage column backfilled based on email presence")
                         else:
-                            logger.info(f"✅ {column_name} column already exists and is correct")
+                            # Column exists - check if it needs to be fixed
+                            is_nullable = column_row[1] == 'YES'
+                            current_default = column_row[2]
+                            default_str = f"'{default_value}'"
+                            
+                            needs_fix = False
+                            if should_be_not_null and is_nullable:
+                                needs_fix = True
+                            if current_default and default_str not in str(current_default):
+                                needs_fix = True
+                            
+                            if needs_fix:
+                                logger.warning(f"⚠️  {column_name} column exists but needs fixing (nullable={is_nullable}, default={current_default})")
+                                # Backfill NULL values
+                                await conn.execute(
+                                    text(f"UPDATE prospects SET {column_name} = :default_value WHERE {column_name} IS NULL"),
+                                    {"default_value": default_value}
+                                )
+                                # Update default if needed
+                                if not current_default or default_str not in str(current_default):
+                                    await conn.execute(
+                                        text(f"ALTER TABLE prospects ALTER COLUMN {column_name} DROP DEFAULT")
+                                    )
+                                    await conn.execute(
+                                        text(f"ALTER TABLE prospects ALTER COLUMN {column_name} SET DEFAULT '{default_value}'")
+                                    )
+                                # Make NOT NULL if required and currently nullable
+                                if should_be_not_null and is_nullable:
+                                    await conn.execute(
+                                        text(f"ALTER TABLE prospects ALTER COLUMN {column_name} SET NOT NULL")
+                                    )
+                                logger.info(f"✅ Fixed {column_name} column (now {'NOT NULL' if should_be_not_null else 'NULLABLE'} with DEFAULT '{default_value}')")
+                                
+                                # Special handling for stage column: backfill based on email presence
+                                if column_name == "stage":
+                                    logger.info("🔄 Backfilling stage column based on email presence...")
+                                    # Prospects with emails → LEAD
+                                    await conn.execute(
+                                        text("UPDATE prospects SET stage = 'LEAD' WHERE contact_email IS NOT NULL AND contact_email != '' AND stage = 'DISCOVERED'")
+                                    )
+                                    # Prospects with scrape_status=SCRAPED but no email → SCRAPED
+                                    await conn.execute(
+                                        text("UPDATE prospects SET stage = 'SCRAPED' WHERE scrape_status = 'SCRAPED' AND (contact_email IS NULL OR contact_email = '') AND stage = 'DISCOVERED'")
+                                    )
+                                    # Prospects with scrape_status=ENRICHED → LEAD (they have emails)
+                                    await conn.execute(
+                                        text("UPDATE prospects SET stage = 'LEAD' WHERE scrape_status = 'ENRICHED' AND stage = 'DISCOVERED'")
+                                    )
+                                    logger.info("✅ Stage column backfilled based on email presence")
+                            else:
+                                logger.info(f"✅ {column_name} column already exists and is correct")
             except Exception as e:
                 logger.error(f"Failed to check/add discovery_status column: {e}", exc_info=True)
         except Exception as post_migration_error:
