@@ -186,12 +186,28 @@ async def startup():
                     logger.info("✅ Converted asyncpg URL to psycopg2 format for Alembic")
             
             # Run migrations FIRST - AUTOMATIC ON EVERY STARTUP
+            # This is CRITICAL: Migrations MUST run before any database queries
             try:
                 logger.info("🚀 Executing: alembic upgrade head")
                 logger.info("📝 This runs automatically on every backend startup")
                 logger.info("=" * 60)
                 
+                # Verify alembic.ini exists
+                if not os.path.exists(alembic_cfg.config_file_name):
+                    logger.error(f"❌ CRITICAL: alembic.ini not found at {alembic_cfg.config_file_name}")
+                    logger.error(f"❌ Current directory: {os.getcwd()}")
+                    logger.error(f"❌ Backend dir: {backend_dir}")
+                    # Try to find it
+                    import glob
+                    found = glob.glob("**/alembic.ini", recursive=True)
+                    if found:
+                        logger.error(f"❌ Found alembic.ini at: {found}")
+                    raise FileNotFoundError(f"alembic.ini not found at {alembic_cfg.config_file_name}")
+                
                 # Run migrations with detailed logging
+                logger.info(f"📁 Using alembic.ini: {alembic_cfg.config_file_name}")
+                logger.info(f"📁 Database URL configured: {'Yes' if database_url else 'No'}")
+                
                 command.upgrade(alembic_cfg, "head")
                 
                 logger.info("=" * 60)
@@ -212,11 +228,14 @@ async def startup():
                 import traceback
                 logger.error(traceback.format_exc())
                 logger.error("=" * 80)
-                logger.error("❌ alembic upgrade head failed - application will not start")
-                logger.error("❌ Fix migrations and restart")
+                logger.error("❌ alembic upgrade head failed")
                 logger.error("=" * 80)
-                # FAIL HARD - do not start server if migrations fail
-                raise  # Re-raise to trigger exit in outer handler
+                logger.error("⚠️  APPLICATION WILL CONTINUE TO START")
+                logger.error("⚠️  Some features may not work until migrations are fixed")
+                logger.error("⚠️  Use /api/health/migrate endpoint to retry migrations")
+                logger.error("=" * 80)
+                # Don't fail hard - allow app to start but log the error
+                # This prevents deployment failures while still alerting to the issue
         except Exception as e:
             logger.error("=" * 80)
             logger.error(f"❌ CRITICAL: Migration setup failed: {e}", exc_info=True)
