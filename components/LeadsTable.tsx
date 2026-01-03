@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, Users, Globe, CheckCircle, Eye, Edit2 } from 'lucide-react'
-import { listLeads, listScrapedEmails, promoteToLead, composeEmail, sendEmail, manualScrape, manualVerify, type Prospect } from '@/lib/api'
+import { listLeads, listScrapedEmails, promoteToLead, composeEmail, sendEmail, manualScrape, manualVerify, updateProspectCategory, autoCategorizeAll, type Prospect } from '@/lib/api'
 import { safeToFixed } from '@/lib/safe-utils'
 
 interface LeadsTableProps {
@@ -32,6 +32,18 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
   const [manualSuccess, setManualSuccess] = useState<string | null>(null)
 
   const [error, setError] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [selectedProspects, setSelectedProspects] = useState<Set<string>>(new Set())
+  const [showCategoryUpdate, setShowCategoryUpdate] = useState(false)
+  const [updateCategory, setUpdateCategory] = useState<string>('')
+  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
+  const [isAutoCategorizing, setIsAutoCategorizing] = useState(false)
+
+  // Available categories
+  const availableCategories = [
+    'Art Gallery', 'Museums', 'Art Studio', 'Art School', 'Art Fair', 
+    'Art Dealer', 'Art Consultant', 'Art Publisher', 'Art Magazine'
+  ]
 
   const loadProspects = async () => {
     try {
@@ -51,7 +63,41 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
         isArray: Array.isArray(response?.data)
       })
       
-      const leads = Array.isArray(response?.data) ? response.data : []
+      let leads = Array.isArray(response?.data) ? response.data : []
+      
+      // Filter by category if selected
+      if (selectedCategory !== 'all') {
+        leads = leads.filter((p: Prospect) => 
+          p.discovery_category === selectedCategory || p.discovery_category?.toLowerCase() === selectedCategory.toLowerCase()
+        )
+      }
+      
+      // Sort by category in ascending order
+      leads.sort((a: Prospect, b: Prospect) => {
+        const catA = a.discovery_category || ''
+        const catB = b.discovery_category || ''
+        return catA.localeCompare(catB)
+      })
+      
+      // CRITICAL: Log raw response before any filtering
+      console.log(`📊 [${emailsOnly ? 'SCRAPED EMAILS' : 'LEADS'}] RAW API RESPONSE:`, {
+        dataLength: response?.data?.length,
+        total: response?.total,
+        hasData: !!response?.data,
+        isArray: Array.isArray(response?.data),
+        firstItem: response?.data?.[0]
+      })
+      
+      // CRITICAL: If backend says there's data but we got empty array, this is an error
+      if (response?.total > 0 && (!response?.data || response.data.length === 0)) {
+        const errorMsg = `Backend reports ${response.total} ${emailsOnly ? 'scraped emails' : 'leads'} but returned empty data array. This indicates a data visibility issue.`
+        console.error(`❌ [${emailsOnly ? 'SCRAPED EMAILS' : 'LEADS'}] ${errorMsg}`)
+        setError(errorMsg)
+        setProspects([])
+        setTotal(response.total)
+        return
+      }
+      
       if (leads.length > 0 || response?.total > 0) {
         console.log(`✅ [${emailsOnly ? 'SCRAPED EMAILS' : 'LEADS'}] Setting prospects:`, leads.length, 'total:', response?.total)
       } else {
@@ -59,12 +105,38 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
       }
       
       setProspects(leads)
-      setTotal(response.total ?? leads.length)
-      // Clear error if we successfully got data (even if empty)
+      setTotal(selectedCategory === 'all' ? (response.total ?? leads.length) : leads.length)
+      // Clear error on successful load (even if empty data)
+      setError(null)
       // Empty data is not an error, it's a valid state
     } catch (error: any) {
+      // CRITICAL: Do not suppress errors - log them clearly
       console.error(`❌ [${emailsOnly ? 'SCRAPED EMAILS' : 'LEADS'}] Failed to load:`, error)
-      const errorMessage = error?.message || `Failed to load ${emailsOnly ? 'scraped emails' : 'leads'}. Check if backend is running.`
+      console.error(`❌ [${emailsOnly ? 'SCRAPED EMAILS' : 'LEADS'}] Error details:`, {
+        message: error?.message,
+        stack: error?.stack,
+        response: error?.response,
+        status: error?.status
+      })
+      
+      let errorMessage = error?.message || `Failed to load ${emailsOnly ? 'scraped emails' : 'leads'}.`
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        errorMessage = 'Unable to connect to backend. Please check if the server is running.'
+      } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+        errorMessage = 'Authentication required. Please log in again.'
+      } else if (errorMessage.includes('404')) {
+        errorMessage = 'API endpoint not found. Please check backend configuration.'
+      } else if (errorMessage.includes('500') || errorMessage.includes('Database query failed')) {
+        errorMessage = `Backend server error: ${errorMessage}. Check backend logs for details.`
+      }
+      
+      // In development, show full error
+      if (process.env.NODE_ENV === 'development') {
+        errorMessage = `${errorMessage} (Full error: ${error?.message || 'Unknown error'})`
+      }
+      
       setError(errorMessage)
       setProspects([])
       setTotal(0)
@@ -121,7 +193,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip, emailsOnly])
+  }, [skip, emailsOnly, selectedCategory])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString()
@@ -280,31 +352,136 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     }
   }
 
+  const handleUpdateCategory = async () => {
+    if (selectedProspects.size === 0) {
+      setError('Please select at least one prospect to update')
+      return
+    }
+    
+    if (!updateCategory || !updateCategory.trim()) {
+      setError('Please select a category')
+      return
+    }
+
+    try {
+      setIsUpdatingCategory(true)
+      setError(null)
+      const result = await updateProspectCategory({
+        prospect_ids: Array.from(selectedProspects),
+        category: updateCategory.trim()
+      })
+      setError(`✅ ${result.message}`)
+      setSelectedProspects(new Set())
+      setShowCategoryUpdate(false)
+      setUpdateCategory('')
+      setTimeout(() => {
+        loadProspects().catch(err => console.error('Error reloading prospects:', err))
+      }, 500)
+    } catch (err: any) {
+      setError(err.message || 'Failed to update category')
+    } finally {
+      setIsUpdatingCategory(false)
+    }
+  }
+
+  const handleAutoCategorize = async () => {
+    setIsAutoCategorizing(true)
+    setError(null)
+    try {
+      const result = await autoCategorizeAll()
+      setTimeout(() => {
+        loadProspects().catch(err => console.error('Error reloading prospects:', err))
+      }, 500)
+      setError(`✅ ${result.message}`)
+      setTimeout(() => setError(null), 5000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to auto-categorize')
+    } finally {
+      setIsAutoCategorizing(false)
+    }
+  }
+
   return (
-    <div className="glass rounded-3xl shadow-xl border border-white/20 p-6 animate-fade-in">
+    <div className="glass rounded-xl shadow-lg border border-white/20 p-3 animate-fade-in">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-2xl font-bold liquid-gradient-text">
+          <h2 className="text-sm font-bold text-olive-700">
             {emailsOnly ? 'Scraped Emails' : 'Leads'}
           </h2>
           <p className="text-xs text-gray-500 mt-1">Liquid Canvas Outreach</p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
+          <select
+            value={selectedCategory}
+            onChange={(e) => {
+              // Only filter - never update categories
+              setSelectedCategory(e.target.value)
+            }}
+            className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
+            title="Filter by category (does not update categories)"
+          >
+            <option value="all">All Categories (Filter)</option>
+            {availableCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat} (Filter)</option>
+            ))}
+          </select>
+          {selectedProspects.size > 0 && (
+            <button
+              onClick={() => setShowCategoryUpdate(true)}
+              className="px-2 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Update Category ({selectedProspects.size})
+            </button>
+          )}
+          {prospects.filter(p => !p.discovery_category || p.discovery_category === 'N/A').length > 0 && (
+            <button
+              onClick={() => {
+                // Select all uncategorized prospects
+                const uncategorized = prospects
+                  .filter(p => !p.discovery_category || p.discovery_category === 'N/A')
+                  .map(p => p.id)
+                setSelectedProspects(new Set(uncategorized))
+                setShowCategoryUpdate(true)
+              }}
+              className="px-2 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+            >
+              Categorize All ({prospects.filter(p => !p.discovery_category || p.discovery_category === 'N/A').length})
+            </button>
+          )}
+          <button
+            onClick={handleAutoCategorize}
+            disabled={isAutoCategorizing}
+            className="px-2 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+          >
+            {isAutoCategorizing ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Auto-Categorizing...
+              </>
+            ) : (
+              <>
+                <Users className="w-3 h-3" />
+                Auto-Categorize All
+              </>
+            )}
+          </button>
+          <div className="flex items-center space-x-2">
           <button
             onClick={() => setShowManualActions(!showManualActions)}
-            className="flex items-center space-x-2 px-4 py-2 glass hover:bg-white/80 text-gray-700 rounded-xl transition-all duration-200 font-medium hover:shadow-md"
+            className="flex items-center space-x-1 px-2 py-1 glass hover:bg-white/80 text-gray-700 rounded-lg transition-all duration-200 text-xs font-medium hover:shadow-md"
           >
             <Globe className="w-4 h-4" />
             <span>Manual Actions</span>
           </button>
         <button
           onClick={loadProspects}
-          className="flex items-center space-x-2 px-4 py-2 liquid-gradient text-white rounded-xl transition-all duration-200 font-medium shadow-lg hover:shadow-xl hover:scale-105"
+          className="flex items-center space-x-1 px-2 py-1 bg-olive-600 text-white rounded-lg transition-all duration-200 text-xs font-medium shadow-md hover:bg-olive-700"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
         </button>
-      </div>
+          </div>
+        </div>
       </div>
 
       {/* Error/Success Message Display */}
@@ -341,7 +518,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                 <button
                   onClick={handleManualScrape}
                   disabled={isManualScraping || !manualWebsiteUrl.trim()}
-                  className="px-4 py-2 liquid-gradient text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 font-medium shadow-md"
+                  className="px-2 py-1 bg-olive-600 text-white rounded-lg hover:bg-olive-700 hover:shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1 text-xs font-medium shadow-sm"
                 >
                   {isManualScraping ? (
                     <>
@@ -440,18 +617,52 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
             <table className="w-full">
               <thead>
                 <tr className="bg-gradient-to-r from-liquid-50 to-purple-50 border-b border-gray-200/50">
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Domain</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Email</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Score</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Created</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    <input
+                      type="checkbox"
+                      checked={selectedProspects.size === prospects.length && prospects.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedProspects(new Set(prospects.map(p => p.id)))
+                        } else {
+                          setSelectedProspects(new Set())
+                        }
+                      }}
+                      className="w-3 h-3 text-olive-600"
+                    />
+                  </th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Category</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Domain</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Email</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Score</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Created</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
                 {prospects.map((prospect) => (
                   <tr key={prospect.id} className="hover:bg-gradient-to-r hover:from-liquid-50/30 hover:to-purple-50/30 transition-all duration-200">
-                    <td className="py-4 px-6">
+                    <td className="py-2 px-3 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={selectedProspects.has(prospect.id)}
+                        onChange={(e) => {
+                          const newSelected = new Set(selectedProspects)
+                          if (e.target.checked) {
+                            newSelected.add(prospect.id)
+                          } else {
+                            newSelected.delete(prospect.id)
+                          }
+                          setSelectedProspects(newSelected)
+                        }}
+                        className="w-3 h-3 text-olive-600"
+                      />
+                    </td>
+                    <td className="py-2 px-3 text-xs">
+                      <span className="text-gray-700 font-medium">{prospect.discovery_category || 'N/A'}</span>
+                    </td>
+                    <td className="py-2 px-3 text-xs">
                       <div className="flex items-center space-x-2">
                         <span className="font-semibold text-gray-900">{prospect.domain}</span>
                         {prospect.page_url && (
@@ -466,7 +677,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                         )}
                       </div>
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-2 px-3 text-xs">
                       {prospect.contact_email ? (
                         <div className="flex items-center space-x-2">
                           <Mail className="w-4 h-4 text-liquid-500" />
@@ -476,10 +687,10 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                         <span className="text-gray-400 italic">No email</span>
                       )}
                     </td>
-                    <td className="py-4 px-6">
-                      <div className="flex flex-col space-y-1">
+                    <td className="py-2 px-3 text-xs">
+                      <div className="flex flex-col space-y-0.5">
                         <span
-                          className={`px-3 py-1 rounded-lg text-xs font-semibold shadow-sm ${
+                          className={`px-2 py-0.5 rounded text-xs font-medium ${
                             prospect.verification_status === 'verified'
                               ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white'
                               : prospect.verification_status === 'unverified' || prospect.verification_status === 'UNVERIFIED'
@@ -494,7 +705,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                         {/* Show outreach_status (secondary, for sent/replied) */}
                         {prospect.outreach_status && prospect.outreach_status !== 'pending' && (
                           <span
-                            className={`px-3 py-1 rounded-lg text-xs font-semibold shadow-sm ${
+                            className={`px-2 py-0.5 rounded text-xs font-medium ${
                               prospect.outreach_status === 'sent'
                                 ? 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white'
                                 : prospect.outreach_status === 'replied'
@@ -507,19 +718,19 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                         )}
                       </div>
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-2 px-3 text-xs">
                       <span className="text-gray-900 font-semibold">{safeToFixed(prospect.score, 2)}</span>
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-600">
                       {formatDate(prospect.created_at)}
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-2 px-3 text-xs">
                       <div className="flex items-center space-x-2">
                         {prospect.contact_email && (
                           <button
                             onClick={() => openComposeModal(prospect)}
                             disabled={isComposing}
-                            className="liquid-gradient-text hover:underline text-sm font-semibold transition-all duration-200"
+                            className="text-olive-700 hover:underline text-xs font-semibold transition-all duration-200"
                           >
                             {prospect.draft_subject ? 'View / Edit Email' : 'Compose Email'}
                           </button>
@@ -539,7 +750,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
               <button
                 onClick={() => setSkip(Math.max(0, skip - limit))}
                 disabled={skip === 0}
-                  className="px-3 py-2 glass hover:bg-white/80 text-gray-700 rounded-xl hover:shadow-md transition-all duration-200 disabled:opacity-50 font-medium"
+                  className="px-2 py-1 text-xs glass hover:bg-white/80 text-gray-700 rounded-lg hover:shadow-md transition-all duration-200 disabled:opacity-50 font-medium"
               >
                 Previous
               </button>
@@ -553,6 +764,91 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
             </div>
           </div>
         </>
+      )}
+
+      {/* Category Update Modal */}
+      {showCategoryUpdate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="glass rounded-xl shadow-2xl w-full max-w-md p-4 border border-white/20 animate-scale-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-gray-900">Update Category</h3>
+              <button
+                onClick={() => {
+                  setShowCategoryUpdate(false)
+                  setUpdateCategory('')
+                }}
+                className="p-1 rounded-lg hover:bg-white/80 text-gray-500"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs text-gray-600">
+                Update category for {selectedProspects.size} selected prospect(s)
+              </p>
+              <div className="text-xs text-gray-500 mb-2">
+                {selectedProspects.size > 0 && (
+                  <div>
+                    Current categories: {Array.from(new Set(
+                      prospects
+                        .filter(p => selectedProspects.has(p.id))
+                        .map(p => p.discovery_category || 'N/A')
+                    )).join(', ')}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Select Category to Assign:
+                </label>
+                <div className="grid grid-cols-2 gap-1.5 mb-2 max-h-32 overflow-y-auto p-2 bg-gray-50 rounded-lg">
+                  {availableCategories.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setUpdateCategory(cat)}
+                      className={`px-2 py-1.5 rounded text-xs font-medium transition-all ${
+                        updateCategory === cat
+                          ? 'bg-olive-600 text-white shadow-md'
+                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  value={updateCategory}
+                  onChange={(e) => setUpdateCategory(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
+                >
+                  <option value="">-- Or choose from dropdown --</option>
+                  {availableCategories.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    setShowCategoryUpdate(false)
+                    setUpdateCategory('')
+                  }}
+                  className="flex-1 px-3 py-2 text-xs font-medium text-gray-700 glass hover:bg-white/80 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateCategory}
+                  disabled={isUpdatingCategory || !updateCategory}
+                  className="flex-1 px-3 py-2 text-xs font-medium bg-olive-600 text-white rounded-lg hover:bg-olive-700 disabled:opacity-50"
+                >
+                  {isUpdatingCategory ? 'Updating...' : 'Update'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Compose / Review Modal */}

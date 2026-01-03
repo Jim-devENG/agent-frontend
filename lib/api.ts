@@ -1334,3 +1334,323 @@ export async function manualVerify(request: ManualVerifyRequest): Promise<Manual
   }
   return res.json()
 }
+
+// ============================================
+// CATEGORY MANAGEMENT
+// ============================================
+
+export interface UpdateCategoryRequest {
+  prospect_ids: string[]
+  category: string
+}
+
+export interface UpdateCategoryResponse {
+  success: boolean
+  updated_count: number
+  message: string
+}
+
+export async function updateProspectCategory(request: UpdateCategoryRequest): Promise<UpdateCategoryResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/update_category`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to update category' }))
+    throw new Error(error.detail || 'Failed to update category')
+  }
+  return res.json()
+}
+
+export interface AutoCategorizeResponse {
+  success: boolean
+  categorized_count: number
+  message: string
+}
+
+export async function autoCategorizeAll(): Promise<AutoCategorizeResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/pipeline/auto_categorize`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to auto-categorize' }))
+    throw new Error(error.detail || 'Failed to auto-categorize')
+  }
+  return res.json()
+}
+
+// ============================================
+// MASTER SWITCH & AUTOMATION CONTROL
+// ============================================
+
+export interface MasterSwitchResponse {
+  enabled: boolean
+  message: string
+}
+
+export async function getMasterSwitch(): Promise<MasterSwitchResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/scraper/master`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to get master switch status' }))
+    throw new Error(error.detail || 'Failed to get master switch status')
+  }
+  return res.json()
+}
+
+export async function setMasterSwitch(enabled: boolean): Promise<MasterSwitchResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/scraper/master`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled }),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to set master switch' }))
+    throw new Error(error.detail || 'Failed to set master switch')
+  }
+  const result = await res.json()
+  // Store in localStorage for Pipeline to check
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('master_switch_enabled', String(enabled))
+    // Dispatch event so Pipeline can react
+    window.dispatchEvent(new CustomEvent('masterSwitchChanged', { detail: { enabled } }))
+  }
+  return result
+}
+
+export interface AutomationSettings {
+  enabled: boolean
+}
+
+export async function getAutomationSettings(): Promise<AutomationSettings> {
+  const res = await authenticatedFetch(`${API_BASE}/settings/automation`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to get automation settings' }))
+    throw new Error(error.detail || 'Failed to get automation settings')
+  }
+  return res.json()
+}
+
+export async function updateAutomationSettings(settings: AutomationSettings): Promise<AutomationSettings> {
+  const res = await authenticatedFetch(`${API_BASE}/settings/automation`, {
+    method: 'POST',
+    body: JSON.stringify(settings),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to update automation settings' }))
+    throw new Error(error.detail || 'Failed to update automation settings')
+  }
+  const result = await res.json()
+  // Store in localStorage for Pipeline to check
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('automation_enabled', String(settings.enabled))
+    // Dispatch event so Pipeline can react
+    window.dispatchEvent(new CustomEvent('automationSettingsChanged', { detail: settings }))
+  }
+  return result
+}
+
+// Helper function to check if master switch is enabled (for Pipeline)
+export function isMasterSwitchEnabled(): boolean {
+  if (typeof window === 'undefined') return false
+  const stored = localStorage.getItem('master_switch_enabled')
+  return stored === 'true'
+}
+
+// ============================================
+// SOCIAL OUTREACH API (Separate from Website Outreach)
+// ============================================
+
+export interface SocialDiscoveryRequest {
+  platform: 'linkedin' | 'instagram' | 'tiktok'
+  filters: {
+    keywords?: string[]
+    location?: string
+    hashtags?: string[]
+  }
+  max_results?: number
+}
+
+export interface SocialDiscoveryResponse {
+  success: boolean
+  job_id: string
+  message: string
+  profiles_count: number
+}
+
+export interface SocialProfile {
+  id: string
+  platform: string
+  username: string
+  full_name?: string
+  profile_url: string
+  bio?: string
+  followers_count: number
+  location?: string
+  category?: string
+  engagement_score: number
+  discovery_status: string
+  outreach_status: string
+  created_at: string
+}
+
+export interface SocialProfileListResponse {
+  data: SocialProfile[]
+  total: number
+  skip: number
+  limit: number
+}
+
+export async function discoverSocialProfiles(request: SocialDiscoveryRequest): Promise<SocialDiscoveryResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/social/discover`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to discover social profiles' }))
+    throw new Error(error.detail || 'Failed to discover social profiles')
+  }
+  return await res.json()
+}
+
+export async function listSocialProfiles(
+  skip: number = 0,
+  limit: number = 50,
+  platform?: string,
+  qualification_status?: string
+): Promise<SocialProfileListResponse> {
+  const params = new URLSearchParams({ skip: skip.toString(), limit: limit.toString() })
+  if (platform) params.append('platform', platform)
+  if (qualification_status) params.append('qualification_status', qualification_status)
+  
+  const res = await authenticatedFetch(`${API_BASE}/social/profiles?${params.toString()}`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to list social profiles' }))
+    throw new Error(error.detail || 'Failed to list social profiles')
+  }
+  return await res.json()
+}
+
+export async function createSocialDrafts(request: { profile_ids: string[]; is_followup?: boolean }): Promise<{ success: boolean; drafts_created: number; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/social/drafts`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to create social drafts' }))
+    throw new Error(error.detail || 'Failed to create social drafts')
+  }
+  return await res.json()
+}
+
+export async function sendSocialMessages(request: { profile_ids: string[] }): Promise<{ success: boolean; messages_sent: number; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/social/send`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to send social messages' }))
+    throw new Error(error.detail || 'Failed to send social messages')
+  }
+  return await res.json()
+}
+
+export async function createSocialFollowups(request: { profile_ids: string[] }): Promise<{ success: boolean; drafts_created: number; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/social/followup`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to create social followups' }))
+    throw new Error(error.detail || 'Failed to create social followups')
+  }
+  return await res.json()
+}
+
+// SOCIAL PIPELINE API (New pipeline endpoints)
+export interface SocialPipelineStatus {
+  discovered: number
+  reviewed: number
+  qualified: number
+  drafted: number
+  sent: number
+  followup_ready: number
+  status?: 'active' | 'inactive'
+  reason?: string
+}
+
+export async function getSocialPipelineStatus(): Promise<SocialPipelineStatus> {
+  const res = await authenticatedFetch(`${API_BASE}/social/pipeline/status`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to get social pipeline status' }))
+    throw new Error(error.detail || 'Failed to get social pipeline status')
+  }
+  return res.json()
+}
+
+export interface SocialDiscoveryPipelineRequest {
+  platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook'
+  categories: string[]
+  locations: string[]
+  keywords?: string[]
+  parameters?: Record<string, any>
+  max_results?: number
+}
+
+export async function discoverSocialProfilesPipeline(request: SocialDiscoveryPipelineRequest): Promise<{ success: boolean; job_id: string; message: string; profiles_count: number }> {
+  const res = await authenticatedFetch(`${API_BASE}/social/pipeline/discover`, {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to discover social profiles' }))
+    throw new Error(error.detail || 'Failed to discover social profiles')
+  }
+  return res.json()
+}
+
+export async function reviewSocialProfiles(profile_ids: string[], action: 'qualify' | 'reject'): Promise<{ success: boolean; updated: number; action: string; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/social/pipeline/review`, {
+    method: 'POST',
+    body: JSON.stringify({ profile_ids, action }),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to review profiles' }))
+    throw new Error(error.detail || 'Failed to review profiles')
+  }
+  return res.json()
+}
+
+export async function draftSocialProfiles(profile_ids: string[], is_followup: boolean = false): Promise<{ success: boolean; drafts_created: number; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/social/pipeline/draft`, {
+    method: 'POST',
+    body: JSON.stringify({ profile_ids, is_followup }),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to create drafts' }))
+    throw new Error(error.detail || 'Failed to create drafts')
+  }
+  return res.json()
+}
+
+export async function sendSocialProfiles(profile_ids: string[]): Promise<{ success: boolean; messages_sent: number; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/social/pipeline/send`, {
+    method: 'POST',
+    body: JSON.stringify({ profile_ids }),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to send messages' }))
+    throw new Error(error.detail || 'Failed to send messages')
+  }
+  return res.json()
+}
+
+export async function createSocialFollowupsPipeline(profile_ids: string[]): Promise<{ success: boolean; drafts_created: number; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/social/pipeline/followup`, {
+    method: 'POST',
+    body: JSON.stringify({ profile_ids }),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to create followups' }))
+    throw new Error(error.detail || 'Failed to create followups')
+  }
+  return res.json()
+}

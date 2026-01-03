@@ -60,22 +60,22 @@ export default function StatsCards({ stats }: StatsCardsProps) {
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
       {cards.map((card, index) => {
         const Icon = card.icon
         return (
           <div
             key={card.title}
-            className="glass rounded-3xl shadow-xl border border-white/20 p-6 hover:shadow-2xl hover:scale-105 transition-all duration-300 animate-slide-up"
+            className="glass rounded-xl shadow-lg border border-white/20 p-3 hover:shadow-xl hover:scale-102 transition-all duration-300 animate-slide-up"
             style={{ animationDelay: `${index * 100}ms` }}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-2">{card.title}</p>
-                <p className={`text-3xl font-bold liquid-gradient-text`}>{card.value}</p>
+                <p className="text-xs font-medium text-gray-600 mb-1">{card.title}</p>
+                <p className={`text-lg font-bold text-olive-700`}>{card.value}</p>
               </div>
-              <div className={`p-4 rounded-2xl shadow-lg liquid-gradient`}>
-                <Icon className="w-6 h-6 text-white" />
+              <div className={`p-2 rounded-lg shadow-md bg-olive-600`}>
+                <Icon className="w-4 h-4 text-white" />
               </div>
             </div>
           </div>
