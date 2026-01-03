@@ -594,8 +594,8 @@ async def startup():
     # Validate ALL tables exist after migrations
     # Log errors but don't exit - allow app to start
     schema_valid = False
-        try:
-            from app.utils.schema_validator import validate_all_tables_exist, SchemaValidationError
+    try:
+        from app.utils.schema_validator import validate_all_tables_exist, SchemaValidationError
             await validate_all_tables_exist(engine)
             logger.info("✅ Database schema validated - All required tables present")
             schema_valid = True
