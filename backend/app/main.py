@@ -264,9 +264,12 @@ async def startup():
         except Exception as e:
             logger.error("=" * 80)
             logger.error(f"❌ CRITICAL: Migration setup failed: {e}", exc_info=True)
-            logger.error("❌ Application will exit to prevent broken state")
+            logger.error("❌ Application will continue to start")
+            logger.error("⚠️  Some features may not work until migrations are fixed")
+            logger.error("⚠️  Use /health/migrate endpoint to retry migrations")
             logger.error("=" * 80)
-            raise  # Re-raise to trigger exit
+            # Don't re-raise - allow app to start even if migrations fail
+            # This prevents deployment failures while still alerting to the issue
         
         # Add a small delay after migrations
         await asyncio.sleep(1)
