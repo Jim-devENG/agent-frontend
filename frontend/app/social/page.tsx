@@ -4,11 +4,12 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import SocialProfilesTable from '@/components/SocialProfilesTable'
 import SocialDiscovery from '@/components/SocialDiscovery'
-import { MessageSquare, Search, Send, RefreshCw } from 'lucide-react'
+import SocialPipeline from '@/components/SocialPipeline'
+import { MessageSquare, Search, Send, RefreshCw, LayoutDashboard } from 'lucide-react'
 
 export default function SocialPage() {
   const router = useRouter()
-  const [activeView, setActiveView] = useState<'discover' | 'profiles' | 'drafts' | 'sent'>('discover')
+  const [activeView, setActiveView] = useState<'pipeline' | 'discover' | 'profiles' | 'drafts' | 'sent'>('pipeline')
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
@@ -29,6 +30,17 @@ export default function SocialPage() {
 
         {/* Navigation Tabs */}
         <div className="flex space-x-2 mb-6 border-b border-gray-200">
+          <button
+            onClick={() => setActiveView('pipeline')}
+            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+              activeView === 'pipeline'
+                ? 'border-olive-600 text-olive-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4 inline mr-1" />
+            Pipeline
+          </button>
           <button
             onClick={() => setActiveView('discover')}
             className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
@@ -77,6 +89,7 @@ export default function SocialPage() {
 
         {/* Content */}
         <div>
+          {activeView === 'pipeline' && <SocialPipeline />}
           {activeView === 'discover' && <SocialDiscovery />}
           {activeView === 'profiles' && <SocialProfilesTable />}
           {activeView === 'drafts' && (
