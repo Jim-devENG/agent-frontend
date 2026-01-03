@@ -353,6 +353,31 @@ async def startup():
                     else:
                         logger.info("✅ discovery_query_id column already exists")
                     
+                    # CRITICAL: Check if social columns exist (source_type, source_platform, etc.)
+                    # These are required for social outreach feature
+                    result = await conn.execute(
+                        text("""
+                            SELECT column_name 
+                            FROM information_schema.columns 
+                            WHERE table_name = 'prospects' 
+                            AND column_name IN ('source_type', 'source_platform', 'profile_url', 'username')
+                        """)
+                    )
+                    existing_social_columns = {row[0] for row in result.fetchall()}
+                    required_columns = {'source_type', 'source_platform', 'profile_url', 'username'}
+                    missing_columns = required_columns - existing_social_columns
+                    
+                    if missing_columns:
+                        logger.error("=" * 80)
+                        logger.error("❌ CRITICAL: Social outreach columns are missing!")
+                        logger.error(f"❌ Missing columns: {', '.join(missing_columns)}")
+                        logger.error("❌ Social outreach feature will NOT work until migration is applied")
+                        logger.error("❌ Migration: add_social_columns_to_prospects")
+                        logger.error("❌ Run: alembic upgrade head")
+                        logger.error("=" * 80)
+                    else:
+                        logger.info("✅ Social outreach columns exist (source_type, source_platform, etc.)")
+                    
                     # Check and add serp_intent columns if missing
                     serp_intent_check = await conn.execute(
                         text("""
