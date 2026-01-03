@@ -5,11 +5,23 @@ import { useRouter } from 'next/navigation'
 import SocialProfilesTable from '@/components/SocialProfilesTable'
 import SocialDiscovery from '@/components/SocialDiscovery'
 import SocialPipeline from '@/components/SocialPipeline'
-import { MessageSquare, Search, Send, RefreshCw, LayoutDashboard } from 'lucide-react'
+import Sidebar from '@/components/Sidebar'
+import { 
+  LayoutDashboard, 
+  Search, 
+  MessageSquare, 
+  RefreshCw, 
+  Send,
+  Users,
+  FileText,
+  Mail
+} from 'lucide-react'
 
 export default function SocialPage() {
   const router = useRouter()
-  const [activeView, setActiveView] = useState<'pipeline' | 'discover' | 'profiles' | 'drafts' | 'sent'>('pipeline')
+  const [activeTab, setActiveTab] = useState<
+    'pipeline' | 'discover' | 'profiles' | 'drafts' | 'sent'
+  >('pipeline')
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
@@ -19,99 +31,42 @@ export default function SocialPage() {
     }
   }, [router])
 
+  const socialTabs = [
+    { id: 'pipeline', label: 'Pipeline', icon: LayoutDashboard },
+    { id: 'discover', label: 'Discover', icon: Search },
+    { id: 'profiles', label: 'Profiles', icon: Users },
+    { id: 'drafts', label: 'Drafts', icon: FileText },
+    { id: 'sent', label: 'Sent', icon: Mail },
+  ]
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-olive-50 to-white">
-      <div className="container mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Social Media Outreach</h1>
-          <p className="text-sm text-gray-600">Discover and engage with social media profiles</p>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="flex space-x-2 mb-6 border-b border-gray-200">
-          <button
-            onClick={() => setActiveView('pipeline')}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
-              activeView === 'pipeline'
-                ? 'border-olive-600 text-olive-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4 inline mr-1" />
-            Pipeline
-          </button>
-          <button
-            onClick={() => setActiveView('discover')}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
-              activeView === 'discover'
-                ? 'border-olive-600 text-olive-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <Search className="w-4 h-4 inline mr-1" />
-            Discover
-          </button>
-          <button
-            onClick={() => setActiveView('profiles')}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
-              activeView === 'profiles'
-                ? 'border-olive-600 text-olive-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4 inline mr-1" />
-            Profiles
-          </button>
-          <button
-            onClick={() => setActiveView('drafts')}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
-              activeView === 'drafts'
-                ? 'border-olive-600 text-olive-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <RefreshCw className="w-4 h-4 inline mr-1" />
-            Drafts
-          </button>
-          <button
-            onClick={() => setActiveView('sent')}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
-              activeView === 'sent'
-                ? 'border-olive-600 text-olive-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <Send className="w-4 h-4 inline mr-1" />
-            Sent
-          </button>
-        </div>
-
-        {/* Content */}
-        <div>
-          {activeView === 'pipeline' && <SocialPipeline />}
-          {activeView === 'discover' && <SocialDiscovery />}
-          {activeView === 'profiles' && <SocialProfilesTable />}
-          {activeView === 'drafts' && (
-            <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-sm text-gray-600">Drafts view coming soon</p>
-            </div>
-          )}
-          {activeView === 'sent' && (
-            <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-sm text-gray-600">Sent messages view coming soon</p>
-            </div>
-          )}
-        </div>
-        
-        {/* Debug Info - Remove in production */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
-            <p>Active View: {activeView}</p>
-            <p>Component: {activeView === 'discover' ? 'SocialDiscovery' : activeView === 'profiles' ? 'SocialProfilesTable' : 'Placeholder'}</p>
+      <Sidebar 
+        activeTab={activeTab} 
+        onTabChange={(tab) => setActiveTab(tab as any)}
+        tabs={socialTabs}
+      />
+      
+      <main className="lg:ml-64 p-4 lg:p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Content */}
+          <div>
+            {activeTab === 'pipeline' && <SocialPipeline />}
+            {activeTab === 'discover' && <SocialDiscovery />}
+            {activeTab === 'profiles' && <SocialProfilesTable />}
+            {activeTab === 'drafts' && (
+              <div className="glass rounded-xl shadow-lg p-6 border border-olive-200">
+                <p className="text-sm text-gray-600">Drafts view coming soon</p>
+              </div>
+            )}
+            {activeTab === 'sent' && (
+              <div className="glass rounded-xl shadow-lg p-6 border border-olive-200">
+                <p className="text-sm text-gray-600">Sent messages view coming soon</p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      </main>
     </div>
   )
 }

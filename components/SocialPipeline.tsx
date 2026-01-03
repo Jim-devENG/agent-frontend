@@ -145,12 +145,12 @@ export default function SocialPipeline() {
 
   if (!status || status.status === 'inactive') {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="glass rounded-xl shadow-lg p-6 border border-olive-200">
         <div className="flex items-center space-x-2 text-amber-600 mb-2">
           <AlertCircle className="w-5 h-5" />
-          <h3 className="font-semibold">Social Outreach Not Available</h3>
+          <h3 className="font-semibold text-sm">Social Outreach Not Available</h3>
         </div>
-        <p className="text-sm text-gray-600">
+        <p className="text-xs text-gray-600">
           {status?.reason || 'Social outreach feature is not initialized. Please run database migrations.'}
         </p>
       </div>
@@ -211,92 +211,102 @@ export default function SocialPipeline() {
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Pipeline Cards */}
+    <div className="space-y-4 animate-fade-in">
+      {/* Header */}
+      <div className="glass rounded-xl shadow-lg p-3 border border-olive-200">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h2 className="text-sm font-bold text-olive-700 mb-1">Social Outreach Pipeline</h2>
+            <p className="text-gray-600 text-xs">
+              Connect with social media profiles through creative outreach
+            </p>
+          </div>
+          <button
+            onClick={loadStatus}
+            className="flex items-center space-x-1 px-2 py-1 bg-olive-600 text-white rounded-lg transition-all duration-200 text-xs font-medium hover:bg-olive-700 hover:shadow-md"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Refresh</span>
+          </button>
+        </div>
+        <div className="mt-2 p-2 bg-gradient-to-r from-olive-50 to-olive-50 rounded-lg border border-olive-200">
+          <p className="text-xs text-gray-700">
+            <span className="font-semibold">Orchestrate your social outreach</span> — Each stage builds on the previous, creating meaningful connections through art and creativity.
+          </p>
+        </div>
+      </div>
+
+      {/* Step Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {steps.map((step, index) => {
           const Icon = step.icon
+          const isCompleted = step.status === 'completed' || (step.count > 0 && step.status === 'active')
           const isLocked = step.status === 'locked'
-          const isCompleted = step.count > 0 && step.status === 'active'
-          const isActive = step.status === 'active' && !isCompleted
-
+          const isActive = step.status === 'active' && !isLocked
+          
           return (
             <div
               key={step.id}
-              className={`
-                bg-white rounded-lg shadow-md p-4 border-2 transition-all duration-200
-                ${isLocked ? 'border-gray-200 opacity-60' : 'border-olive-200 hover:border-olive-400 hover:shadow-lg'}
-                ${isActive ? 'ring-2 ring-olive-300' : ''}
-              `}
+              className={`glass rounded-xl shadow-lg p-3 border transition-all duration-300 hover:shadow-xl hover:scale-102 animate-slide-up ${
+                isCompleted
+                  ? 'border-olive-300 bg-gradient-to-br from-olive-50/80 to-olive-50/50'
+                  : isLocked
+                  ? 'border-gray-200 opacity-60'
+                  : 'border-olive-300 bg-gradient-to-br from-olive-50/80 to-olive-50/50'
+              }`}
+              style={{ animationDelay: `${index * 100}ms` }}
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center space-x-2">
-                  {isLocked ? (
-                    <Lock className="w-5 h-5 text-gray-400" />
-                  ) : isCompleted ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <Icon className="w-5 h-5 text-olive-600" />
-                  )}
-                  <h3 className="font-semibold text-sm text-gray-900">{step.name}</h3>
+              <div className="flex items-start justify-between mb-2">
+                <div className={`p-2 rounded-lg shadow-md transition-all duration-300 ${
+                  isCompleted
+                    ? 'bg-olive-600 text-white'
+                    : isLocked
+                    ? 'bg-gray-300 text-gray-500'
+                    : 'bg-olive-600 text-white hover-glow'
+                }`}>
+                  <Icon className="w-4 h-4" />
                 </div>
+                {isCompleted && (
+                  <CheckCircle2 className="w-4 h-4 text-olive-600 animate-scale-in" />
+                )}
                 {isLocked && (
-                  <Circle className="w-4 h-4 text-gray-400" />
+                  <Lock className="w-4 h-4 text-gray-400" />
                 )}
               </div>
 
-              <p className="text-xs text-gray-600 mb-3">{step.description}</p>
+              <h3 className="text-sm font-bold text-gray-900 mb-1">{step.name}</h3>
+              <p className="text-xs text-gray-600 mb-2">{step.description}</p>
 
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-2xl font-bold text-olive-600">{step.count}</span>
-                {isActive && (
-                  <span className="text-xs text-olive-600 font-medium">Active</span>
-                )}
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <p className="text-lg font-bold text-olive-700">{step.count}</p>
+                  <p className="text-xs text-gray-500">
+                    {step.id === 1 && `${status.discovered} discovered`}
+                    {step.id === 2 && `${status.qualified} qualified`}
+                    {step.id === 3 && `${status.drafted} drafted`}
+                    {step.id === 4 && `${status.sent} sent`}
+                    {step.id === 5 && `${status.followup_ready} ready for follow-up`}
+                  </p>
+                </div>
               </div>
 
               <button
                 onClick={step.ctaAction}
                 disabled={isLocked}
-                className={`
-                  w-full py-2 px-3 rounded-lg text-xs font-medium transition-all duration-200
-                  ${isLocked
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-olive-600 text-white hover:bg-olive-700 hover:shadow-md'
-                  }
-                `}
+                className={`w-full px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-all duration-200 ${
+                  isLocked
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    : isCompleted
+                    ? 'bg-olive-600 text-white hover:bg-olive-700 hover:shadow-md hover:scale-102'
+                    : 'bg-olive-600 text-white hover:bg-olive-700 hover:shadow-md hover:scale-102'
+                }`}
               >
-                {step.ctaText}
+                <span>{step.ctaText}</span>
+                {!isLocked && <ArrowRight className="w-3 h-3" />}
               </button>
             </div>
           )
         })}
-      </div>
-
-      {/* Summary Stats */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <h3 className="font-semibold text-sm text-gray-900 mb-3">Pipeline Summary</h3>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-olive-600">{status.discovered}</div>
-            <div className="text-xs text-gray-600">Discovered</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-olive-600">{status.qualified}</div>
-            <div className="text-xs text-gray-600">Qualified</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-olive-600">{status.drafted}</div>
-            <div className="text-xs text-gray-600">Drafted</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-olive-600">{status.sent}</div>
-            <div className="text-xs text-gray-600">Sent</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-olive-600">{status.followup_ready}</div>
-            <div className="text-xs text-gray-600">Follow-up Ready</div>
-          </div>
-        </div>
       </div>
     </div>
   )
