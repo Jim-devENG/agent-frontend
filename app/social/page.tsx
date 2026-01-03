@@ -101,10 +101,15 @@ export default function SocialPage() {
     )
   }
 
+  // Wrapper function to handle type compatibility with Sidebar component
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab as 'pipeline' | 'discover' | 'profiles' | 'drafts' | 'sent')
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-liquid-50 to-white flex">
       {/* Left Sidebar */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} tabs={socialTabs} />
+      <Sidebar activeTab={activeTab} onTabChange={handleTabChange} tabs={socialTabs} />
 
       {/* Main Content Area */}
       <div className="flex-1 lg:ml-64 flex flex-col">
