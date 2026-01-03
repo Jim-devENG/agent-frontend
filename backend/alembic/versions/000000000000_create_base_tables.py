@@ -17,9 +17,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create jobs table
-    op.create_table(
-        'jobs',
+    # Check if tables already exist (idempotent)
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    existing_tables = inspector.get_table_names()
+    
+    # Create jobs table (idempotent)
+    if 'jobs' not in existing_tables:
+        op.create_table(
+            'jobs',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('user_id', postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column('job_type', sa.String(), nullable=False),
@@ -33,10 +40,11 @@ def upgrade() -> None:
     op.create_index('ix_jobs_id', 'jobs', ['id'])
     op.create_index('ix_jobs_job_type', 'jobs', ['job_type'])
     op.create_index('ix_jobs_status', 'jobs', ['status'])
-    op.create_index('ix_jobs_created_at', 'jobs', ['created_at'])
+        op.create_index('ix_jobs_created_at', 'jobs', ['created_at'])
     
-    # Create prospects table
-    op.create_table(
+    # Create prospects table (idempotent)
+    if 'prospects' not in existing_tables:
+        op.create_table((
         'prospects',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('domain', sa.String(), nullable=False),
@@ -60,10 +68,11 @@ def upgrade() -> None:
     op.create_index('ix_prospects_domain', 'prospects', ['domain'])
     op.create_index('ix_prospects_contact_email', 'prospects', ['contact_email'])
     op.create_index('ix_prospects_outreach_status', 'prospects', ['outreach_status'])
-    op.create_index('ix_prospects_created_at', 'prospects', ['created_at'])
+        op.create_index('ix_prospects_created_at', 'prospects', ['created_at'])
     
-    # Create email_logs table
-    op.create_table(
+    # Create email_logs table (idempotent)
+    if 'email_logs' not in existing_tables:
+        op.create_table((
         'email_logs',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('prospect_id', postgresql.UUID(as_uuid=True), nullable=False),
