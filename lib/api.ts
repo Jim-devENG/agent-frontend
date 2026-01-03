@@ -1565,6 +1565,45 @@ export async function createSocialFollowups(request: { profile_ids: string[] }):
   return await res.json()
 }
 
+// SOCIAL STATS API
+export interface SocialStats {
+  total_profiles: number
+  discovered: number
+  drafted: number
+  sent: number
+  pending: number
+  jobs_running: number
+  linkedin_total: number
+  linkedin_discovered: number
+  linkedin_drafted: number
+  linkedin_sent: number
+  instagram_total: number
+  instagram_discovered: number
+  instagram_drafted: number
+  instagram_sent: number
+  facebook_total: number
+  facebook_discovered: number
+  facebook_drafted: number
+  facebook_sent: number
+  tiktok_total: number
+  tiktok_discovered: number
+  tiktok_drafted: number
+  tiktok_sent: number
+}
+
+export async function getSocialStats(): Promise<SocialStats | null> {
+  try {
+    const res = await authenticatedFetch(`${API_BASE}/social/stats`)
+    if (!res.ok) {
+      return null
+    }
+    return res.json()
+  } catch (error) {
+    console.error('Failed to get social stats:', error)
+    return null
+  }
+}
+
 // SOCIAL PIPELINE API (New pipeline endpoints)
 export interface SocialPipelineStatus {
   discovered: number
@@ -1577,8 +1616,11 @@ export interface SocialPipelineStatus {
   reason?: string
 }
 
-export async function getSocialPipelineStatus(): Promise<SocialPipelineStatus> {
-  const res = await authenticatedFetch(`${API_BASE}/social/pipeline/status`)
+export async function getSocialPipelineStatus(platform?: 'linkedin' | 'instagram' | 'facebook' | 'tiktok'): Promise<SocialPipelineStatus> {
+  const url = platform 
+    ? `${API_BASE}/social/pipeline/status?platform=${platform}`
+    : `${API_BASE}/social/pipeline/status`
+  const res = await authenticatedFetch(url)
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to get social pipeline status' }))
     throw new Error(error.detail || 'Failed to get social pipeline status')

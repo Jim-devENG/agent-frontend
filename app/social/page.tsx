@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import SocialProfilesTable from '@/components/SocialProfilesTable'
 import SocialDiscovery from '@/components/SocialDiscovery'
 import SocialPipeline from '@/components/SocialPipeline'
+import SocialOverview from '@/components/SocialOverview'
 import Sidebar from '@/components/Sidebar'
 import SystemStatus from '@/components/SystemStatus'
 import { 
@@ -24,8 +25,8 @@ import type { Job } from '@/lib/api'
 export default function SocialPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<
-    'pipeline' | 'discover' | 'profiles' | 'drafts' | 'sent'
-  >('pipeline')
+    'overview' | 'pipeline' | 'discover' | 'profiles' | 'drafts' | 'sent'
+  >('overview')
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
   const [connectionError, setConnectionError] = useState(false)
@@ -76,6 +77,7 @@ export default function SocialPage() {
   }
 
   const socialTabs = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'pipeline', label: 'Pipeline', icon: LayoutDashboard },
     { id: 'discover', label: 'Discover', icon: Search },
     { id: 'profiles', label: 'Profiles', icon: Users },
@@ -103,7 +105,7 @@ export default function SocialPage() {
 
   // Wrapper function to handle type compatibility with Sidebar component
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab as 'pipeline' | 'discover' | 'profiles' | 'drafts' | 'sent')
+    setActiveTab(tab as 'overview' | 'pipeline' | 'discover' | 'profiles' | 'drafts' | 'sent')
   }
 
   return (
@@ -171,6 +173,7 @@ export default function SocialPage() {
         {/* Main Content */}
         <main className="flex-1 px-3 sm:px-4 py-3 overflow-y-auto">
           <div className="max-w-7xl mx-auto">
+            {activeTab === 'overview' && <SocialOverview />}
             {activeTab === 'pipeline' && <SocialPipeline />}
             {activeTab === 'discover' && <SocialDiscovery />}
             {activeTab === 'profiles' && <SocialProfilesTable />}

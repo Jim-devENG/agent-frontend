@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Circle, Lock, Loader2, Search, Eye, FileText, Send, RefreshCw, ArrowRight, AlertCircle, Users } from 'lucide-react'
+import { CheckCircle2, Circle, Lock, Loader2, Search, Eye, FileText, Send, RefreshCw, ArrowRight, AlertCircle, Users, Linkedin, Instagram, Facebook, Music } from 'lucide-react'
 import { 
   getSocialPipelineStatus,
   discoverSocialProfilesPipeline,
@@ -24,7 +24,10 @@ interface StepCard {
   ctaAction: () => void
 }
 
+type Platform = 'all' | 'linkedin' | 'instagram' | 'facebook' | 'tiktok'
+
 export default function SocialPipeline() {
+  const [selectedPlatform, setSelectedPlatform] = useState<Platform>('all')
   const [status, setStatus] = useState<SocialPipelineStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [discoveryLoading, setDiscoveryLoading] = useState(false)
@@ -54,7 +57,8 @@ export default function SocialPipeline() {
 
   const loadStatus = async () => {
     try {
-      const pipelineStatus = await getSocialPipelineStatus()
+      const platform = selectedPlatform === 'all' ? undefined : selectedPlatform
+      const pipelineStatus = await getSocialPipelineStatus(platform)
       setStatus(pipelineStatus)
     } catch (error) {
       console.error('Failed to load social pipeline status:', error)
@@ -117,7 +121,7 @@ export default function SocialPipeline() {
         window.removeEventListener('refreshSocialPipelineStatus', handleRefresh)
       }
     }
-  }, [])
+  }, [selectedPlatform]) // Reload when platform changes
 
   const handleDiscover = async () => {
     // Discovery is handled in the discovery component
@@ -201,6 +205,14 @@ export default function SocialPipeline() {
       </div>
     )
   }
+
+  const platforms = [
+    { id: 'all' as Platform, label: 'All Platforms', icon: Users },
+    { id: 'linkedin' as Platform, label: 'LinkedIn', icon: Linkedin },
+    { id: 'instagram' as Platform, label: 'Instagram', icon: Instagram },
+    { id: 'facebook' as Platform, label: 'Facebook', icon: Facebook },
+    { id: 'tiktok' as Platform, label: 'TikTok', icon: Music },
+  ]
 
   const steps: StepCard[] = [
     {
@@ -302,13 +314,15 @@ export default function SocialPipeline() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      {/* Header */}
+      {/* Platform Selector */}
       <div className="glass rounded-xl shadow-lg p-3 border border-olive-200">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-sm font-bold text-olive-700 mb-1">Social Outreach Pipeline</h2>
             <p className="text-gray-600 text-xs">
-              Connect with social media profiles through creative outreach
+              {selectedPlatform === 'all' 
+                ? 'View all platforms or filter by specific platform'
+                : `Viewing ${platforms.find(p => p.id === selectedPlatform)?.label} pipeline`}
             </p>
           </div>
           <button
@@ -318,6 +332,28 @@ export default function SocialPipeline() {
             <RefreshCw className="w-3 h-3" />
             <span>Refresh</span>
           </button>
+        </div>
+        
+        {/* Platform Tabs */}
+        <div className="flex flex-wrap gap-2">
+          {platforms.map((platform) => {
+            const Icon = platform.icon
+            const isSelected = selectedPlatform === platform.id
+            return (
+              <button
+                key={platform.id}
+                onClick={() => setSelectedPlatform(platform.id)}
+                className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                  isSelected
+                    ? 'bg-olive-600 text-white shadow-md'
+                    : 'bg-white text-gray-700 hover:bg-olive-50 border border-gray-200'
+                }`}
+              >
+                <Icon className="w-3 h-3" />
+                <span>{platform.label}</span>
+              </button>
+            )
+          })}
         </div>
         {!masterSwitchEnabled && (
           <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
