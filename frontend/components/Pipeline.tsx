@@ -35,6 +35,7 @@ export default function Pipeline() {
   const [loading, setLoading] = useState(true)
   const [discoveryJobs, setDiscoveryJobs] = useState<Job[]>([])
   const [masterSwitchEnabled, setMasterSwitchEnabled] = useState(false)
+  const [latestDiscoveryJobId, setLatestDiscoveryJobId] = useState<string | null>(null)
 
   // Check master switch status
   useEffect(() => {
@@ -77,6 +78,24 @@ export default function Pipeline() {
       const jobs = await listJobs(0, 50)
       const discoveryJobsList = jobs.filter((j: Job) => j.job_type === 'discover')
       setDiscoveryJobs(discoveryJobsList)
+      
+      // Track latest discovery job to detect new discovery runs
+      if (discoveryJobsList.length > 0) {
+        const latestJob = discoveryJobsList.sort((a: Job, b: Job) => {
+          const dateA = new Date(a.created_at || 0).getTime()
+          const dateB = new Date(b.created_at || 0).getTime()
+          return dateB - dateA
+        })[0]
+        
+        // If this is a new discovery job, reset pipeline UI state
+        if (latestJob.id && latestJob.id !== latestDiscoveryJobId) {
+          setLatestDiscoveryJobId(latestJob.id)
+          // Reset pipeline state by reloading status
+          // This ensures buttons are re-enabled based on current data
+          console.log('🔄 New discovery detected, resetting pipeline state')
+          loadStatus()
+        }
+      }
     } catch (err) {
       console.error('Failed to load discovery jobs:', err)
     }
@@ -117,8 +136,18 @@ export default function Pipeline() {
       loadStatusDebounced()
     }
     
+    // Listen for discovery completion to reset pipeline state
+    const handleDiscoveryCompleted = () => {
+      console.log('🔄 Discovery completed, resetting pipeline state...')
+      // Reset latest discovery job ID to trigger re-evaluation
+      setLatestDiscoveryJobId(null)
+      loadStatusDebounced()
+      loadDiscoveryJobs()
+    }
+    
     if (typeof window !== 'undefined') {
       window.addEventListener('refreshPipelineStatus', handleRefreshPipelineStatus)
+      window.addEventListener('discoveryCompleted', handleDiscoveryCompleted)
     }
     
     return () => {
@@ -129,6 +158,7 @@ export default function Pipeline() {
       clearInterval(interval)
       if (typeof window !== 'undefined') {
         window.removeEventListener('refreshPipelineStatus', handleRefreshPipelineStatus)
+        window.removeEventListener('discoveryCompleted', handleDiscoveryCompleted)
       }
     }
   }, [])
@@ -565,6 +595,13 @@ function Step1Discovery({ onComplete }: { onComplete: () => void }) {
       })
       setSuccess(true)
       setShowForm(false)
+      
+      // Trigger discovery completion event to reset pipeline state
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('discoveryCompleted'))
+        window.dispatchEvent(new CustomEvent('refreshPipelineStatus'))
+      }
+      
       setTimeout(() => {
         onComplete()
         setSuccess(false)

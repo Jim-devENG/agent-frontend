@@ -32,6 +32,7 @@ export default function SocialPipeline() {
   const [loading, setLoading] = useState(true)
   const [discoveryLoading, setDiscoveryLoading] = useState(false)
   const [masterSwitchEnabled, setMasterSwitchEnabled] = useState(false)
+  const [latestDiscoveryJobId, setLatestDiscoveryJobId] = useState<string | null>(null)
 
   // Check master switch status
   useEffect(() => {
@@ -107,8 +108,17 @@ export default function SocialPipeline() {
       loadStatusDebounced()
     }
     
+    // Listen for discovery completion to reset pipeline state
+    const handleDiscoveryCompleted = () => {
+      console.log('🔄 Social discovery completed, resetting pipeline state...')
+      // Reset latest discovery job ID to trigger re-evaluation
+      setLatestDiscoveryJobId(null)
+      loadStatusDebounced()
+    }
+    
     if (typeof window !== 'undefined') {
       window.addEventListener('refreshSocialPipelineStatus', handleRefresh)
+      window.addEventListener('socialDiscoveryCompleted', handleDiscoveryCompleted)
     }
     
     return () => {
@@ -119,6 +129,7 @@ export default function SocialPipeline() {
       clearInterval(interval)
       if (typeof window !== 'undefined') {
         window.removeEventListener('refreshSocialPipelineStatus', handleRefresh)
+        window.removeEventListener('socialDiscoveryCompleted', handleDiscoveryCompleted)
       }
     }
   }, [selectedPlatform]) // Reload when platform changes

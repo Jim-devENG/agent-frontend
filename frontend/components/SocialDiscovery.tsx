@@ -144,6 +144,8 @@ export default function SocialDiscovery() {
       
       // Refresh pipeline status and trigger all table refreshes
       if (typeof window !== 'undefined') {
+        // Trigger discovery completion event to reset pipeline state
+        window.dispatchEvent(new CustomEvent('socialDiscoveryCompleted'))
         window.dispatchEvent(new CustomEvent('refreshSocialPipelineStatus'))
         window.dispatchEvent(new CustomEvent('jobsCompleted'))
       }
