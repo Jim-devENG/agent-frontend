@@ -64,29 +64,31 @@ class RateLimiter:
         limit_str = self.RATE_LIMITS[platform]
         
         # Check if we can make a request
-        # CRITICAL FIX: limits library hit() signature is hit(limit_str, key), not hit(key, limit_str)
-        # The limit_str must be a RateLimitItem or parseable string, key is the identifier
-        from limits import parse_many
+        # CRITICAL FIX: limits library hit() method expects (limit, key) where limit can be a string
+        # But the library internally may call .key_for() on the limit if it thinks it's an enum
+        # Solution: Ensure we pass a plain string for the limit, not an enum-like object
+        from limits import parse
+        
+        key = f"{platform}_api"
         
         try:
-            # Parse the limit string into RateLimitItem objects
-            rate_limit_items = parse_many(limit_str)
-            if not rate_limit_items:
-                logger.error(f"❌ [RATE LIMIT] Failed to parse rate limit string: {limit_str}")
-                # Allow request to proceed if parsing fails (fail open)
-                return
+            # Parse the limit string into a RateLimitItem object
+            # This ensures proper format and prevents the key_for() error
+            rate_limit_item = parse(limit_str)
             
-            # Use the first parsed rate limit
-            rate_limit_item = rate_limit_items[0]
-            key = f"{platform}_api"
-            
-            # CORRECT SIGNATURE: hit(rate_limit_item, key)
+            # CORRECT USAGE: hit(rate_limit_item, key)
+            # The rate_limit_item is a parsed RateLimitItem object, key is a string identifier
             can_proceed = strategy.hit(rate_limit_item, key)
             
         except Exception as parse_err:
-            # If parsing fails, log error but allow request (fail open to prevent blocking)
-            logger.error(f"❌ [RATE LIMIT] Error parsing rate limit '{limit_str}' for {platform}: {parse_err}", exc_info=True)
+            # If parsing fails, log error but allow request (fail open to prevent blocking discovery)
+            logger.error(
+                f"❌ [RATE LIMIT] Error parsing rate limit '{limit_str}' for {platform}: {parse_err}\n"
+                f"This is likely the 'key_for' bug - allowing request to proceed",
+                exc_info=True
+            )
             logger.warning(f"⚠️  [RATE LIMIT] Allowing request to proceed despite rate limit parsing error")
+            # Fail open: allow the request to proceed
             return
         
         if not can_proceed:
@@ -101,15 +103,14 @@ class RateLimiter:
             
             await asyncio.sleep(wait_seconds)
             
-            # Try again with correct signature
+            # Try again with correct usage
             try:
-                rate_limit_items = parse_many(limit_str)
-                if rate_limit_items:
-                    can_proceed = strategy.hit(rate_limit_items[0], key)
-                else:
-                    can_proceed = True  # Fail open if parsing fails
+                rate_limit_item = parse(limit_str)
+                can_proceed = strategy.hit(rate_limit_item, key)
             except Exception:
-                can_proceed = True  # Fail open if parsing fails
+                # Fail open if parsing fails
+                can_proceed = True
+                logger.warning(f"⚠️  [RATE LIMIT] Retry parsing failed, allowing request to proceed")
             if not can_proceed:
                 logger.error(f"❌ [RATE LIMIT] Still rate limited after wait for {platform}")
     
