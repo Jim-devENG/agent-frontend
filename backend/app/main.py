@@ -303,7 +303,7 @@ async def startup():
             except Exception as db_check_err:
                 logger.error(f"❌ Error checking database connection: {db_check_err}", exc_info=True)
             
-            # VERIFY: Check that social columns exist after migrations
+            # AUTOMATIC FIX: Check and add missing social columns if needed
             try:
                 from sqlalchemy import text
                 async with engine.begin() as conn:
@@ -318,17 +318,77 @@ async def startup():
                         """)
                     )
                     existing_columns = {row[0] for row in result.fetchall()}
-                    required_columns = {'source_type', 'source_platform', 'profile_url', 'username', 'display_name', 'follower_count', 'engagement_rate'}
-                    missing_columns = required_columns - existing_columns
+                    required_columns = {
+                        'source_type': 'VARCHAR',
+                        'source_platform': 'VARCHAR',
+                        'profile_url': 'TEXT',
+                        'username': 'VARCHAR',
+                        'display_name': 'VARCHAR',
+                        'follower_count': 'INTEGER',
+                        'engagement_rate': 'NUMERIC'
+                    }
+                    missing_columns = {col: col_type for col, col_type in required_columns.items() if col not in existing_columns}
                     
                     if missing_columns:
-                        logger.warning(f"⚠️  Missing social columns after migration: {missing_columns}")
-                        logger.warning("⚠️  This may cause UndefinedColumnError during discovery")
-                        logger.warning("⚠️  Run 'alembic upgrade head' manually to fix")
+                        logger.warning("=" * 80)
+                        logger.warning(f"⚠️  Missing {len(missing_columns)} social columns - applying automatic fix...")
+                        logger.warning(f"⚠️  Missing: {', '.join(missing_columns.keys())}")
+                        
+                        # Build ALTER TABLE statement
+                        alter_statements = []
+                        for col_name, col_type in missing_columns.items():
+                            if col_type == 'NUMERIC':
+                                alter_statements.append(f"ADD COLUMN {col_name} NUMERIC(5, 2)")
+                            elif col_type == 'VARCHAR':
+                                alter_statements.append(f"ADD COLUMN {col_name} VARCHAR")
+                            elif col_type == 'TEXT':
+                                alter_statements.append(f"ADD COLUMN {col_name} TEXT")
+                            elif col_type == 'INTEGER':
+                                alter_statements.append(f"ADD COLUMN {col_name} INTEGER")
+                        
+                        alter_sql = f"ALTER TABLE prospects {', '.join(alter_statements)}"
+                        
+                        try:
+                            await conn.execute(text(alter_sql))
+                            await conn.commit()
+                            logger.info("✅ Automatic schema fix applied successfully")
+                            logger.info(f"✅ Added {len(missing_columns)} columns to prospects table")
+                            
+                            # Verify the fix
+                            verify_result = await conn.execute(
+                                text("""
+                                    SELECT column_name 
+                                    FROM information_schema.columns 
+                                    WHERE table_name = 'prospects' 
+                                    AND column_name IN ('source_type', 'source_platform', 'profile_url', 'username', 'display_name', 'follower_count', 'engagement_rate')
+                                """)
+                            )
+                            verified_columns = {row[0] for row in verify_result.fetchall()}
+                            
+                            if len(verified_columns) == 7:
+                                logger.info("✅ All 7 social columns verified after automatic fix")
+                                # Test SELECT query
+                                try:
+                                    test_result = await conn.execute(
+                                        text("SELECT source_type, source_platform FROM prospects LIMIT 1")
+                                    )
+                                    test_result.fetchone()  # Consume result
+                                    logger.info("✅ SELECT query test passed - schema fix successful")
+                                except Exception as test_err:
+                                    logger.error(f"❌ SELECT query test failed: {test_err}")
+                            else:
+                                logger.warning(f"⚠️  Verification incomplete - only {len(verified_columns)}/7 columns found")
+                        except Exception as fix_err:
+                            logger.error("=" * 80)
+                            logger.error(f"❌ CRITICAL: Automatic schema fix failed: {fix_err}")
+                            logger.error(f"❌ Error type: {type(fix_err).__name__}")
+                            logger.error("❌ Manual intervention required - run fix_schema_now.py or apply SQL manually")
+                            logger.error("=" * 80)
+                            await conn.rollback()
                     else:
                         logger.info("✅ All social columns verified: source_type, source_platform, profile_url, username, display_name, follower_count, engagement_rate")
             except Exception as social_check_err:
-                logger.error(f"❌ Error checking social columns: {social_check_err}", exc_info=True)
+                logger.error(f"❌ Error checking/fixing social columns: {social_check_err}", exc_info=True)
             
             # EMERGENCY FIX: Check and add discovery_query_id column if missing
             try:
