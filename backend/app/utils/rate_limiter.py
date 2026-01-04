@@ -64,8 +64,30 @@ class RateLimiter:
         limit_str = self.RATE_LIMITS[platform]
         
         # Check if we can make a request
-        key = f"{platform}_api"
-        can_proceed = strategy.hit(key, limit_str)
+        # CRITICAL FIX: limits library hit() signature is hit(limit_str, key), not hit(key, limit_str)
+        # The limit_str must be a RateLimitItem or parseable string, key is the identifier
+        from limits import parse_many
+        
+        try:
+            # Parse the limit string into RateLimitItem objects
+            rate_limit_items = parse_many(limit_str)
+            if not rate_limit_items:
+                logger.error(f"❌ [RATE LIMIT] Failed to parse rate limit string: {limit_str}")
+                # Allow request to proceed if parsing fails (fail open)
+                return
+            
+            # Use the first parsed rate limit
+            rate_limit_item = rate_limit_items[0]
+            key = f"{platform}_api"
+            
+            # CORRECT SIGNATURE: hit(rate_limit_item, key)
+            can_proceed = strategy.hit(rate_limit_item, key)
+            
+        except Exception as parse_err:
+            # If parsing fails, log error but allow request (fail open to prevent blocking)
+            logger.error(f"❌ [RATE LIMIT] Error parsing rate limit '{limit_str}' for {platform}: {parse_err}", exc_info=True)
+            logger.warning(f"⚠️  [RATE LIMIT] Allowing request to proceed despite rate limit parsing error")
+            return
         
         if not can_proceed:
             # Calculate wait time (approximate)
@@ -79,8 +101,15 @@ class RateLimiter:
             
             await asyncio.sleep(wait_seconds)
             
-            # Try again
-            can_proceed = strategy.hit(key, limit_str)
+            # Try again with correct signature
+            try:
+                rate_limit_items = parse_many(limit_str)
+                if rate_limit_items:
+                    can_proceed = strategy.hit(rate_limit_items[0], key)
+                else:
+                    can_proceed = True  # Fail open if parsing fails
+            except Exception:
+                can_proceed = True  # Fail open if parsing fails
             if not can_proceed:
                 logger.error(f"❌ [RATE LIMIT] Still rate limited after wait for {platform}")
     

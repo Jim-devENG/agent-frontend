@@ -375,10 +375,12 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                             logger.info(f"Job {job_id} was cancelled after API call")
                             return {"error": "Job was cancelled"}
                         
-                        if not serp_results or not serp_results.get("success"):
-                            error_msg = serp_results.get('error', 'Unknown error') if serp_results else 'No response'
-                            logger.warning(f"❌ No results for query '{query}' in {loc}: {error_msg}")
-                            query_stats["status"] = "failed"
+                        # CRITICAL FIX: Differentiate API failure vs zero results
+                        if not serp_results:
+                            # API call completely failed - no response
+                            error_msg = "DataForSEO API call failed: No response received"
+                            logger.error(f"❌ [API FAILURE] Query '{query}' in {loc}: {error_msg}")
+                            query_stats["status"] = "api_failure"
                             query_stats["error"] = error_msg
                             search_stats["queries_failed"] += 1
                             search_stats["queries_detail"].append(query_stats)
@@ -386,7 +388,33 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                             # Update DiscoveryQuery record
                             discovery_query.status = "failed"
                             discovery_query.error_message = error_msg
-                            await safe_commit(db, f"updating discovery_query {discovery_query.id} status to failed")
+                            await safe_commit(db, f"updating discovery_query {discovery_query.id} status to failed (API failure)")
+                            continue
+                        
+                        if not serp_results.get("success"):
+                            # API call returned error response
+                            error_msg = serp_results.get('error', 'Unknown API error')
+                            
+                            # Check if this is a real API error or just no results
+                            if "API" in error_msg.upper() or "failed" in error_msg.lower() or "error" in error_msg.lower():
+                                # This is an API failure, not zero results
+                                logger.error(f"❌ [API FAILURE] Query '{query}' in {loc}: {error_msg}")
+                                query_stats["status"] = "api_failure"
+                                query_stats["error"] = error_msg
+                                search_stats["queries_failed"] += 1
+                            else:
+                                # This might be zero results (but API succeeded)
+                                logger.warning(f"⚠️  [ZERO RESULTS] Query '{query}' in {loc}: {error_msg}")
+                                query_stats["status"] = "zero_results"
+                                query_stats["error"] = error_msg
+                                search_stats["queries_successful"] += 1  # API succeeded, just no results
+                            
+                            search_stats["queries_detail"].append(query_stats)
+                            
+                            # Update DiscoveryQuery record
+                            discovery_query.status = "failed" if query_stats["status"] == "api_failure" else "success"
+                            discovery_query.error_message = error_msg
+                            await safe_commit(db, f"updating discovery_query {discovery_query.id} status")
                             continue
                         
                         search_stats["queries_successful"] += 1
@@ -632,15 +660,36 @@ async def discover_websites_async(job_id: str) -> Dict[str, Any]:
                         await asyncio.sleep(1)
                     
                     except Exception as e:
-                        logger.error(f"❌ Error processing query '{query}' in {loc}: {e}", exc_info=True)
-                        query_stats["status"] = "error"
-                        query_stats["error"] = str(e)
+                        # CRITICAL FIX: Log full error details and mark as API failure
+                        error_str = str(e)
+                        error_type = type(e).__name__
+                        
+                        # Check if this is the key_for error
+                        if "key_for" in error_str:
+                            logger.error(
+                                f"❌ [BUG] key_for() error for query '{query}' in {loc}: {error_str}\n"
+                                f"Error type: {error_type}\n"
+                                f"Full traceback will be logged below",
+                                exc_info=True
+                            )
+                            # This is a bug that needs fixing, mark as API failure
+                            query_stats["status"] = "api_failure"
+                            query_stats["error"] = f"Rate limiter bug: {error_str}"
+                        else:
+                            logger.error(
+                                f"❌ [API FAILURE] Error processing query '{query}' in {loc}: {error_str}\n"
+                                f"Error type: {error_type}",
+                                exc_info=True
+                            )
+                            query_stats["status"] = "api_failure"
+                            query_stats["error"] = error_str
+                        
                         search_stats["queries_failed"] += 1
                         search_stats["queries_detail"].append(query_stats)
                         
                         # Update DiscoveryQuery record
                         discovery_query.status = "failed"
-                        discovery_query.error_message = str(e)
+                        discovery_query.error_message = error_str
                         await safe_commit(db, f"updating discovery_query {discovery_query.id} status to failed (exception)")
                         continue
                 

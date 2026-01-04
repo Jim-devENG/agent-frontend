@@ -237,18 +237,27 @@ class DataForSEOClient:
             
             payload = self._build_payload(payload_obj)
             
-            # Log exact payload being sent
+            # DEFENSIVE LOGGING: Log final payload before sending
             payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
-            logger.info(f"🔵 DataForSEO Request #{self._request_count}")
+            logger.info(f"🔵 [DATAFORSEO REQUEST #{self._request_count}]")
             logger.info(f"🔵 Endpoint: {self.BASE_URL}/serp/google/organic/task_post")
             logger.info(f"🔵 Payload (exact JSON):\n{payload_json}")
-            logger.info(f"🔵 Keyword: '{keyword}', Location: {location_code}, Language: '{language_code}', Device: '{device}'")
+            logger.info(f"🔵 Parameters - Keyword: '{keyword}', Location Code: {location_code}, Language: '{language_code}', Device: '{device}'")
             
             url = f"{self.BASE_URL}/serp/google/organic/task_post"
             
             # Rate limiting: Wait if needed to prevent cost overruns and API bans
-            limiter = get_rate_limiter()
-            await limiter.wait_if_needed("dataforseo")
+            # WRAPPED IN TRY-EXCEPT to prevent rate limiter bugs from blocking discovery
+            try:
+                limiter = get_rate_limiter()
+                await limiter.wait_if_needed("dataforseo")
+            except Exception as rate_limit_err:
+                # Log but don't fail - allow request to proceed if rate limiter has issues
+                logger.warning(
+                    f"⚠️  [RATE LIMITER] Error in rate limiter (allowing request to proceed): {rate_limit_err}\n"
+                    f"This is likely the 'key_for' bug - rate limiting temporarily disabled for this request",
+                    exc_info=True
+                )
             
             # Store request for diagnostics
             self._last_request = {
@@ -263,6 +272,10 @@ class DataForSEOClient:
             }
             
             async with httpx.AsyncClient(timeout=60.0) as client:
+                # DEFENSIVE LOGGING: Log HTTP request execution
+                logger.info(f"🔵 [HTTP REQUEST] POST {url}")
+                logger.debug(f"🔵 [HTTP HEADERS] {json.dumps(dict(self.headers), indent=2)}")
+                
                 # Send using json parameter (httpx handles encoding and Content-Type)
                 response = await client.post(
                     url,
@@ -270,20 +283,29 @@ class DataForSEOClient:
                     json=payload  # httpx will serialize this correctly
                 )
                 
+                # DEFENSIVE LOGGING: Log HTTP response status
+                logger.info(f"🔵 [HTTP RESPONSE] Status: {response.status_code}")
+                logger.debug(f"🔵 [HTTP RESPONSE] Headers: {json.dumps(dict(response.headers), indent=2)}")
+                
                 # Parse response
                 try:
                     result = response.json()
                 except Exception as e:
                     error_msg = f"Failed to parse JSON response: {e}"
-                    logger.error(f"🔴 {error_msg}")
-                    logger.error(f"🔴 Response text: {response.text[:500]}")
+                    response_preview = response.text[:500] if response.text else "(empty response)"
+                    logger.error(f"🔴 [PARSE ERROR] {error_msg}")
+                    logger.error(f"🔴 [RESPONSE PREVIEW] {response_preview}")
                     self._error_count += 1
                     self._last_error = error_msg
                     return {"success": False, "error": error_msg}
                 
-                # Log full response
+                # DEFENSIVE LOGGING: Log full response (truncated for production safety)
                 response_json = json.dumps(result, ensure_ascii=False, indent=2)
-                logger.info(f"🔵 DataForSEO Response (full):\n{response_json}")
+                # Truncate very long responses (keep first 2000 chars)
+                if len(response_json) > 2000:
+                    logger.info(f"🔵 [DATAFORSEO RESPONSE] (truncated, {len(response_json)} chars total):\n{response_json[:2000]}...")
+                else:
+                    logger.info(f"🔵 [DATAFORSEO RESPONSE] (full):\n{response_json}")
                 
                 # Store response for diagnostics
                 self._last_response = {
