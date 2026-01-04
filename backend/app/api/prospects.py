@@ -1899,21 +1899,63 @@ async def gemini_chat(
     This is a human-in-the-loop feature - Gemini provides suggestions,
     but the user must manually copy/paste into the draft editor.
     """
+    stage = "init"
     try:
+        logger.info(f"🔵 [GEMINI CHAT] Request received for prospect {prospect_id}")
+        
+        # Stage 1: Prospect lookup
+        stage = "prospect_lookup"
         result = await db.execute(select(Prospect).where(Prospect.id == prospect_id))
         prospect = result.scalar_one_or_none()
         
         if not prospect:
-            raise HTTPException(status_code=404, detail="Prospect not found")
+            logger.warning(f"⚠️  [GEMINI CHAT] Prospect {prospect_id} not found")
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "PROSPECT_NOT_FOUND",
+                    "message": f"Prospect {prospect_id} not found",
+                    "stage": stage
+                }
+            )
         
+        logger.info(f"✅ [GEMINI CHAT] Prospect found: {prospect.domain}")
+        
+        # Stage 2: Gemini client initialization
+        stage = "init"
         from app.clients.gemini import GeminiClient
+        import os
+        
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_api_key:
+            logger.error("❌ [GEMINI CHAT] GEMINI_API_KEY not found in environment")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "GEMINI_CHAT_FAILED",
+                    "message": "Gemini API key not configured. Please set GEMINI_API_KEY environment variable.",
+                    "stage": stage
+                }
+            )
         
         try:
             gemini_client = GeminiClient()
+            if not gemini_client.is_configured():
+                raise ValueError("Gemini client not properly configured")
+            logger.info("✅ [GEMINI CHAT] Gemini client initialized")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Gemini not configured: {e}")
+            logger.error(f"❌ [GEMINI CHAT] Failed to initialize Gemini client: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "GEMINI_CHAT_FAILED",
+                    "message": f"Failed to initialize Gemini client: {str(e)}",
+                    "stage": stage
+                }
+            )
         
-        # Build context for Gemini
+        # Stage 3: Build prompt
+        stage = "prompt"
         context = f"""You are helping refine an outreach email draft for Liquid Canvas (liquidcanvas.art).
 
 PROSPECT INFORMATION:
@@ -1938,6 +1980,10 @@ Provide helpful suggestions to refine the email. You can:
 
 Return a conversational response with your suggestions. If you want to suggest specific text, include it clearly marked."""
         
+        logger.info(f"✅ [GEMINI CHAT] Prompt built ({len(context)} chars)")
+        
+        # Stage 4: API call
+        stage = "api_call"
         url = f"{gemini_client.BASE_URL}/models/gemini-2.0-flash-exp:generateContent?key={gemini_client.api_key}"
         
         payload = {
@@ -1949,27 +1995,111 @@ Return a conversational response with your suggestions. If you want to suggest s
         }
         
         import httpx
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            result = response.json()
-            
-            if result.get("candidates") and len(result["candidates"]) > 0:
-                candidate = result["candidates"][0]
-                if candidate.get("content") and candidate["content"].get("parts"):
-                    parts = candidate["content"]["parts"]
-                    if parts and isinstance(parts, list) and len(parts) > 0:
-                        text_content = parts[0].get("text", "") if isinstance(parts[0], dict) else ""
-                        
-                        return GeminiChatResponse(
-                            success=True,
-                            response=text_content
-                        )
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                logger.info(f"🔵 [GEMINI CHAT] Calling Gemini API: {url[:80]}...")
+                response = await client.post(url, json=payload)
+                logger.info(f"🔵 [GEMINI CHAT] Response status: {response.status_code}")
+                
+                if response.status_code != 200:
+                    error_text = response.text[:500] if response.text else "No error details"
+                    logger.error(f"❌ [GEMINI CHAT] Gemini API returned {response.status_code}: {error_text}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail={
+                            "error": "GEMINI_CHAT_FAILED",
+                            "message": f"Gemini API returned status {response.status_code}: {error_text}",
+                            "stage": stage
+                        }
+                    )
+                
+                result = response.json()
+                logger.info(f"✅ [GEMINI CHAT] Gemini API call successful")
+        except httpx.TimeoutException:
+            logger.error("❌ [GEMINI CHAT] Gemini API call timed out")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "GEMINI_CHAT_FAILED",
+                    "message": "Gemini API call timed out after 30 seconds",
+                    "stage": stage
+                }
+            )
+        except httpx.RequestError as e:
+            logger.error(f"❌ [GEMINI CHAT] Network error calling Gemini API: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "GEMINI_CHAT_FAILED",
+                    "message": f"Network error calling Gemini API: {str(e)}",
+                    "stage": stage
+                }
+            )
         
-        raise HTTPException(status_code=500, detail="Failed to get response from Gemini")
+        # Stage 5: Parse response
+        stage = "response"
+        if not result.get("candidates") or len(result["candidates"]) == 0:
+            logger.error(f"❌ [GEMINI CHAT] No candidates in Gemini response: {result}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "GEMINI_CHAT_FAILED",
+                    "message": "Gemini API returned no candidates in response",
+                    "stage": stage
+                }
+            )
+        
+        candidate = result["candidates"][0]
+        if not candidate.get("content") or not candidate["content"].get("parts"):
+            logger.error(f"❌ [GEMINI CHAT] Invalid candidate structure: {candidate}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "GEMINI_CHAT_FAILED",
+                    "message": "Gemini API returned invalid response structure",
+                    "stage": stage
+                }
+            )
+        
+        parts = candidate["content"]["parts"]
+        if not parts or not isinstance(parts, list) or len(parts) == 0:
+            logger.error(f"❌ [GEMINI CHAT] No parts in candidate: {parts}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "GEMINI_CHAT_FAILED",
+                    "message": "Gemini API returned no content parts",
+                    "stage": stage
+                }
+            )
+        
+        text_content = parts[0].get("text", "") if isinstance(parts[0], dict) else ""
+        if not text_content:
+            logger.error(f"❌ [GEMINI CHAT] Empty text content in response")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "GEMINI_CHAT_FAILED",
+                    "message": "Gemini API returned empty response",
+                    "stage": stage
+                }
+            )
+        
+        logger.info(f"✅ [GEMINI CHAT] Successfully generated response ({len(text_content)} chars)")
+        return GeminiChatResponse(
+            success=True,
+            response=text_content
+        )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ [GEMINI CHAT] Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to chat with Gemini: {str(e)}")
+        logger.error(f"❌ [GEMINI CHAT] Unexpected error at stage '{stage}': {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "GEMINI_CHAT_FAILED",
+                "message": f"Unexpected error: {str(e)}",
+                "stage": stage
+            }
+        )
