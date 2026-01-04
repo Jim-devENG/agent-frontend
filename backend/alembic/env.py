@@ -33,7 +33,7 @@ try:
     sqlalchemy.ext.asyncio.create_async_engine = _mock_create_async_engine
     
     # Now import Base and models - engine creation will be mocked
-from app.db.database import Base
+    from app.db.database import Base
     # Import all models so Alembic can detect them for migrations
     from app.models import Prospect, Job, EmailLog, Settings, DiscoveryQuery, ScraperHistory
     from app.models.social import SocialProfile, SocialDiscoveryJob, SocialDraft, SocialMessage

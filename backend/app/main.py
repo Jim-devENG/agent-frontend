@@ -350,7 +350,7 @@ async def startup():
                         
                         try:
                             await conn.execute(text(alter_sql))
-                            await conn.commit()
+                            # Note: engine.begin() auto-commits on exit, no manual commit needed
                             logger.info("✅ Automatic schema fix applied successfully")
                             logger.info(f"✅ Added {len(missing_columns)} columns to prospects table")
                             
