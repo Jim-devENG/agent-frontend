@@ -236,6 +236,44 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     setDraftBody('')
   }
 
+  const handleSaveDraft = async () => {
+    if (!activeProspect) return
+
+    try {
+      // Update draft directly (manual editing)
+      await updateProspectDraft(activeProspect.id, {
+        subject: draftSubject,
+        body: draftBody
+      })
+      await loadProspects()
+      // Update active prospect state
+      setActiveProspect({
+        ...activeProspect,
+        draft_subject: draftSubject,
+        draft_body: draftBody
+      })
+      // Trigger pipeline status refresh
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('refreshPipelineStatus'))
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to save draft')
+    }
+  }
+
+  const handleDraftAdopted = (subject: string, body: string) => {
+    setDraftSubject(subject)
+    setDraftBody(body)
+    if (activeProspect) {
+      // Update the active prospect's draft fields
+      setActiveProspect({
+        ...activeProspect,
+        draft_subject: subject,
+        draft_body: body
+      })
+    }
+  }
+
   const handleSendNow = async () => {
     if (!activeProspect) return
     
