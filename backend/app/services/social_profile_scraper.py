@@ -123,6 +123,79 @@ async def scrape_linkedin_profile(profile_url: str) -> Dict[str, Any]:
         return {"success": False, "error": str(e)}
 
 
+async def scrape_instagram_profile(profile_url: str) -> Dict[str, Any]:
+    """
+    Scrape Instagram profile to extract follower count, engagement, and email.
+    Uses the same simple HTTP approach as TikTok scraping.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            }
+            
+            response = await client.get(profile_url, headers=headers)
+            response.raise_for_status()
+            html = response.text
+            
+            result = {
+                "follower_count": None,
+                "engagement_rate": None,
+                "email": None,
+                "success": True,
+                "error": None
+            }
+            
+            # Extract follower count - same patterns as TikTok
+            follower_patterns = [
+                r'"edge_followed_by":\{"count":(\d+)\}',
+                r'"follower_count":(\d+)',
+                r'"userInteractionCount":(\d+)',
+                r'(\d+(?:,\d+)*)\s*followers?',
+            ]
+            
+            for pattern in follower_patterns:
+                matches = re.findall(pattern, html, re.IGNORECASE)
+                if matches:
+                    try:
+                        count_str = matches[0].replace(',', '')
+                        result["follower_count"] = int(count_str)
+                        logger.info(f"✅ [INSTAGRAM SCRAPE] Found follower count: {result['follower_count']}")
+                        break
+                    except (ValueError, IndexError):
+                        continue
+            
+            # Extract email from bio - same as TikTok
+            email_patterns = [
+                r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
+                r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
+            ]
+            
+            for pattern in email_patterns:
+                matches = re.findall(pattern, html)
+                for match in matches:
+                    email = match.lower().strip()
+                    if is_plausible_email(email) and 'instagram.com' not in email:
+                        result["email"] = email
+                        logger.info(f"✅ [INSTAGRAM SCRAPE] Found email: {email}")
+                        break
+                if result["email"]:
+                    break
+            
+            # Estimate engagement rate - same as TikTok
+            if result["follower_count"]:
+                result["engagement_rate"] = 2.5  # Default estimate for Instagram
+                logger.info(f"📊 [INSTAGRAM SCRAPE] Estimated engagement rate: {result['engagement_rate']}%")
+            else:
+                # Set default even if follower count not found
+                result["engagement_rate"] = 2.5
+                logger.info(f"📊 [INSTAGRAM SCRAPE] Using default engagement rate: {result['engagement_rate']}%")
+            
+            return result
+            
+    except Exception as e:
+        logger.error(f"❌ [INSTAGRAM SCRAPE] Error scraping {profile_url}: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
 
 
 async def scrape_facebook_profile(profile_url: str) -> Dict[str, Any]:
@@ -251,10 +324,14 @@ async def scrape_tiktok_profile(profile_url: str) -> Dict[str, Any]:
                 if result["email"]:
                     break
             
-            # Estimate engagement rate
+            # Estimate engagement rate - always set it
             if result["follower_count"]:
                 result["engagement_rate"] = 3.5  # Default estimate for TikTok
                 logger.info(f"📊 [TIKTOK SCRAPE] Estimated engagement rate: {result['engagement_rate']}%")
+            else:
+                # Set default even if follower count not found
+                result["engagement_rate"] = 3.5
+                logger.info(f"📊 [TIKTOK SCRAPE] Using default engagement rate: {result['engagement_rate']}%")
             
             return result
             
