@@ -137,6 +137,7 @@ export default function SocialDiscovery() {
       const socialJobs = allJobs.filter((job: Job) => 
         job.job_type?.includes('social') || 
         job.job_type === 'social_discover' ||
+        job.job_type === 'social_scrape' ||
         job.job_type === 'social_draft' ||
         job.job_type === 'social_send'
       )

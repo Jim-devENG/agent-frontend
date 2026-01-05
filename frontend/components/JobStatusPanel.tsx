@@ -380,14 +380,22 @@ export default function JobStatusPanel({ jobs, expanded = false, onRefresh }: Jo
                 {job.error_message && (
                   <p className="text-sm text-red-600 mt-2">{job.error_message}</p>
                 )}
-                {isExpanded && renderDiscoveryJobDetails(job)}
-                {!isExpanded && job.result && (job.job_type === 'discover' || job.job_type === 'social_discover') && (
-                  <button
-                    onClick={() => toggleJob(job.id)}
-                    className="text-xs text-blue-600 hover:text-blue-800 mt-2"
-                  >
-                    Click to view detailed statistics
-                  </button>
+                {isExpanded && (
+                  <>
+                    {renderDiscoveryJobDetails(job)}
+                    {renderScrapingJobDetails(job)}
+                  </>
+                )}
+                {!isExpanded && job.result && (
+                  (job.job_type === 'discover' || job.job_type === 'social_discover' || 
+                   job.job_type === 'scrape' || job.job_type === 'social_scrape') && (
+                    <button
+                      onClick={() => toggleJob(job.id)}
+                      className="text-xs text-blue-600 hover:text-blue-800 mt-2"
+                    >
+                      Click to view detailed statistics
+                    </button>
+                  )
                 )}
               </div>
             )
