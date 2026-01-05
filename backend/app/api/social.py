@@ -227,18 +227,26 @@ async def list_profiles(
             # Special handling for 'discovered' and 'leads' statuses
             if discovery_status.lower() == 'discovered':
                 # Show only PENDING profiles (needs accept/reject)
+                # Also include NULL approval_status (treat as PENDING)
                 query = query.where(
                     and_(
                         Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value,
-                        Prospect.approval_status == 'PENDING'
+                        or_(
+                            Prospect.approval_status == 'PENDING',
+                            Prospect.approval_status.is_(None)  # NULL means not yet reviewed
+                        )
                     )
                 )
                 count_query = count_query.where(
                     and_(
                         Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value,
-                        Prospect.approval_status == 'PENDING'
+                        or_(
+                            Prospect.approval_status == 'PENDING',
+                            Prospect.approval_status.is_(None)  # NULL means not yet reviewed
+                        )
                     )
                 )
+                logger.info(f"📊 [SOCIAL PROFILES] Filtering for Discovered: approval_status IN ('PENDING', NULL)")
             elif discovery_status.lower() == 'leads' or discovery_status.lower() == 'approved':
                 # Show only approved profiles (Social Leads)
                 # Use case-insensitive comparison with func.lower() for PostgreSQL compatibility
@@ -332,6 +340,19 @@ async def list_profiles(
             sample_result = await db.execute(sample_query)
             samples = [{"id": str(row[0]), "username": row[1], "approval_status": row[2], "discovery_status": row[3]} for row in sample_result.fetchall()]
             logger.warning(f"🔍 [SOCIAL PROFILES DEBUG] Sample DISCOVERED profiles: {samples}")
+            
+            # If discovery_status is 'discovered', also check PENDING count
+            if discovery_status.lower() == 'discovered':
+                pending_query = text("""
+                    SELECT COUNT(*) as count
+                    FROM prospects
+                    WHERE source_type = 'social'
+                    AND discovery_status = 'DISCOVERED'
+                    AND (approval_status = 'PENDING' OR approval_status IS NULL)
+                """)
+                pending_result = await db.execute(pending_query)
+                pending_count = pending_result.scalar() or 0
+                logger.warning(f"🔍 [SOCIAL PROFILES DEBUG] Profiles matching Discovered query (PENDING or NULL): {pending_count}")
         
         # Get paginated results
         query = query.order_by(Prospect.created_at.desc()).offset(skip).limit(limit)
