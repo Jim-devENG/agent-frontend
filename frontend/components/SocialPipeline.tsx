@@ -10,7 +10,9 @@ import {
   sendSocialProfiles,
   createSocialFollowupsPipeline,
   isMasterSwitchEnabled,
-  type SocialPipelineStatus
+  listJobs,
+  type SocialPipelineStatus,
+  type Job
 } from '@/lib/api'
 
 interface StepCard {
@@ -35,6 +37,8 @@ export default function SocialPipeline() {
   const [discoveryLoading, setDiscoveryLoading] = useState(false)
   const [masterSwitchEnabled, setMasterSwitchEnabled] = useState(false)
   const [latestDiscoveryJobId, setLatestDiscoveryJobId] = useState<string | null>(null)
+  // Track the last social discovery job ID that we've already processed/reset for
+  const [lastProcessedDiscoveryJobId, setLastProcessedDiscoveryJobId] = useState<string | null>(null)
 
   // Check master switch status
   useEffect(() => {
@@ -80,23 +84,69 @@ export default function SocialPipeline() {
     }
   }
 
+  const loadSocialDiscoveryJobs = async (checkForNewJob: boolean = true) => {
+    try {
+      const jobs = await listJobs(0, 50)
+      const socialDiscoveryJobs = jobs.filter((j: Job) => j.job_type === 'social_discover')
+      
+      // Only check for new jobs if explicitly requested (not on network refreshes)
+      if (!checkForNewJob) {
+        return
+      }
+      
+      // Track latest social discovery job to detect new discovery runs
+      if (socialDiscoveryJobs.length > 0) {
+        const latestJob = socialDiscoveryJobs.sort((a: Job, b: Job) => {
+          const dateA = new Date(a.created_at || 0).getTime()
+          const dateB = new Date(b.created_at || 0).getTime()
+          return dateB - dateA
+        })[0]
+        
+        // Only reset if this is a truly NEW job that we haven't processed yet
+        // Compare against lastProcessedDiscoveryJobId, not latestDiscoveryJobId
+        if (latestJob.id && latestJob.id !== lastProcessedDiscoveryJobId) {
+          // Update both tracking states immediately to prevent repeated resets
+          setLatestDiscoveryJobId(latestJob.id)
+          setLastProcessedDiscoveryJobId(latestJob.id)
+          // Reset pipeline state by reloading status
+          // This ensures buttons are re-enabled based on current data
+          console.log('🔄 New social discovery detected, resetting pipeline state', latestJob.id)
+          loadStatus()
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load social discovery jobs:', err)
+    }
+  }
+
   useEffect(() => {
     let abortController = new AbortController()
     
     // Initial load only - no polling
     loadStatus()
+    // On initial load, check for new jobs
+    loadSocialDiscoveryJobs(true)
     
     // Listen for manual refresh requests
+    // Do NOT check for new jobs on refresh - only refresh status
     const handleRefresh = () => {
       loadStatus()
+      // Load jobs list but don't check for new jobs (prevents false resets)
+      loadSocialDiscoveryJobs(false)
     }
     
     // Listen for discovery completion to reset pipeline state
     // Only reset if we have a confirmed new job ID
     const handleDiscoveryCompleted = () => {
       console.log('🔄 Social discovery completed event received...')
-      // Reload status - discovery completion handler will handle job ID tracking
-      loadStatus()
+      // Load discovery jobs to check for new job ID
+      // Pass true to check for new jobs
+      loadSocialDiscoveryJobs(true).then(() => {
+        // Status will be reloaded by loadSocialDiscoveryJobs if new job detected
+      }).catch(err => {
+        console.error('Failed to load social discovery jobs after discovery completed:', err)
+        // Don't reset state on error - treat as false positive
+      })
     }
     
     if (typeof window !== 'undefined') {

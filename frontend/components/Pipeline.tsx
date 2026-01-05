@@ -38,6 +38,8 @@ export default function Pipeline() {
   const [discoveryJobs, setDiscoveryJobs] = useState<Job[]>([])
   const [masterSwitchEnabled, setMasterSwitchEnabled] = useState(false)
   const [latestDiscoveryJobId, setLatestDiscoveryJobId] = useState<string | null>(null)
+  // Track the last discovery job ID that we've already processed/reset for
+  const [lastProcessedDiscoveryJobId, setLastProcessedDiscoveryJobId] = useState<string | null>(null)
 
   // Check master switch status
   useEffect(() => {
@@ -75,11 +77,16 @@ export default function Pipeline() {
     }
   }
 
-  const loadDiscoveryJobs = async () => {
+  const loadDiscoveryJobs = async (checkForNewJob: boolean = true) => {
     try {
       const jobs = await listJobs(0, 50)
       const discoveryJobsList = jobs.filter((j: Job) => j.job_type === 'discover')
       setDiscoveryJobs(discoveryJobsList)
+      
+      // Only check for new jobs if explicitly requested (not on network refreshes)
+      if (!checkForNewJob) {
+        return
+      }
       
       // Track latest discovery job to detect new discovery runs
       if (discoveryJobsList.length > 0) {
@@ -89,12 +96,15 @@ export default function Pipeline() {
           return dateB - dateA
         })[0]
         
-        // If this is a new discovery job, reset pipeline UI state
-        if (latestJob.id && latestJob.id !== latestDiscoveryJobId) {
+        // Only reset if this is a truly NEW job that we haven't processed yet
+        // Compare against lastProcessedDiscoveryJobId, not latestDiscoveryJobId
+        if (latestJob.id && latestJob.id !== lastProcessedDiscoveryJobId) {
+          // Update both tracking states immediately to prevent repeated resets
           setLatestDiscoveryJobId(latestJob.id)
+          setLastProcessedDiscoveryJobId(latestJob.id)
           // Reset pipeline state by reloading status
           // This ensures buttons are re-enabled based on current data
-          console.log('🔄 New discovery detected, resetting pipeline state')
+          console.log('🔄 New discovery detected, resetting pipeline state', latestJob.id)
           loadStatus()
         }
       }
@@ -108,13 +118,16 @@ export default function Pipeline() {
     
     // Initial load only - no polling
     loadStatus()
-    loadDiscoveryJobs()
+    // On initial load, check for new jobs
+    loadDiscoveryJobs(true)
     
     // Listen for manual refresh requests (e.g., after composing email from Leads page)
+    // Do NOT check for new jobs on refresh - only refresh status
     const handleRefreshPipelineStatus = () => {
       console.log('🔄 Pipeline status refresh requested...')
       loadStatus()
-      loadDiscoveryJobs()
+      // Load jobs list but don't check for new jobs (prevents false resets)
+      loadDiscoveryJobs(false)
     }
     
     // Listen for discovery completion to reset pipeline state
@@ -122,7 +135,8 @@ export default function Pipeline() {
     const handleDiscoveryCompleted = () => {
       console.log('🔄 Discovery completed event received...')
       // Load discovery jobs to check for new job ID
-      loadDiscoveryJobs().then(() => {
+      // Pass true to check for new jobs
+      loadDiscoveryJobs(true).then(() => {
         // Status will be reloaded by loadDiscoveryJobs if new job detected
       }).catch(err => {
         console.error('Failed to load discovery jobs after discovery completed:', err)
