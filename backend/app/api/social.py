@@ -387,6 +387,108 @@ async def list_profiles(
 
 
 # ============================================
+# DIAGNOSTIC ENDPOINT
+# ============================================
+
+@router.get("/debug/profiles")
+async def debug_social_profiles(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
+):
+    """
+    Diagnostic endpoint to check database state for social profiles.
+    Returns counts by approval_status, scrape_status, etc.
+    """
+    try:
+        from sqlalchemy import text
+        
+        # Get counts by approval_status
+        approval_status_query = text("""
+            SELECT approval_status, COUNT(*) as count
+            FROM prospects
+            WHERE source_type = 'social'
+            GROUP BY approval_status
+        """)
+        approval_result = await db.execute(approval_status_query)
+        approval_counts = {row[0]: row[1] for row in approval_result.fetchall() if row[0] is not None}
+        null_approval_count = sum(row[1] for row in approval_result.fetchall() if row[0] is None)
+        if null_approval_count > 0:
+            approval_counts['NULL'] = null_approval_count
+        
+        # Get counts by scrape_status
+        scrape_status_query = text("""
+            SELECT scrape_status, COUNT(*) as count
+            FROM prospects
+            WHERE source_type = 'social'
+            GROUP BY scrape_status
+        """)
+        scrape_result = await db.execute(scrape_status_query)
+        scrape_counts = {row[0]: row[1] for row in scrape_result.fetchall() if row[0] is not None}
+        null_scrape_count = sum(row[1] for row in scrape_result.fetchall() if row[0] is None)
+        if null_scrape_count > 0:
+            scrape_counts['NULL'] = null_scrape_count
+        
+        # Get counts by discovery_status
+        discovery_status_query = text("""
+            SELECT discovery_status, COUNT(*) as count
+            FROM prospects
+            WHERE source_type = 'social'
+            GROUP BY discovery_status
+        """)
+        discovery_result = await db.execute(discovery_status_query)
+        discovery_counts = {row[0]: row[1] for row in discovery_result.fetchall() if row[0] is not None}
+        null_discovery_count = sum(row[1] for row in discovery_result.fetchall() if row[0] is None)
+        if null_discovery_count > 0:
+            discovery_counts['NULL'] = null_discovery_count
+        
+        # Get sample approved profiles
+        sample_query = text("""
+            SELECT id, username, approval_status, discovery_status, scrape_status, follower_count
+            FROM prospects
+            WHERE source_type = 'social'
+            AND discovery_status = 'DISCOVERED'
+            AND (approval_status = 'approved' OR approval_status = 'APPROVED' OR LOWER(approval_status) = 'approved')
+            LIMIT 5
+        """)
+        sample_result = await db.execute(sample_query)
+        sample_profiles = [
+            {
+                "id": str(row[0]),
+                "username": row[1],
+                "approval_status": row[2],
+                "discovery_status": row[3],
+                "scrape_status": row[4],
+                "follower_count": row[5],
+            }
+            for row in sample_result.fetchall()
+        ]
+        
+        # Count profiles that should appear in Social Leads
+        social_leads_query = text("""
+            SELECT COUNT(*) as count
+            FROM prospects
+            WHERE source_type = 'social'
+            AND discovery_status = 'DISCOVERED'
+            AND approval_status IS NOT NULL
+            AND LOWER(approval_status) = 'approved'
+        """)
+        social_leads_result = await db.execute(social_leads_query)
+        social_leads_count = social_leads_result.scalar() or 0
+        
+        return {
+            "approval_status_counts": approval_counts,
+            "scrape_status_counts": scrape_counts,
+            "discovery_status_counts": discovery_counts,
+            "sample_approved_profiles": sample_profiles,
+            "social_leads_count": social_leads_count,
+            "total_social_profiles": sum(approval_counts.values()) if approval_counts else 0
+        }
+    except Exception as e:
+        logger.error(f"❌ [SOCIAL DEBUG] Error: {e}", exc_info=True)
+        return {"error": str(e)}
+
+
+# ============================================
 # STATS
 # ============================================
 
