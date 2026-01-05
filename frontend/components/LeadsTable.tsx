@@ -240,6 +240,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
     if (!activeProspect) return
 
     try {
+      setError(null)
       // Update draft directly (manual editing)
       await updateProspectDraft(activeProspect.id, {
         subject: draftSubject,
@@ -256,7 +257,11 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('refreshPipelineStatus'))
       }
+      // Show success message
+      setError('✅ Draft saved successfully!')
+      setTimeout(() => setError(null), 3000)
     } catch (err: any) {
+      console.error('Failed to save draft:', err)
       setError(err.message || 'Failed to save draft')
     }
   }
@@ -914,7 +919,7 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
       {/* Compose / Review Modal */}
       {activeProspect && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="glass rounded-3xl shadow-2xl w-full max-w-4xl max-height-[85vh] max-h-[85vh] overflow-hidden flex flex-col border border-white/20 animate-scale-in">
+          <div className="glass rounded-3xl shadow-2xl w-full max-w-7xl max-height-[90vh] max-h-[90vh] overflow-hidden flex flex-col border border-white/20 animate-scale-in">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200/50 bg-gradient-to-r from-liquid-50/50 to-purple-50/30">
               <div>
                 <h3 className="text-xl font-bold liquid-gradient-text">

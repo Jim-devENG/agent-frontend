@@ -29,6 +29,39 @@ export default function GeminiChatPanel({ prospectId, currentSubject, currentBod
   const [savingDraft, setSavingDraft] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // Load chat history from localStorage on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    const storageKey = `gemini_chat_${prospectId}`
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const parsedMessages = JSON.parse(saved)
+        // Convert timestamp strings back to Date objects
+        const restoredMessages: ChatMessage[] = parsedMessages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }))
+        setMessages(restoredMessages)
+      }
+    } catch (error) {
+      console.error('Failed to load chat history:', error)
+    }
+  }, [prospectId])
+
+  // Save chat history to localStorage whenever messages change
+  useEffect(() => {
+    if (typeof window === 'undefined' || messages.length === 0) return
+    
+    const storageKey = `gemini_chat_${prospectId}`
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(messages))
+    } catch (error) {
+      console.error('Failed to save chat history:', error)
+    }
+  }, [messages, prospectId])
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
