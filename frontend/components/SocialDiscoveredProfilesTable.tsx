@@ -76,11 +76,33 @@ export default function SocialDiscoveredProfilesTable() {
     try {
       await reviewSocialProfiles(Array.from(selected), 'qualify')
       setSelected(new Set())
+      
+      // Initial refresh
       await loadProfiles()
+      
       // Refresh pipeline status
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('refreshSocialPipelineStatus'))
       }
+      
+      // Poll for updates (scraping happens in background)
+      // Refresh every 2 seconds for up to 30 seconds to catch scraping updates
+      let pollCount = 0
+      const maxPolls = 15 // 15 * 2 seconds = 30 seconds
+      const pollInterval = setInterval(async () => {
+        pollCount++
+        await loadProfiles()
+        
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval)
+        }
+      }, 2000) // Poll every 2 seconds
+      
+      // Clear interval after 30 seconds
+      setTimeout(() => {
+        clearInterval(pollInterval)
+      }, 30000)
+      
     } catch (err: any) {
       setError(err.message || 'Failed to accept profiles')
     } finally {
