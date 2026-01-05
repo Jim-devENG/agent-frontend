@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Mail, ExternalLink, RefreshCw, Send, X, Loader2, Users, Globe, CheckCircle, Eye, Edit2, Download } from 'lucide-react'
-import { listLeads, listScrapedEmails, promoteToLead, composeEmail, sendEmail, manualScrape, manualVerify, updateProspectCategory, autoCategorizeAll, exportLeadsCSV, exportScrapedEmailsCSV, type Prospect } from '@/lib/api'
+import { listLeads, listScrapedEmails, promoteToLead, composeEmail, sendEmail, updateProspectDraft, manualScrape, manualVerify, updateProspectCategory, autoCategorizeAll, exportLeadsCSV, exportScrapedEmailsCSV, type Prospect } from '@/lib/api'
 import GeminiChatPanel from '@/components/GeminiChatPanel'
 import { safeToFixed } from '@/lib/safe-utils'
 
@@ -980,99 +980,54 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                   </div>
                 </>
               ) : (
-                <div className="flex-1 p-4">
-                  {/* Email Preview - styled like Gmail */}
-                  <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-                    {/* Email Header */}
-                    <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="text-sm font-semibold text-gray-900 mb-1">
-                            {draftSubject || '(No subject)'}
-                          </div>
-                          <div className="text-xs text-gray-600 space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-medium">From:</span>
-                              <span>Your Email (via Gmail)</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className="font-medium">To:</span>
-                              <span>{activeProspect.contact_email}</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className="font-medium">Date:</span>
-                              <span>{new Date().toLocaleString()}</span>
-                            </div>
-                          </div>
-                        </div>
+                  <div className="flex-1 overflow-y-auto p-4">
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Subject:</h4>
+                        <p className="text-sm text-gray-900">{draftSubject || '(No subject)'}</p>
                       </div>
-                    </div>
-                    
-                    {/* Email Body */}
-                    <div className="px-4 py-6">
-                      <div className="prose prose-sm max-w-none">
-                        <div 
-                          className="text-gray-900 whitespace-pre-wrap leading-relaxed"
-                          style={{ 
-                            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                            lineHeight: '1.6'
-                          }}
-                        >
-                          {draftBody || (
-                            <span className="text-gray-400 italic">No message content yet. Switch to Edit tab to compose.</span>
-                          )}
-                        </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Body:</h4>
+                        <div className="text-sm text-gray-900 whitespace-pre-wrap">{draftBody || '(No body)'}</div>
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Preview Info */}
-                  <div className="mt-4 p-4 bg-gradient-to-r from-liquid-50 to-purple-50 border-2 border-liquid-200 rounded-xl shadow-sm">
-                    <p className="text-xs text-gray-700 font-medium">
-                      <strong className="liquid-gradient-text">Preview:</strong> This is how your email will appear to the recipient. 
-                      The actual email will be sent via Gmail API.
-                    </p>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
-            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200/50 bg-gradient-to-r from-gray-50/50 to-white/50">
-              <p className="text-xs text-gray-600 font-medium">
-                {activeProspect.draft_subject && activeProspect.draft_body
-                  ? '✨ Review and send your drafted email, or send via Pipeline.'
-                  : '📝 This is a DRAFT ONLY. To send emails, use the Pipeline → Send card.'}
-              </p>
-              <div className="flex items-center space-x-3">
+            <div className="border-t p-4 flex items-center justify-end gap-2">
+              <button
+                onClick={closeComposeModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveDraft}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+              >
+                Save Draft
+              </button>
+              {draftSubject && draftBody && (
                 <button
-                  onClick={closeComposeModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 glass hover:bg-white/80 rounded-xl transition-all duration-200 hover:shadow-md"
+                  onClick={handleSendNow}
+                  disabled={isSending}
+                  className="px-4 py-2 text-sm font-medium text-white bg-olive-600 rounded-lg hover:bg-olive-700 disabled:opacity-50 flex items-center gap-2"
                 >
-                  Close
+                  {isSending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Send
+                    </>
+                  )}
                 </button>
-                {activeProspect.draft_subject && activeProspect.draft_body && (
-                  <button
-                    onClick={handleSendNow}
-                    disabled={isSending}
-                    className="flex items-center space-x-2 px-5 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-xl hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg"
-                  >
-                    <Send className="w-4 h-4" />
-                    <span>{isSending ? 'Sending...' : 'Send Now'}</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    // Navigate to Pipeline tab to use Send card
-                    const event = new CustomEvent('change-tab', { detail: 'pipeline' })
-                    window.dispatchEvent(event)
-                    closeComposeModal()
-                  }}
-                  className="flex items-center space-x-2 px-5 py-2 liquid-gradient text-white rounded-xl hover:shadow-xl hover:scale-105 transition-all duration-200 font-semibold shadow-lg"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>Go to Pipeline</span>
-                </button>
-              </div>
+              )}
             </div>
           </div>
         </div>

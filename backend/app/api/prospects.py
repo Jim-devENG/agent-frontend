@@ -1379,6 +1379,48 @@ async def get_prospect(
     return ProspectResponse(**response_dict)
 
 
+@router.put("/{prospect_id}/draft")
+async def update_prospect_draft(
+    prospect_id: UUID,
+    draft: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
+):
+    """
+    Update draft for a website prospect.
+    
+    Allows manual editing of draft_subject and draft_body.
+    """
+    try:
+        result = await db.execute(
+            select(Prospect).where(Prospect.id == prospect_id)
+        )
+        prospect = result.scalar_one_or_none()
+        
+        if not prospect:
+            raise HTTPException(status_code=404, detail="Prospect not found")
+        
+        if 'subject' in draft:
+            prospect.draft_subject = draft['subject']
+        if 'body' in draft:
+            prospect.draft_body = draft['body']
+        
+        prospect.draft_status = 'drafted'
+        
+        await db.commit()
+        
+        return {
+            "success": True,
+            "message": "Draft updated successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ [DRAFT UPDATE] Error: {e}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update draft: {str(e)}")
+
+
 @router.post("/{prospect_id}/compose", response_model=ComposeResponse)
 async def compose_email(
     prospect_id: UUID,

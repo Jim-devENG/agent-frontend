@@ -761,6 +761,18 @@ export async function composeEmail(prospectId: string): Promise<{
   return res.json()
 }
 
+export async function updateProspectDraft(prospectId: string, draft: { subject?: string; body?: string }): Promise<{ success: boolean; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/prospects/${prospectId}/draft`, {
+    method: 'PUT',
+    body: JSON.stringify(draft),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to update draft' }))
+    throw new Error(error.detail || 'Failed to update draft')
+  }
+  return res.json()
+}
+
 export async function sendEmail(
   prospectId: string
 ): Promise<{
