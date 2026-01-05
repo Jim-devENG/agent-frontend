@@ -1860,7 +1860,13 @@ export async function geminiChat(request: GeminiChatRequest): Promise<GeminiChat
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to chat with Gemini' }))
-    throw new Error(error.detail || 'Failed to chat with Gemini')
+    // Handle structured error response: {error, message, stage} or simple {detail}
+    const errorMessage = typeof error.detail === 'object' && error.detail?.message
+      ? error.detail.message
+      : typeof error.detail === 'string'
+      ? error.detail
+      : error.message || 'Failed to chat with Gemini'
+    throw new Error(errorMessage)
   }
   return await res.json()
 }

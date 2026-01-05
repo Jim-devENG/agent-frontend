@@ -66,9 +66,19 @@ export default function GeminiChatPanel({ prospectId, currentSubject, currentBod
         onSuggestion?.(response.suggested_subject, response.suggested_body)
       }
     } catch (error: any) {
+      // Extract error message properly - handle both Error objects and string errors
+      let errorText = 'Failed to get response from Gemini'
+      if (error instanceof Error) {
+        errorText = error.message
+      } else if (typeof error === 'string') {
+        errorText = error
+      } else if (error?.message) {
+        errorText = error.message
+      }
+      
       const errorMessage: ChatMessage = {
         role: 'assistant',
-        content: `Error: ${error.message || 'Failed to get response from Gemini'}`,
+        content: `Error: ${errorText}`,
         timestamp: new Date()
       }
       setMessages(prev => [...prev, errorMessage])
