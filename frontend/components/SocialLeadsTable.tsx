@@ -140,15 +140,15 @@ export default function SocialLeadsTable() {
     }
   }
 
-  const handleDraftAdopted = (candidateDraft: { subject: string; body: string }) => {
-    setDraftSubject(candidateDraft.subject)
-    setDraftBody(candidateDraft.body)
+  const handleDraftAdopted = (subject: string, body: string) => {
+    setDraftSubject(subject)
+    setDraftBody(body)
     if (activeProspect) {
       // Update the active prospect's draft fields
       setActiveProspect({
         ...activeProspect,
-        draft_subject: candidateDraft.subject,
-        draft_body: candidateDraft.body
+        draft_subject: subject,
+        draft_body: body
       })
     }
   }
@@ -373,7 +373,8 @@ export default function SocialLeadsTable() {
               <div className="w-1/3 border-r flex flex-col">
                 <GeminiChatPanel
                   prospectId={activeProspect.id}
-                  currentDraft={{ subject: draftSubject, body: draftBody }}
+                  currentSubject={draftSubject}
+                  currentBody={draftBody}
                   onDraftAdopted={handleDraftAdopted}
                 />
               </div>
