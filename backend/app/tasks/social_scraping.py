@@ -132,14 +132,29 @@ async def scrape_social_profiles_async(job_id: str) -> dict:
                         # Update prospect with real data
                         updated = False
                         
+                        # Always update engagement_rate if provided (even if None, use default)
+                        if scrape_result.get("engagement_rate") is not None:
+                            prospect.engagement_rate = scrape_result["engagement_rate"]
+                            updated = True
+                        elif prospect.engagement_rate is None:
+                            # Set default engagement rate if not set
+                            platform_defaults = {
+                                'linkedin': 1.5,
+                                'instagram': 2.5,
+                                'facebook': 2.0,
+                                'tiktok': 3.5
+                            }
+                            default_rate = platform_defaults.get(prospect.source_platform.lower(), 2.0)
+                            prospect.engagement_rate = default_rate
+                            updated = True
+                            logger.info(f"📊 [SOCIAL SCRAPING] Set default engagement rate {default_rate}% for {prospect.source_platform}")
+                        
+                        # Update follower_count if found
                         if scrape_result.get("follower_count"):
                             prospect.follower_count = scrape_result["follower_count"]
                             updated = True
                         
-                        if scrape_result.get("engagement_rate"):
-                            prospect.engagement_rate = scrape_result["engagement_rate"]
-                            updated = True
-                        
+                        # Update email if found
                         if scrape_result.get("email"):
                             prospect.contact_email = scrape_result["email"]
                             prospect.contact_method = "profile_scraping"
@@ -147,7 +162,9 @@ async def scrape_social_profiles_async(job_id: str) -> dict:
                             profiles_with_emails += 1
                             updated = True
                         else:
-                            prospect.scrape_status = "NO_EMAIL_FOUND"
+                            # Mark as scraped even if no email found
+                            if prospect.scrape_status in ['DISCOVERED', None]:
+                                prospect.scrape_status = "NO_EMAIL_FOUND"
                             profiles_without_emails += 1
                             updated = True
                         
@@ -156,8 +173,8 @@ async def scrape_social_profiles_async(job_id: str) -> dict:
                             profiles_scraped += 1
                             logger.info(
                                 f"✅ [SOCIAL SCRAPING] Updated profile {prospect.id}: "
-                                f"followers={prospect.follower_count}, "
-                                f"engagement={prospect.engagement_rate}, "
+                                f"followers={prospect.follower_count or 'N/A'}, "
+                                f"engagement={prospect.engagement_rate or 'N/A'}%, "
                                 f"email={'found' if prospect.contact_email else 'not found'}"
                             )
                     else:
