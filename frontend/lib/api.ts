@@ -1553,11 +1553,11 @@ export async function listSocialProfiles(
   skip: number = 0,
   limit: number = 50,
   platform?: string,
-  qualification_status?: string
+  discovery_status?: string
 ): Promise<SocialProfileListResponse> {
   const params = new URLSearchParams({ skip: skip.toString(), limit: limit.toString() })
   if (platform) params.append('platform', platform)
-  if (qualification_status) params.append('qualification_status', qualification_status)
+  if (discovery_status) params.append('discovery_status', discovery_status)
   
   const res = await authenticatedFetch(`${API_BASE}/social/profiles?${params.toString()}`)
   if (!res.ok) {
@@ -1731,6 +1731,18 @@ export async function createSocialFollowupsPipeline(profile_ids?: string[]): Pro
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to create followups' }))
     throw new Error(error.detail || 'Failed to create followups')
+  }
+  return res.json()
+}
+
+export async function updateSocialProfileDraft(profileId: string, draft: { subject?: string; body?: string }): Promise<{ success: boolean; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/social/profiles/${profileId}/draft`, {
+    method: 'PUT',
+    body: JSON.stringify(draft),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to update draft' }))
+    throw new Error(error.detail || 'Failed to update draft')
   }
   return res.json()
 }

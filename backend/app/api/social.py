@@ -1137,3 +1137,59 @@ async def export_sent_csv(
     except Exception as e:
         logger.error(f"❌ [CSV EXPORT SENT] Error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to export sent CSV: {str(e)}")
+
+
+# ============================================
+# DRAFT UPDATE
+# ============================================
+
+class DraftUpdateRequest(BaseModel):
+    subject: Optional[str] = None
+    body: Optional[str] = None
+
+
+@router.put("/profiles/{profile_id}/draft")
+async def update_profile_draft(
+    profile_id: UUID,
+    draft: DraftUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
+):
+    """
+    Update draft for a social profile.
+    
+    Allows manual editing of draft_subject and draft_body.
+    """
+    try:
+        result = await db.execute(
+            select(Prospect).where(
+                and_(
+                    Prospect.id == profile_id,
+                    Prospect.source_type == 'social'
+                )
+            )
+        )
+        prospect = result.scalar_one_or_none()
+        
+        if not prospect:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        
+        if draft.subject is not None:
+            prospect.draft_subject = draft.subject
+        if draft.body is not None:
+            prospect.draft_body = draft.body
+        
+        prospect.draft_status = 'drafted'
+        
+        await db.commit()
+        
+        return {
+            "success": True,
+            "message": "Draft updated successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ [SOCIAL DRAFT UPDATE] Error: {e}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update draft: {str(e)}")
