@@ -120,9 +120,9 @@ class LinkedInDiscoveryAdapter:
                                 logger.debug(f"🔗 [LINKEDIN DISCOVERY] Checking URL: {url}")
                                 
                                 if "linkedin.com/in/" in url:
-                                # Extract username from URL
-                                username = url.split("linkedin.com/in/")[-1].split("/")[0].split("?")[0]
-                                
+                                    # Extract username from URL
+                                    username = url.split("linkedin.com/in/")[-1].split("/")[0].split("?")[0]
+                                    
                                     # Skip if we already have this username
                                     if any(p.username == username for p in prospects):
                                         logger.debug(f"⏭️  [LINKEDIN DISCOVERY] Skipping duplicate username: {username}")
