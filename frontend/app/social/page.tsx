@@ -21,6 +21,7 @@ import {
   Users,
   FileText,
   Mail,
+  Eye,
   LogOut as LogOutIcon
 } from 'lucide-react'
 import { listJobs } from '@/lib/api'
