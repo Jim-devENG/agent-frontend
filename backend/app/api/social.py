@@ -242,9 +242,11 @@ async def list_profiles(
             elif discovery_status.lower() == 'leads' or discovery_status.lower() == 'approved':
                 # Show only approved profiles (Social Leads)
                 # Check for both 'approved' and 'APPROVED' to handle case variations
+                # Also handle NULL approval_status (treat as not approved)
                 query = query.where(
                     and_(
                         Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value,
+                        Prospect.approval_status.isnot(None),  # Exclude NULL
                         or_(
                             Prospect.approval_status == 'approved',
                             Prospect.approval_status == 'APPROVED'
@@ -254,13 +256,14 @@ async def list_profiles(
                 count_query = count_query.where(
                     and_(
                         Prospect.discovery_status == DiscoveryStatus.DISCOVERED.value,
+                        Prospect.approval_status.isnot(None),  # Exclude NULL
                         or_(
                             Prospect.approval_status == 'approved',
                             Prospect.approval_status == 'APPROVED'
                         )
                     )
                 )
-                logger.info(f"📊 [SOCIAL PROFILES] Filtering for Social Leads: approval_status IN ('approved', 'APPROVED')")
+                logger.info(f"📊 [SOCIAL PROFILES] Filtering for Social Leads: approval_status IN ('approved', 'APPROVED'), excluding NULL")
             else:
                 # Map discovery_status to Prospect.discovery_status
                 query = query.where(Prospect.discovery_status == discovery_status.upper())
