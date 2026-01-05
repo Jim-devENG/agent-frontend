@@ -19,6 +19,7 @@ interface SocialProfile {
   location?: string
   category?: string
   engagement_score: number
+  contact_email?: string
   discovery_status: string
   outreach_status: string
   created_at: string
@@ -285,6 +286,13 @@ export default function SocialDiscoveredProfilesTable() {
                   <td className="py-2 px-3">{profile.category || '-'}</td>
                   <td className="py-2 px-3">{profile.followers_count.toLocaleString()}</td>
                   <td className="py-2 px-3">{profile.engagement_score.toFixed(2)}%</td>
+                  <td className="py-2 px-3">
+                    {profile.contact_email ? (
+                      <span className="text-green-600 font-medium">{profile.contact_email}</span>
+                    ) : (
+                      <span className="text-gray-400 text-xs">Scraping...</span>
+                    )}
+                  </td>
                   <td className="py-2 px-3">
                     <a
                       href={profile.profile_url}

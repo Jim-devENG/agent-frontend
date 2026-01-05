@@ -284,6 +284,7 @@ async def list_profiles(
                     "location": p.discovery_location or "",
                     "category": p.discovery_category or "",
                     "engagement_score": float(p.engagement_rate) if p.engagement_rate else 0.0,
+                    "contact_email": p.contact_email or "",  # Include email if scraped
                     "discovery_status": p.discovery_status or "DISCOVERED",
                     "outreach_status": p.outreach_status or "pending",
                     "created_at": p.created_at.isoformat() if p.created_at else None,
