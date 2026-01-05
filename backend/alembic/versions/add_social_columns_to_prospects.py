@@ -13,8 +13,9 @@ from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision = 'add_social_columns'
-# Chain from add_serp_intent_fields which is the last migration in the current chain
-down_revision = 'add_serp_intent_fields'
+# Chain from add_pipeline_status_fields to resolve branch conflict
+# Pipeline status fields were added first, so social columns come after
+down_revision = 'add_pipeline_status_fields'
 branch_labels = None
 depends_on = None
 
