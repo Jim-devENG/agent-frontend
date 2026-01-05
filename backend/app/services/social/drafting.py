@@ -265,12 +265,12 @@ class SocialDraftingService:
             "character_limit": "1000 characters"
         })
         
-        return f"""You are a professional outreach specialist for Liquid Canvas (liquidcanvas.art), an art and creative services company.
+        from app.clients.gemini import CANONICAL_LIQUID_CANVAS_DESCRIPTION
+        
+        return f"""You are a professional outreach specialist for Liquid Canvas (liquidcanvas.art), a mobile-to-TV streaming art platform.
 
-About Liquid Canvas:
-Liquid Canvas (liquidcanvas.art) is an art and creative services company specializing in innovative visual solutions and artistic collaborations. We offer custom creative services, digital art, and artistic partnerships for businesses and creators.
-
-Website: https://liquidcanvas.art
+ABOUT LIQUID CANVAS (CANONICAL DESCRIPTION - USE THIS EXACTLY):
+{CANONICAL_LIQUID_CANVAS_DESCRIPTION}
 
 Your task is to compose a personalized {platform} outreach message.
 
@@ -286,11 +286,16 @@ Character limit: {guidance['character_limit']}
 Requirements:
 1. The message must be {guidance['tone']}
 2. It should mention something specific about their profile/bio/content
-3. It should introduce Liquid Canvas (liquidcanvas.art) naturally
+3. It should introduce Liquid Canvas as a mobile-to-TV streaming art platform - emphasize TV-based art streaming, playlists, connected TVs, personal + shared display, and NFTs where relevant
 4. It should be concise and fit within {guidance['character_limit']}
 5. It should include a clear call-to-action
 6. It should be warm but not overly salesy
 7. Platform-appropriate: {guidance['format']}
+
+CRITICAL POSITIONING RULES:
+- Liquid Canvas is a streaming art platform, NOT an art services company, creative agency, design studio, or art consultancy
+- Emphasize: TV-based art streaming, playlists, connected TVs, personal + shared display, NFTs
+- Avoid generic "art collaboration" or "creative services" language
 
 You MUST return ONLY valid JSON with this exact structure:
 {{
@@ -354,12 +359,12 @@ Do not include any text before or after the JSON. Return ONLY the JSON object.""
         history_context = "\n\n".join(history_text) if history_text else "No previous messages"
         followup_number = len(message_history) + 1
         
-        return f"""You are a professional outreach specialist for Liquid Canvas (liquidcanvas.art), an art and creative services company.
+        from app.clients.gemini import CANONICAL_LIQUID_CANVAS_DESCRIPTION
+        
+        return f"""You are a professional outreach specialist for Liquid Canvas (liquidcanvas.art), a mobile-to-TV streaming art platform.
 
-About Liquid Canvas:
-Liquid Canvas (liquidcanvas.art) is an art and creative services company specializing in innovative visual solutions and artistic collaborations. We offer custom creative services, digital art, and artistic partnerships for businesses and creators.
-
-Website: https://liquidcanvas.art
+ABOUT LIQUID CANVAS (CANONICAL DESCRIPTION - USE THIS EXACTLY):
+{CANONICAL_LIQUID_CANVAS_DESCRIPTION}
 
 Your task is to compose a SHORT, PLAYFUL, LIGHT, WITTY follow-up message for {platform.upper()}. This is follow-up #{followup_number} in the conversation.
 
