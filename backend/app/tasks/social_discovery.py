@@ -132,6 +132,17 @@ async def discover_social_profiles_async(job_id: str) -> dict:
                 prospect.discovery_status = DiscoveryStatus.DISCOVERED.value
                 prospect.approval_status = 'PENDING'  # Needs manual accept/reject
                 prospect.scrape_status = 'DISCOVERED'
+                
+                # CRITICAL: Clear fields that may not exist in database yet (from add_realtime_scraping_fields migration)
+                # These are only set during scraping, not discovery
+                # Setting them to None explicitly prevents SQLAlchemy from trying to insert them if columns don't exist
+                if hasattr(prospect, 'bio_text'):
+                    prospect.bio_text = None
+                if hasattr(prospect, 'external_links'):
+                    prospect.external_links = None
+                if hasattr(prospect, 'scraped_at'):
+                    prospect.scraped_at = None
+                
                 db.add(prospect)
                 saved_count += 1
             
