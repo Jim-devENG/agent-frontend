@@ -8,7 +8,6 @@ interface GeminiChatPanelProps {
   prospectId: string
   currentSubject: string
   currentBody: string
-  onSuggestion?: (subject?: string, body?: string) => void
   onDraftAdopted?: (subject: string, body: string) => void
 }
 
@@ -22,7 +21,7 @@ interface ChatMessage {
   }
 }
 
-export default function GeminiChatPanel({ prospectId, currentSubject, currentBody, onSuggestion, onDraftAdopted }: GeminiChatPanelProps) {
+export default function GeminiChatPanel({ prospectId, currentSubject, currentBody, onDraftAdopted }: GeminiChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -68,11 +67,9 @@ export default function GeminiChatPanel({ prospectId, currentSubject, currentBod
 
       setMessages(prev => [...prev, assistantMessage])
 
-      // Legacy support: if old format suggested_subject/body exists, use it
-      // (This should not happen with new backend, but keeping for compatibility)
-      if (!response.candidate_draft && (response as any).suggested_subject || (response as any).suggested_body) {
-        onSuggestion?.((response as any).suggested_subject, (response as any).suggested_body)
-      }
+      // NO AUTO-MUTATION: Do not call onSuggestion automatically
+      // Draft changes must flow through: chat → candidate draft → user clicks "Use This Draft"
+      // Legacy format is ignored - all changes require explicit user action
     } catch (error: any) {
       // Extract error message properly - handle both Error objects and string errors
       let errorText = 'Failed to get response from Gemini'
@@ -106,13 +103,22 @@ export default function GeminiChatPanel({ prospectId, currentSubject, currentBod
     
     setSavingDraft(true)
     try {
-      // Update local draft state via parent callback
-      if (onDraftAdopted) {
-        onDraftAdopted(candidateDraft.subject, candidateDraft.body)
-      } else if (onSuggestion) {
-        // Fallback to old callback if onDraftAdopted not provided
-        onSuggestion(candidateDraft.subject, candidateDraft.body)
+      // EXPLICIT PROMOTION ONLY: Only update draft when user explicitly clicks "Use This Draft"
+      if (!onDraftAdopted) {
+        throw new Error('Draft adoption callback not provided')
       }
+      
+      // Clean the draft content - ensure no JSON or metadata
+      const cleanSubject = candidateDraft.subject.trim()
+      const cleanBody = candidateDraft.body.trim()
+      
+      // Validate that we have actual content
+      if (!cleanSubject || !cleanBody) {
+        throw new Error('Draft suggestion is incomplete')
+      }
+      
+      // Call parent callback to update draft editor
+      onDraftAdopted(cleanSubject, cleanBody)
       
       // Show success message
       const successMessage: ChatMessage = {
@@ -183,8 +189,9 @@ export default function GeminiChatPanel({ prospectId, currentSubject, currentBod
                     </div>
                     <button
                       onClick={() => handleUseDraft(msg.candidateDraft!)}
-                      disabled={savingDraft}
+                      disabled={savingDraft || !onDraftAdopted}
                       className="mt-3 w-full px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-1"
+                      title={!onDraftAdopted ? 'Draft adoption not available' : 'Apply this draft to the email editor'}
                     >
                       {savingDraft ? (
                         <>
@@ -194,7 +201,7 @@ export default function GeminiChatPanel({ prospectId, currentSubject, currentBod
                       ) : (
                         <>
                           <Check className="w-3 h-3" />
-                          <span>Use This Draft</span>
+                          <span>Use This Version</span>
                         </>
                       )}
                     </button>

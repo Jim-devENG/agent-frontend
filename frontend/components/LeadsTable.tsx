@@ -954,27 +954,27 @@ export default function LeadsTable({ emailsOnly = false }: LeadsTableProps) {
                       prospectId={activeProspect.id}
                       currentSubject={draftSubject}
                       currentBody={draftBody}
-                      onSuggestion={(subject, body) => {
-                        // Legacy callback - update local state
-                        if (subject) setDraftSubject(subject)
-                        if (body) setDraftBody(body)
-                      }}
-                      onDraftAdopted={async (subject, body) => {
-                        // Update local draft state immediately
-                        setDraftSubject(subject)
-                        setDraftBody(body)
+                      onDraftAdopted={(subject, body) => {
+                        // EXPLICIT PROMOTION ONLY: Update draft editor ONLY when user clicks "Use This Draft"
+                        // Clean the content to ensure no JSON or metadata
+                        const cleanSubject = subject.trim()
+                        const cleanBody = body.trim()
                         
-                        // Update active prospect state
+                        // Update draft editor fields (authoritative source)
+                        setDraftSubject(cleanSubject)
+                        setDraftBody(cleanBody)
+                        
+                        // Update active prospect state to keep in sync
                         if (activeProspect) {
                           setActiveProspect({
                             ...activeProspect,
-                            draft_subject: subject,
-                            draft_body: body
+                            draft_subject: cleanSubject,
+                            draft_body: cleanBody
                           })
                         }
                         
-                        // Note: Draft will be saved when user clicks "Send Now" or closes modal
-                        // The draft fields are now in local state and will be used for sending
+                        // Note: Draft is now in editor. User can edit further or send.
+                        // Draft will be saved when user clicks "Send Now" via the send endpoint.
                       }}
                     />
                   </div>
