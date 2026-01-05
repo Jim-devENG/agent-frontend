@@ -5,15 +5,26 @@ Scrapes social media profiles to extract:
 - Real follower counts
 - Engagement rates (calculated from recent posts)
 - Email addresses (from profile pages, bios, contact info)
+
+Uses Playwright for JavaScript-rendered content (Instagram, TikTok, etc.)
 """
 import logging
 import re
 import httpx
+import asyncio
 from typing import Dict, Any, Optional, List
 from bs4 import BeautifulSoup
 from app.utils.email_validation import is_plausible_email
 
 logger = logging.getLogger(__name__)
+
+# Try to import Playwright, fallback to httpx if not available
+try:
+    from playwright.async_api import async_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    logger.warning("⚠️  Playwright not installed. Install with: pip install playwright && playwright install chromium")
 
 
 async def scrape_linkedin_profile(profile_url: str) -> Dict[str, Any]:
@@ -112,7 +123,141 @@ async def scrape_linkedin_profile(profile_url: str) -> Dict[str, Any]:
         return {"success": False, "error": str(e)}
 
 
-async def scrape_instagram_profile(profile_url: str) -> Dict[str, Any]:
+async def scrape_instagram_profile_playwright(profile_url: str) -> Dict[str, Any]:
+    """
+    Scrape Instagram profile using Playwright (handles JavaScript).
+    This is the preferred method for Instagram.
+    """
+    if not PLAYWRIGHT_AVAILABLE:
+        logger.warning("⚠️  Playwright not available, falling back to basic scraping")
+        return await scrape_instagram_profile_basic(profile_url)
+    
+    try:
+        async with async_playwright() as p:
+            # Launch browser
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                viewport={'width': 1920, 'height': 1080}
+            )
+            page = await context.new_page()
+            
+            logger.info(f"🔍 [INSTAGRAM SCRAPE] Loading {profile_url} with Playwright...")
+            
+            # Navigate to profile
+            await page.goto(profile_url, wait_until='networkidle', timeout=30000)
+            
+            # Wait for content to load
+            await asyncio.sleep(2)
+            
+            # Get page content
+            html = await page.content()
+            
+            # Try to extract follower count from page
+            follower_count = None
+            engagement_rate = 2.5  # Default
+            
+            # Method 1: Try to find follower count in text
+            try:
+                # Look for follower count in various formats
+                follower_text = await page.evaluate("""
+                    () => {
+                        // Try to find follower count in the page
+                        const texts = Array.from(document.querySelectorAll('*')).map(el => el.textContent);
+                        const followerRegex = /([\\d,]+(?:\\.[\\d]+)?[KMB]?)\\s*followers?/i;
+                        for (const text of texts) {
+                            const match = text.match(followerRegex);
+                            if (match) {
+                                return match[1];
+                            }
+                        }
+                        return null;
+                    }
+                """)
+                
+                if follower_text:
+                    # Parse K, M, B suffixes
+                    follower_text_clean = follower_text.replace(',', '').upper()
+                    if 'K' in follower_text_clean:
+                        follower_count = int(float(follower_text_clean.replace('K', '')) * 1000)
+                    elif 'M' in follower_text_clean:
+                        follower_count = int(float(follower_text_clean.replace('M', '')) * 1000000)
+                    elif 'B' in follower_text_clean:
+                        follower_count = int(float(follower_text_clean.replace('B', '')) * 1000000000)
+                    else:
+                        follower_count = int(follower_text_clean)
+                    logger.info(f"✅ [INSTAGRAM SCRAPE] Found follower count via Playwright: {follower_count}")
+            except Exception as e:
+                logger.debug(f"⚠️  [INSTAGRAM SCRAPE] Could not extract follower count via Playwright: {e}")
+            
+            # Method 2: Try to find in HTML/JSON
+            if not follower_count:
+                follower_patterns = [
+                    r'"edge_followed_by":\{"count":(\d+)\}',
+                    r'"follower_count":(\d+)',
+                    r'"userInteractionCount":(\d+)',
+                    r'(\d+(?:,\d+)*(?:\.\d+)?[KMB]?)\s*followers?',
+                ]
+                
+                for pattern in follower_patterns:
+                    matches = re.findall(pattern, html, re.IGNORECASE)
+                    if matches:
+                        try:
+                            count_str = matches[0].replace(',', '').replace('.', '').upper()
+                            if 'K' in count_str:
+                                follower_count = int(float(count_str.replace('K', '')) * 1000)
+                            elif 'M' in count_str:
+                                follower_count = int(float(count_str.replace('M', '')) * 1000000)
+                            elif 'B' in count_str:
+                                follower_count = int(float(count_str.replace('B', '')) * 1000000000)
+                            else:
+                                follower_count = int(count_str)
+                            logger.info(f"✅ [INSTAGRAM SCRAPE] Found follower count in HTML: {follower_count}")
+                            break
+                        except (ValueError, IndexError):
+                            continue
+            
+            # Extract email from bio
+            email = None
+            try:
+                email_patterns = [
+                    r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
+                    r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
+                ]
+                
+                for pattern in email_patterns:
+                    matches = re.findall(pattern, html)
+                    for match in matches:
+                        email_candidate = match.lower().strip()
+                        if is_plausible_email(email_candidate) and 'instagram.com' not in email_candidate:
+                            email = email_candidate
+                            logger.info(f"✅ [INSTAGRAM SCRAPE] Found email: {email}")
+                            break
+                    if email:
+                        break
+            except Exception as e:
+                logger.debug(f"⚠️  [INSTAGRAM SCRAPE] Could not extract email: {e}")
+            
+            await browser.close()
+            
+            return {
+                "follower_count": follower_count,
+                "engagement_rate": engagement_rate,
+                "email": email,
+                "success": True,
+                "error": None
+            }
+            
+    except Exception as e:
+        logger.error(f"❌ [INSTAGRAM SCRAPE] Playwright error for {profile_url}: {e}", exc_info=True)
+        # Fallback to basic scraping
+        return await scrape_instagram_profile_basic(profile_url)
+
+
+async def scrape_instagram_profile_basic(profile_url: str) -> Dict[str, Any]:
+    """
+    Basic Instagram scraping (fallback when Playwright not available).
+    """
     """
     Scrape Instagram profile to extract follower count, engagement, and email.
     
