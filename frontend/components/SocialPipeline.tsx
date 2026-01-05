@@ -341,12 +341,13 @@ export default function SocialPipeline() {
       name: 'Drafting',
       description: 'Create outreach messages',
       icon: FileText,
-      status: status.qualified === 0 ? 'locked' :
+      status: (status.qualified === 0 && status.drafted === 0) ? 'locked' :
               status.drafted > 0 ? 'completed' : 'active',
       count: status.drafted,
-      ctaText: status.qualified === 0 ? 'Review Profiles First' : 'Start Drafting',
+      ctaText: (status.qualified === 0 && status.drafted === 0) ? 'Review Profiles First' : 
+               status.drafted > 0 ? 'Create More Drafts' : 'Start Drafting',
       ctaAction: () => {
-        if (status.qualified === 0) {
+        if (status.qualified === 0 && status.drafted === 0) {
           alert('Please review and qualify profiles first')
           return
         }
