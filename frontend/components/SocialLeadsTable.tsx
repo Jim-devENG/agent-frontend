@@ -34,6 +34,13 @@ interface SocialProfile {
 
 type Platform = 'all' | 'linkedin' | 'instagram' | 'facebook' | 'tiktok'
 
+const platformIcons = {
+  linkedin: '💼',
+  instagram: '📷',
+  facebook: '👥',
+  tiktok: '🎵',
+}
+
 export default function SocialLeadsTable() {
   const [profiles, setProfiles] = useState<SocialProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -259,19 +266,26 @@ export default function SocialLeadsTable() {
         </div>
       </div>
 
-      {/* Platform Filter */}
-      <div className="mb-4 flex flex-wrap gap-2">
+      {/* Platform-Specific Tabs */}
+      <div className="mb-4 flex items-center space-x-2 border-b border-olive-200">
         {platforms.map((platform) => (
           <button
             key={platform.id}
             onClick={() => setSelectedPlatform(platform.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+            className={`px-4 py-2 rounded-t-lg text-xs font-semibold transition-all border-b-2 ${
               selectedPlatform === platform.id
-                ? 'bg-olive-600 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-olive-50 text-olive-700 border-olive-600'
+                : 'bg-white text-gray-600 border-transparent hover:text-olive-700 hover:bg-olive-50'
             }`}
           >
-            {platform.label}
+            {platform.id === 'all' ? (
+              platform.label
+            ) : (
+              <span className="flex items-center space-x-1">
+                <span>{platformIcons[platform.id]}</span>
+                <span>{platform.label}</span>
+              </span>
+            )}
           </button>
         ))}
       </div>

@@ -87,7 +87,10 @@ export default function SocialPipeline() {
   const loadSocialDiscoveryJobs = async (checkForNewJob: boolean = true) => {
     try {
       const jobs = await listJobs(0, 50)
-      const socialDiscoveryJobs = jobs.filter((j: Job) => j.job_type === 'social_discover')
+      const socialDiscoveryJobs = jobs.filter((j: Job) => 
+        j.job_type === 'social_discover' && 
+        j.status === 'completed'  // Only consider completed jobs
+      )
       
       // Only check for new jobs if explicitly requested (not on network refreshes)
       if (!checkForNewJob) {
@@ -110,8 +113,15 @@ export default function SocialPipeline() {
           setLastProcessedDiscoveryJobId(latestJob.id)
           // Reset pipeline state by reloading status
           // This ensures buttons are re-enabled based on current data
-          console.log('🔄 New social discovery detected, resetting pipeline state', latestJob.id)
-          loadStatus()
+          console.log('🔄 [SOCIAL PIPELINE] New discovery job detected, resetting pipeline state', latestJob.id)
+          await loadStatus()
+          
+          // Dispatch event to notify other components
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('socialPipelineReset', { 
+              detail: { jobId: latestJob.id } 
+            }))
+          }
         }
       }
     } catch (err) {
