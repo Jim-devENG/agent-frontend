@@ -66,25 +66,49 @@ async def scrape_linkedin_profile(profile_url: str) -> Dict[str, Any]:
                 "error": None
             }
             
-            # Extract follower/connection count
-            # LinkedIn shows connections count in various places
-            # Look for patterns like "500+ connections" or follower counts
+            # Extract follower/connection count - intensive patterns
             connections_patterns = [
-                r'(\d+(?:,\d+)*)\+?\s*connections?',
-                r'(\d+(?:,\d+)*)\s*followers?',
+                # JSON patterns
                 r'"connectionsCount":(\d+)',
                 r'"followerCount":(\d+)',
+                r'"followersCount":(\d+)',
+                r'"followers_count":(\d+)',
+                r'"followers":\{"count":(\d+)\}',
+                r'"follower_count":(\d+)',
+                # Text patterns
+                r'(\d+(?:,\d+)*(?:\.\d+)?[KMB]?)\+?\s*connections?',
+                r'(\d+(?:,\d+)*)\+?\s*connections?',
+                r'(\d+(?:,\d+)*(?:\.\d+)?[KMB]?)\s*followers?',
+                r'(\d+(?:,\d+)*)\s*followers?',
+                r'followers?[:\s]+(\d+(?:,\d+)*)',
+                r'connections?[:\s]+(\d+(?:,\d+)*)',
+                r'(\d+(?:,\d+)*)\s*follower',
+                r'(\d+(?:,\d+)*)\s*connection',
+                # Meta tags
+                r'<meta[^>]*content="(\d+(?:,\d+)*)\s*(?:followers?|connections?)',
             ]
             
             for pattern in connections_patterns:
                 matches = re.findall(pattern, html, re.IGNORECASE)
                 if matches:
                     try:
-                        count_str = matches[0].replace(',', '')
-                        result["follower_count"] = int(count_str)
-                        logger.info(f"✅ [LINKEDIN SCRAPE] Found follower count: {result['follower_count']}")
+                        count_str = matches[0].replace(',', '').strip()
+                        # Handle K, M, B suffixes
+                        if 'K' in count_str.upper() or 'k' in count_str:
+                            count_str = count_str.replace('K', '').replace('k', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000)
+                        elif 'M' in count_str.upper() or 'm' in count_str:
+                            count_str = count_str.replace('M', '').replace('m', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000000)
+                        elif 'B' in count_str.upper() or 'b' in count_str:
+                            count_str = count_str.replace('B', '').replace('b', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000000000)
+                        else:
+                            result["follower_count"] = int(count_str)
+                        logger.info(f"✅ [LINKEDIN SCRAPE] Found follower count: {result['follower_count']} (pattern: {pattern[:30]}...)")
                         break
-                    except (ValueError, IndexError):
+                    except (ValueError, IndexError) as e:
+                        logger.debug(f"⚠️  [LINKEDIN SCRAPE] Failed to parse follower count from match: {matches[0]}, error: {e}")
                         continue
             
             # Extract email from profile
@@ -105,13 +129,13 @@ async def scrape_linkedin_profile(profile_url: str) -> Dict[str, Any]:
                 if result["email"]:
                     break
             
-            # Calculate engagement rate (simplified - would need post data for accurate calculation)
-            # For now, estimate based on follower count if available
+            # Always set engagement rate
             if result["follower_count"]:
-                # LinkedIn engagement typically 1-3% for active profiles
-                # Use a conservative estimate
                 result["engagement_rate"] = 1.5  # Default estimate
                 logger.info(f"📊 [LINKEDIN SCRAPE] Estimated engagement rate: {result['engagement_rate']}%")
+            else:
+                result["engagement_rate"] = 1.5
+                logger.info(f"📊 [LINKEDIN SCRAPE] Using default engagement rate: {result['engagement_rate']}%")
             
             return result
             
@@ -146,23 +170,47 @@ async def scrape_instagram_profile(profile_url: str) -> Dict[str, Any]:
                 "error": None
             }
             
-            # Extract follower count - same patterns as TikTok
+            # Extract follower count - intensive patterns to catch all formats
             follower_patterns = [
+                # JSON patterns (most reliable)
                 r'"edge_followed_by":\{"count":(\d+)\}',
                 r'"follower_count":(\d+)',
                 r'"userInteractionCount":(\d+)',
+                r'"followers":\{"count":(\d+)\}',
+                r'"followerCount":(\d+)',
+                r'"followersCount":(\d+)',
+                r'"followers_count":(\d+)',
+                # Text patterns with various formats
+                r'(\d+(?:,\d+)*(?:\.\d+)?[KMB]?)\s*followers?',
                 r'(\d+(?:,\d+)*)\s*followers?',
+                r'followers?[:\s]+(\d+(?:,\d+)*)',
+                r'(\d+(?:,\d+)*)\s*follower',
+                # Instagram-specific patterns
+                r'<meta[^>]*content="(\d+(?:,\d+)*)\s*followers?',
+                r'followers?[:\s]*(\d+(?:,\d+)*(?:\.\d+)?[KMB]?)',
             ]
             
             for pattern in follower_patterns:
                 matches = re.findall(pattern, html, re.IGNORECASE)
                 if matches:
                     try:
-                        count_str = matches[0].replace(',', '')
-                        result["follower_count"] = int(count_str)
-                        logger.info(f"✅ [INSTAGRAM SCRAPE] Found follower count: {result['follower_count']}")
+                        count_str = matches[0].replace(',', '').strip()
+                        # Handle K, M, B suffixes
+                        if 'K' in count_str.upper() or 'k' in count_str:
+                            count_str = count_str.replace('K', '').replace('k', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000)
+                        elif 'M' in count_str.upper() or 'm' in count_str:
+                            count_str = count_str.replace('M', '').replace('m', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000000)
+                        elif 'B' in count_str.upper() or 'b' in count_str:
+                            count_str = count_str.replace('B', '').replace('b', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000000000)
+                        else:
+                            result["follower_count"] = int(count_str)
+                        logger.info(f"✅ [INSTAGRAM SCRAPE] Found follower count: {result['follower_count']} (pattern: {pattern[:30]}...)")
                         break
-                    except (ValueError, IndexError):
+                    except (ValueError, IndexError) as e:
+                        logger.debug(f"⚠️  [INSTAGRAM SCRAPE] Failed to parse follower count from match: {matches[0]}, error: {e}")
                         continue
             
             # Extract email from bio - same as TikTok
@@ -220,22 +268,49 @@ async def scrape_facebook_profile(profile_url: str) -> Dict[str, Any]:
                 "error": None
             }
             
-            # Extract follower count
+            # Extract follower count - intensive patterns
             follower_patterns = [
-                r'(\d+(?:,\d+)*)\s*(?:people|person)\s*(?:like|follow)',
+                # JSON patterns
                 r'"follower_count":(\d+)',
+                r'"followersCount":(\d+)',
+                r'"followers_count":(\d+)',
+                r'"followers":\{"count":(\d+)\}',
+                r'"followerCount":(\d+)',
                 r'"likes":(\d+)',
+                r'"likeCount":(\d+)',
+                # Text patterns
+                r'(\d+(?:,\d+)*(?:\.\d+)?[KMB]?)\s*(?:people|person|users?)\s*(?:like|follow|followers?)',
+                r'(\d+(?:,\d+)*)\s*(?:people|person)\s*(?:like|follow)',
+                r'(\d+(?:,\d+)*(?:\.\d+)?[KMB]?)\s*followers?',
+                r'(\d+(?:,\d+)*)\s*followers?',
+                r'followers?[:\s]+(\d+(?:,\d+)*)',
+                r'likes?[:\s]+(\d+(?:,\d+)*)',
+                r'(\d+(?:,\d+)*)\s*follower',
+                # Meta tags
+                r'<meta[^>]*content="(\d+(?:,\d+)*)\s*(?:followers?|likes?)',
             ]
             
             for pattern in follower_patterns:
                 matches = re.findall(pattern, html, re.IGNORECASE)
                 if matches:
                     try:
-                        count_str = matches[0].replace(',', '')
-                        result["follower_count"] = int(count_str)
-                        logger.info(f"✅ [FACEBOOK SCRAPE] Found follower count: {result['follower_count']}")
+                        count_str = matches[0].replace(',', '').strip()
+                        # Handle K, M, B suffixes
+                        if 'K' in count_str.upper() or 'k' in count_str:
+                            count_str = count_str.replace('K', '').replace('k', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000)
+                        elif 'M' in count_str.upper() or 'm' in count_str:
+                            count_str = count_str.replace('M', '').replace('m', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000000)
+                        elif 'B' in count_str.upper() or 'b' in count_str:
+                            count_str = count_str.replace('B', '').replace('b', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000000000)
+                        else:
+                            result["follower_count"] = int(count_str)
+                        logger.info(f"✅ [FACEBOOK SCRAPE] Found follower count: {result['follower_count']} (pattern: {pattern[:30]}...)")
                         break
-                    except (ValueError, IndexError):
+                    except (ValueError, IndexError) as e:
+                        logger.debug(f"⚠️  [FACEBOOK SCRAPE] Failed to parse follower count from match: {matches[0]}, error: {e}")
                         continue
             
             # Extract email
@@ -255,10 +330,13 @@ async def scrape_facebook_profile(profile_url: str) -> Dict[str, Any]:
                 if result["email"]:
                     break
             
-            # Estimate engagement rate
+            # Always set engagement rate
             if result["follower_count"]:
                 result["engagement_rate"] = 2.0  # Default estimate for Facebook
                 logger.info(f"📊 [FACEBOOK SCRAPE] Estimated engagement rate: {result['engagement_rate']}%")
+            else:
+                result["engagement_rate"] = 2.0
+                logger.info(f"📊 [FACEBOOK SCRAPE] Using default engagement rate: {result['engagement_rate']}%")
             
             return result
             
@@ -289,22 +367,44 @@ async def scrape_tiktok_profile(profile_url: str) -> Dict[str, Any]:
                 "error": None
             }
             
-            # Extract follower count
+            # Extract follower count - intensive patterns
             follower_patterns = [
+                # JSON patterns
                 r'"followerCount":(\d+)',
                 r'"follower_count":(\d+)',
+                r'"followersCount":(\d+)',
+                r'"followers_count":(\d+)',
+                r'"followers":\{"count":(\d+)\}',
+                # Text patterns
+                r'(\d+(?:,\d+)*(?:\.\d+)?[KMB]?)\s*followers?',
                 r'(\d+(?:,\d+)*)\s*followers?',
+                r'followers?[:\s]+(\d+(?:,\d+)*)',
+                r'(\d+(?:,\d+)*)\s*follower',
+                # Meta tags
+                r'<meta[^>]*content="(\d+(?:,\d+)*)\s*followers?',
             ]
             
             for pattern in follower_patterns:
                 matches = re.findall(pattern, html, re.IGNORECASE)
                 if matches:
                     try:
-                        count_str = matches[0].replace(',', '')
-                        result["follower_count"] = int(count_str)
-                        logger.info(f"✅ [TIKTOK SCRAPE] Found follower count: {result['follower_count']}")
+                        count_str = matches[0].replace(',', '').strip()
+                        # Handle K, M, B suffixes
+                        if 'K' in count_str.upper() or 'k' in count_str:
+                            count_str = count_str.replace('K', '').replace('k', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000)
+                        elif 'M' in count_str.upper() or 'm' in count_str:
+                            count_str = count_str.replace('M', '').replace('m', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000000)
+                        elif 'B' in count_str.upper() or 'b' in count_str:
+                            count_str = count_str.replace('B', '').replace('b', '').replace(',', '')
+                            result["follower_count"] = int(float(count_str) * 1000000000)
+                        else:
+                            result["follower_count"] = int(count_str)
+                        logger.info(f"✅ [TIKTOK SCRAPE] Found follower count: {result['follower_count']} (pattern: {pattern[:30]}...)")
                         break
-                    except (ValueError, IndexError):
+                    except (ValueError, IndexError) as e:
+                        logger.debug(f"⚠️  [TIKTOK SCRAPE] Failed to parse follower count from match: {matches[0]}, error: {e}")
                         continue
             
             # Extract email from bio
