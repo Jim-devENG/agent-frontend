@@ -1323,12 +1323,22 @@ async def get_websites(
                                'source_type', 'source_platform', 'profile_url', 'username', 'display_name', 'follower_count', 'engagement_rate',
                                'created_at', 'updated_at']
                 for row in rows:
-                    # Create a minimal Prospect object from row data
-                    prospect = Prospect()
-                    for i, col_name in enumerate(column_names):
-                        if i < len(row):
-                            setattr(prospect, col_name, row[i])
-                    websites.append(prospect)
+                    try:
+                        # Create a minimal Prospect object from row data
+                        # Access row as tuple or Row object
+                        row_data = tuple(row) if hasattr(row, '__iter__') else row
+                        prospect = Prospect()
+                        for i, col_name in enumerate(column_names):
+                            if i < len(row_data):
+                                try:
+                                    setattr(prospect, col_name, row_data[i])
+                                except Exception as attr_err:
+                                    logger.warning(f"⚠️  [WEBSITES FALLBACK] Could not set {col_name} on prospect: {attr_err}")
+                                    continue
+                        websites.append(prospect)
+                    except Exception as row_err:
+                        logger.error(f"❌ [WEBSITES FALLBACK] Error converting row to Prospect: {row_err}", exc_info=True)
+                        continue
                 logger.info(f"📊 [WEBSITES] FALLBACK QUERY RESULT: Found {len(websites)} websites using fallback query (total available: {total})")
             else:
                 # Re-raise if it's a different error

@@ -801,12 +801,22 @@ async def list_leads(
                                'source_type', 'source_platform', 'profile_url', 'username', 'display_name', 'follower_count', 'engagement_rate',
                                'created_at', 'updated_at']
                 for row in rows:
-                    # Create a minimal Prospect object from row data
-                    prospect = Prospect()
-                    for i, col_name in enumerate(column_names):
-                        if i < len(row):
-                            setattr(prospect, col_name, row[i])
-                    prospects.append(prospect)
+                    try:
+                        # Create a minimal Prospect object from row data
+                        # Access row as tuple or Row object
+                        row_data = tuple(row) if hasattr(row, '__iter__') else row
+                        prospect = Prospect()
+                        for i, col_name in enumerate(column_names):
+                            if i < len(row_data):
+                                try:
+                                    setattr(prospect, col_name, row_data[i])
+                                except Exception as attr_err:
+                                    logger.warning(f"⚠️  [LEADS FALLBACK] Could not set {col_name} on prospect: {attr_err}")
+                                    continue
+                        prospects.append(prospect)
+                    except Exception as row_err:
+                        logger.error(f"❌ [LEADS FALLBACK] Error converting row to Prospect: {row_err}", exc_info=True)
+                        continue
                 logger.info(f"📊 [LEADS] FALLBACK QUERY RESULT: Found {len(prospects)} prospects using fallback query (total available: {total})")
             else:
                 # Re-raise if it's a different error
@@ -1047,19 +1057,31 @@ async def list_scraped_emails(
                 rows = fallback_result.fetchall()
                 # Convert rows to Prospect-like objects
                 prospects = []
+                column_names = ['id', 'domain', 'page_url', 'page_title', 'contact_email', 'contact_method', 'da_est', 'score',
+                               'discovery_status', 'scrape_status', 'approval_status', 'verification_status', 'draft_status', 'send_status',
+                               'stage', 'outreach_status', 'last_sent', 'followups_sent', 'draft_subject', 'draft_body', 'final_body',
+                               'thread_id', 'sequence_index', 'is_manual', 'discovery_query_id', 'discovery_category', 'discovery_location',
+                               'discovery_keywords', 'scrape_payload', 'scrape_source_url', 'verification_confidence', 'verification_payload',
+                               'dataforseo_payload', 'snov_payload', 'serp_intent', 'serp_confidence', 'serp_signals',
+                               'source_type', 'source_platform', 'profile_url', 'username', 'display_name', 'follower_count', 'engagement_rate',
+                               'created_at', 'updated_at']
                 for row in rows:
-                    # Create a minimal Prospect object from row data
-                    prospect = Prospect()
-                    for i, col_name in enumerate(['id', 'domain', 'page_url', 'page_title', 'contact_email', 'contact_method', 'da_est', 'score',
-                                                   'discovery_status', 'scrape_status', 'approval_status', 'verification_status', 'draft_status', 'send_status',
-                                                   'stage', 'outreach_status', 'last_sent', 'followups_sent', 'draft_subject', 'draft_body', 'final_body',
-                                                   'thread_id', 'sequence_index', 'is_manual', 'discovery_query_id', 'discovery_category', 'discovery_location',
-                                                   'discovery_keywords', 'scrape_payload', 'scrape_source_url', 'verification_confidence', 'verification_payload',
-                                                   'dataforseo_payload', 'snov_payload', 'serp_intent', 'serp_confidence', 'serp_signals',
-                                                   'source_type', 'source_platform', 'profile_url', 'username', 'display_name', 'follower_count', 'engagement_rate',
-                                                   'created_at', 'updated_at']):
-                        setattr(prospect, col_name, row[i])
-                    prospects.append(prospect)
+                    try:
+                        # Create a minimal Prospect object from row data
+                        # Access row as tuple or Row object
+                        row_data = tuple(row) if hasattr(row, '__iter__') else row
+                        prospect = Prospect()
+                        for i, col_name in enumerate(column_names):
+                            if i < len(row_data):
+                                try:
+                                    setattr(prospect, col_name, row_data[i])
+                                except Exception as attr_err:
+                                    logger.warning(f"⚠️  [SCRAPED EMAILS FALLBACK] Could not set {col_name} on prospect: {attr_err}")
+                                    continue
+                        prospects.append(prospect)
+                    except Exception as row_err:
+                        logger.error(f"❌ [SCRAPED EMAILS FALLBACK] Error converting row to Prospect: {row_err}", exc_info=True)
+                        continue
                 logger.info(f"📊 [SCRAPED EMAILS] FALLBACK QUERY RESULT: Found {len(prospects)} prospects using fallback query (total available: {total})")
             else:
                 # Re-raise if it's a different error
