@@ -172,144 +172,76 @@ async def startup():
     import asyncio
     
     async def verify_database_state():
-        """Run all database setup operations - BLOCKING until complete"""
-        # CRITICAL: Run migrations FIRST before any queries
-        # This ensures schema is correct before SELECT queries run
+        """
+        Verify database state WITHOUT running migrations.
+        
+        Migrations should be run at deploy time, not on every app boot.
+        This prevents crash loops and repeated migration execution.
+        """
         try:
             from alembic.config import Config
-            from alembic import command
+            from alembic.script import ScriptDirectory
+            from sqlalchemy import create_engine, text
             
-            logger.info("🔄 Running database migrations on startup (CRITICAL: must run before queries)...")
+            logger.info("🔍 Verifying database state (migrations should be run at deploy time)...")
             logger.info("=" * 60)
             
-            # Get the backend directory path - try multiple locations
-            import os
-            import glob
-            
-            # Try to find alembic.ini in common locations
-            possible_paths = [
-                os.path.join(os.path.dirname(os.path.dirname(__file__)), "alembic.ini"),  # backend/alembic.ini
-                os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini"),  # backend/alembic.ini (alternative)
-                "alembic.ini",  # Current directory
-                "/app/alembic.ini",  # Render /app directory
-                "/app/backend/alembic.ini",  # Render /app/backend directory
-            ]
-            
-            alembic_ini_path = None
-            for path in possible_paths:
-                if os.path.exists(path):
-                    alembic_ini_path = path
-                    logger.info(f"✅ Found alembic.ini at: {path}")
-                    break
-            
-            if not alembic_ini_path:
-                # Last resort: search for it
-                logger.warning("⚠️  alembic.ini not found in expected locations, searching...")
-                found = glob.glob("**/alembic.ini", recursive=True)
-                if found:
-                    alembic_ini_path = found[0]
-                    logger.info(f"✅ Found alembic.ini at: {alembic_ini_path}")
-                else:
-                    logger.error(f"❌ CRITICAL: alembic.ini not found anywhere")
-                    logger.error(f"❌ Current directory: {os.getcwd()}")
-                    logger.error(f"❌ Searched paths: {possible_paths}")
-                    raise FileNotFoundError("alembic.ini not found in any expected location")
-            
-            alembic_cfg = Config(alembic_ini_path)
-            
-            # Get database URL and set in config
+            # Get database URL
             database_url = os.getenv("DATABASE_URL")
-            if database_url:
-                # Convert asyncpg URL to psycopg2 for Alembic
-                if database_url.startswith("postgresql+asyncpg://"):
-                    sync_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
-                    alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
-                    logger.info("✅ Converted asyncpg URL to psycopg2 format for Alembic")
+            if not database_url:
+                logger.warning("⚠️  DATABASE_URL not set - skipping database verification")
+                return
             
-            # Run migrations FIRST - AUTOMATIC ON EVERY STARTUP
-            # This is CRITICAL: Migrations MUST run before any database queries
+            # Convert asyncpg URL to psycopg2 for sync operations
+            sync_url = database_url.replace("postgresql+asyncpg://", "postgresql://") if database_url.startswith("postgresql+asyncpg://") else database_url
+            sync_engine = create_engine(sync_url, pool_pre_ping=True)
+            
             try:
-                logger.info("🚀 Executing: alembic upgrade heads")
-                logger.info("📝 This runs automatically on every backend startup")
-                logger.info(f"📁 Using alembic.ini: {alembic_ini_path}")
-                logger.info(f"📁 Database URL configured: {'Yes' if database_url else 'No'}")
-                logger.info("=" * 60)
-                
-                # Change to the directory containing alembic.ini for better compatibility
-                alembic_dir = os.path.dirname(os.path.abspath(alembic_ini_path))
-                original_cwd = os.getcwd()
-                try:
-                    os.chdir(alembic_dir)
-                    logger.info(f"📁 Changed to directory: {alembic_dir}")
-                    # Use 'heads' instead of 'head' to upgrade all migration branches
-                    command.upgrade(alembic_cfg, "heads")
-                finally:
-                    os.chdir(original_cwd)
-                
-                logger.info("=" * 60)
-                logger.info("✅ Database migrations completed successfully")
-                logger.info("✅ All tables are up-to-date with latest schema")
-                logger.info("=" * 60)
-                
-                # CRITICAL: Verify Alembic state after migrations - HARD FAIL if wrong
-                try:
-                    from alembic.script import ScriptDirectory
-                    from alembic.runtime.migration import MigrationContext
-                    from sqlalchemy import create_engine, text
+                with sync_engine.connect() as conn:
+                    # Check if alembic_version table exists and has correct revision
+                    version_table_check = conn.execute(text("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_schema = 'public' 
+                            AND table_name = 'alembic_version'
+                        )
+                    """))
+                    version_table_exists = version_table_check.scalar()
                     
-                    # Get current database revision
-                    sync_url = database_url.replace("postgresql+asyncpg://", "postgresql://") if database_url.startswith("postgresql+asyncpg://") else database_url
-                    engine = create_engine(sync_url, pool_pre_ping=True)
+                    if not version_table_exists:
+                        logger.warning("=" * 80)
+                        logger.warning("⚠️  alembic_version table is MISSING!")
+                        logger.warning("⚠️  Run migrations manually: alembic upgrade head")
+                        logger.warning("⚠️  Or use: python backend/fix_alembic_version.py")
+                        logger.warning("=" * 80)
+                        sync_engine.dispose()
+                        return
                     
-                    with engine.connect() as conn:
-                        # CRITICAL: Check if alembic_version table exists
-                        version_table_check = conn.execute(text("""
-                            SELECT EXISTS (
-                                SELECT FROM information_schema.tables 
-                                WHERE table_schema = 'public' 
-                                AND table_name = 'alembic_version'
-                            )
-                        """))
-                        version_table_exists = version_table_check.scalar()
-                        
-                        if not version_table_exists:
-                            logger.error("=" * 80)
-                            logger.error("❌ CRITICAL: alembic_version table is MISSING!")
-                            logger.error("❌ This will cause Alembic to re-run all migrations from base")
-                            logger.error("❌ This will cause schema corruption and data loss")
-                            logger.error("❌ ABORTING STARTUP TO PREVENT DATA LOSS")
-                            logger.error("=" * 80)
-                            engine.dispose()
-                            import sys
-                            sys.exit(1)
-                        
-                        # Get current revision from alembic_version table
-                        version_result = conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
-                        version_row = version_result.fetchone()
-                        current_rev = version_row[0] if version_row else None
-                        
-                        # Also check via MigrationContext for consistency
-                        context = MigrationContext.configure(conn)
-                        context_rev = context.get_current_revision()
-                        
-                        if current_rev != context_rev:
-                            logger.error("=" * 80)
-                            logger.error(f"❌ CRITICAL: Alembic version mismatch!")
-                            logger.error(f"❌ alembic_version table: {current_rev}")
-                            logger.error(f"❌ MigrationContext: {context_rev}")
-                            logger.error("❌ ABORTING STARTUP TO PREVENT SCHEMA CORRUPTION")
-                            logger.error("=" * 80)
-                            engine.dispose()
-                            import sys
-                            sys.exit(1)
+                    # Get current revision
+                    version_result = conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
+                    version_row = version_result.fetchone()
+                    current_rev = version_row[0] if version_row else None
                     
                     # Get head revision from script
+                    backend_dir = os.path.dirname(os.path.dirname(__file__))
+                    alembic_ini_path = os.path.join(backend_dir, "alembic.ini")
+                    
+                    if not os.path.exists(alembic_ini_path):
+                        logger.warning(f"⚠️  alembic.ini not found at {alembic_ini_path}")
+                        sync_engine.dispose()
+                        return
+                    
+                    alembic_cfg = Config(alembic_ini_path)
+                    if database_url.startswith("postgresql+asyncpg://"):
+                        sync_url_for_cfg = database_url.replace("postgresql+asyncpg://", "postgresql://")
+                        alembic_cfg.set_main_option("sqlalchemy.url", sync_url_for_cfg)
+                    
                     script = ScriptDirectory.from_config(alembic_cfg)
                     heads = script.get_revision("heads")
                     head_rev = heads.revision if heads else None
                     
                     logger.info("=" * 60)
-                    logger.info("📊 ALEMBIC STATE VERIFICATION")
+                    logger.info("📊 DATABASE STATE VERIFICATION")
                     logger.info(f"   alembic_version table: ✅ EXISTS")
                     logger.info(f"   Current DB revision: {current_rev}")
                     logger.info(f"   Head revision: {head_rev}")
@@ -317,115 +249,48 @@ async def startup():
                     if current_rev == head_rev:
                         logger.info("   ✅ Database is at latest migration")
                     else:
-                        logger.error("=" * 80)
-                        logger.error(f"❌ CRITICAL: Database is NOT at latest migration!")
-                        logger.error(f"❌ Current: {current_rev}, Expected: {head_rev}")
-                        logger.error("❌ This indicates migrations did not complete successfully")
-                        logger.error("❌ ABORTING STARTUP TO PREVENT SCHEMA MISMATCH")
-                        logger.error("=" * 80)
-                        engine.dispose()
-                        import sys
-                        sys.exit(1)
+                        logger.warning("=" * 80)
+                        logger.warning(f"⚠️  Database is NOT at latest migration!")
+                        logger.warning(f"⚠️  Current: {current_rev}, Expected: {head_rev}")
+                        logger.warning("⚠️  Run migrations manually: alembic upgrade head")
+                        logger.warning("⚠️  Or use: python backend/fix_alembic_version.py")
+                        logger.warning("=" * 80)
                     
                     logger.info("=" * 60)
-                    engine.dispose()
-                except SystemExit:
-                    raise  # Re-raise system exit
-                except Exception as verify_err:
-                    logger.error("=" * 80)
-                    logger.error(f"❌ CRITICAL: Failed to verify Alembic state: {verify_err}")
-                    logger.error("❌ ABORTING STARTUP - cannot guarantee schema correctness")
-                    logger.error("=" * 80)
-                    import sys
-                    sys.exit(1)
+                    
+            finally:
+                sync_engine.dispose()
+            
+            # Verify database connectivity only
+            try:
+                async with engine.begin() as conn:
+                    await conn.execute(text("SELECT 1"))
+                logger.info("✅ Database connectivity verified")
+            except Exception as db_err:
+                logger.error(f"❌ Database connectivity check failed: {db_err}")
+                # Don't exit - allow app to start even if DB is temporarily unavailable
+                # This prevents deployment failures
                 
-                # CRITICAL: Hard-fail schema validation after migrations
-                logger.info("=" * 60)
-                logger.info("🔍 STARTING HARD-FAIL SCHEMA VALIDATION")
-                logger.info("=" * 60)
+            # Non-fatal schema diagnostics check
+            try:
+                from app.utils.schema_validator import get_full_schema_diagnostics
+                diagnostics = await get_full_schema_diagnostics(engine)
+                if not diagnostics.get("schema_match", False):
+                    logger.warning("=" * 80)
+                    logger.warning("⚠️  SCHEMA MISMATCH DETECTED (non-fatal)")
+                    logger.warning(f"⚠️  Missing columns: {', '.join(diagnostics.get('missing_columns', []))}")
+                    logger.warning("⚠️  This may cause query failures - ensure migrations have run")
+                    logger.warning("⚠️  Run: alembic upgrade head")
+                    logger.warning("=" * 80)
+                else:
+                    logger.info("✅ Schema consistency check passed - model columns match database")
+            except Exception as diag_err:
+                logger.warning(f"⚠️  Could not run schema diagnostics: {diag_err}")
                 
-                try:
-                    from app.utils.schema_validator import validate_prospect_schema, validate_alembic_version_table
-                    
-                    # Use async engine for validation
-                    async with engine.begin() as conn:
-                        # Validate alembic_version table first
-                        alembic_validation = await validate_alembic_version_table(conn)
-                        if not alembic_validation["valid"]:
-                            logger.error("=" * 80)
-                            logger.error("❌ CRITICAL: Alembic version table validation FAILED")
-                            logger.error("❌ ABORTING STARTUP")
-                            logger.error("=" * 80)
-                            import sys
-                            sys.exit(1)
-                        
-                        # Validate Prospect schema
-                        schema_validation = await validate_prospect_schema(conn)
-                        if not schema_validation["valid"]:
-                            logger.error("=" * 80)
-                            logger.error("❌ CRITICAL: Prospect schema validation FAILED")
-                            logger.error(f"❌ Missing columns: {', '.join(schema_validation['missing_columns'])}")
-                            logger.error("❌ ABORTING STARTUP TO PREVENT QUERY FAILURES")
-                            logger.error("=" * 80)
-                            import sys
-                            sys.exit(1)
-                    
-                    logger.info("=" * 60)
-                    logger.info("✅ ALL SCHEMA VALIDATIONS PASSED")
-                    logger.info("✅ Database schema matches ORM models exactly")
-                    logger.info("=" * 60)
-                    
-                    # Additional schema consistency check (non-fatal, logs warning)
-                    try:
-                        from app.utils.schema_validator import get_full_schema_diagnostics
-                        diagnostics = await get_full_schema_diagnostics(engine)
-                        if not diagnostics.get("schema_match", False):
-                            logger.warning("=" * 80)
-                            logger.warning("⚠️  SCHEMA MISMATCH DETECTED (non-fatal)")
-                            logger.warning(f"⚠️  Missing columns: {', '.join(diagnostics.get('missing_columns', []))}")
-                            logger.warning("⚠️  This may cause query failures - ensure migrations have run")
-                            logger.warning("=" * 80)
-                        else:
-                            logger.info("✅ Schema consistency check passed - model columns match database")
-                    except Exception as diag_err:
-                        logger.warning(f"⚠️  Could not run schema diagnostics: {diag_err}")
-                    
-                except SystemExit:
-                    raise  # Re-raise system exit
-                except Exception as validation_err:
-                    logger.error("=" * 80)
-                    logger.error(f"❌ CRITICAL: Schema validation failed: {validation_err}")
-                    logger.error("❌ ABORTING STARTUP - cannot guarantee schema correctness")
-                    logger.error("=" * 80)
-                    import sys
-                    sys.exit(1)
-            except Exception as migration_error:
-                logger.error("=" * 80)
-                logger.error("❌ CRITICAL: Migration execution failed")
-                logger.error(f"❌ Error type: {type(migration_error).__name__}")
-                logger.error(f"❌ Error message: {str(migration_error)}")
-                logger.error("=" * 80)
-                logger.error("❌ Full traceback:")
-                import traceback
-                logger.error(traceback.format_exc())
-                logger.error("=" * 80)
-                logger.error("❌ alembic upgrade head failed")
-                logger.error("=" * 80)
-                logger.error("❌ ABORTING STARTUP - migrations must succeed")
-                logger.error("=" * 80)
-                # HARD FAIL - migrations must succeed
-                import sys
-                sys.exit(1)
-        except SystemExit:
-            raise  # Re-raise system exit from validation
-        except Exception as e:
-            logger.error("=" * 80)
-            logger.error(f"❌ CRITICAL: Migration setup failed: {e}", exc_info=True)
-            logger.error("❌ ABORTING STARTUP - migrations must succeed")
-            logger.error("=" * 80)
-            # HARD FAIL - migrations must succeed
-            import sys
-            sys.exit(1)
+        except Exception as verify_err:
+            logger.warning(f"⚠️  Could not verify database state: {verify_err}")
+            # Don't exit - allow app to start
+            # Migrations can be run manually if needed
         
         # Add a small delay after migrations
         await asyncio.sleep(1)
