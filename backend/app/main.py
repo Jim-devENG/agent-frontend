@@ -163,13 +163,81 @@ async def startup():
     logger.info("🚀 Server starting up...")
     logger.info(f"📡 Server will listen on port {os.getenv('PORT', '8000')}")
     
-    # CRITICAL: DO NOT run migrations automatically on startup
-    # Migrations must be run at deploy time, not on every app boot
-    # This prevents crash loops and repeated migration execution
-    # Use /health/migrate endpoint or run 'alembic upgrade head' manually at deploy time
+    # Check if AUTO_MIGRATE environment variable is set
+    # If set to "true" or "1", run migrations automatically on startup
+    # Otherwise, only verify database state (safer, prevents crash loops)
+    auto_migrate = os.getenv("AUTO_MIGRATE", "false").lower() in ("true", "1", "yes")
     
-    # Only verify database connectivity and log schema state
+    if auto_migrate:
+        logger.info("🔄 AUTO_MIGRATE is enabled - running migrations on startup...")
+        logger.info("⚠️  This will run migrations automatically on every app boot")
+        logger.info("⚠️  Set AUTO_MIGRATE=false to disable and run migrations manually")
+    else:
+        logger.info("🔍 AUTO_MIGRATE is disabled - only verifying database state")
+        logger.info("💡 To enable automatic migrations, set AUTO_MIGRATE=true environment variable")
+        logger.info("💡 Or run migrations manually: alembic upgrade head")
+    
     import asyncio
+    
+    async def run_migrations_safely():
+        """Run migrations with error handling - only if AUTO_MIGRATE is enabled"""
+        if not auto_migrate:
+            return
+        
+        try:
+            from alembic.config import Config
+            from alembic import command
+            
+            logger.info("🔄 Running database migrations on startup...")
+            logger.info("=" * 60)
+            
+            # Get the backend directory path
+            backend_dir = os.path.dirname(os.path.dirname(__file__))
+            alembic_ini_path = os.path.join(backend_dir, "alembic.ini")
+            
+            if not os.path.exists(alembic_ini_path):
+                logger.error(f"❌ alembic.ini not found at {alembic_ini_path}")
+                logger.error("⚠️  Skipping migrations - app will continue to start")
+                return
+            
+            alembic_cfg = Config(alembic_ini_path)
+            
+            # Get database URL and set in config
+            database_url = os.getenv("DATABASE_URL")
+            if database_url:
+                if database_url.startswith("postgresql+asyncpg://"):
+                    sync_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
+                    alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
+                    logger.info("✅ Converted asyncpg URL to psycopg2 format for Alembic")
+            
+            # Change to the directory containing alembic.ini
+            alembic_dir = os.path.dirname(os.path.abspath(alembic_ini_path))
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(alembic_dir)
+                logger.info(f"📁 Changed to directory: {alembic_dir}")
+                logger.info("🚀 Executing: alembic upgrade head")
+                
+                # Run migrations
+                command.upgrade(alembic_cfg, "head")
+                
+                logger.info("=" * 60)
+                logger.info("✅ Database migrations completed successfully")
+                logger.info("=" * 60)
+            finally:
+                os.chdir(original_cwd)
+                
+        except Exception as migration_error:
+            logger.error("=" * 80)
+            logger.error("❌ CRITICAL: Migration execution failed")
+            logger.error(f"❌ Error type: {type(migration_error).__name__}")
+            logger.error(f"❌ Error message: {str(migration_error)}")
+            logger.error("=" * 80)
+            logger.error("⚠️  APPLICATION WILL CONTINUE TO START")
+            logger.error("⚠️  Some features may not work until migrations are fixed")
+            logger.error("⚠️  Run 'alembic upgrade head' manually to fix")
+            logger.error("=" * 80)
+            # Don't exit - allow app to start even if migrations fail
     
     async def verify_database_state():
         """
