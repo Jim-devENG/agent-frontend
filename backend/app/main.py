@@ -158,16 +158,20 @@ async def readiness():
 
 @app.on_event("startup")
 async def startup():
-    """Startup event - run migrations and start scheduler"""
+    """Startup event - verify database connectivity and schema"""
     # Log that server is starting (important for Render deployment checks)
     logger.info("🚀 Server starting up...")
     logger.info(f"📡 Server will listen on port {os.getenv('PORT', '8000')}")
     
-    # CRITICAL: Run migrations BEFORE server accepts requests
-    # This ensures schema is correct before any API calls
+    # CRITICAL: DO NOT run migrations automatically on startup
+    # Migrations must be run at deploy time, not on every app boot
+    # This prevents crash loops and repeated migration execution
+    # Use /health/migrate endpoint or run 'alembic upgrade head' manually at deploy time
+    
+    # Only verify database connectivity and log schema state
     import asyncio
     
-    async def run_database_setup():
+    async def verify_database_state():
         """Run all database setup operations - BLOCKING until complete"""
         # CRITICAL: Run migrations FIRST before any queries
         # This ensures schema is correct before SELECT queries run
