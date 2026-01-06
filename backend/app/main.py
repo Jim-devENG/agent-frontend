@@ -165,17 +165,23 @@ async def startup():
     
     # Check if AUTO_MIGRATE environment variable is set
     # If set to "true" or "1", run migrations automatically on startup
-    # Otherwise, only verify database state (safer, prevents crash loops)
-    auto_migrate = os.getenv("AUTO_MIGRATE", "false").lower() in ("true", "1", "yes")
+    # If set to "false" or "0", never run migrations automatically
+    # If not set (default), run migrations only if schema mismatch is detected (smart auto-migrate)
+    auto_migrate_env = os.getenv("AUTO_MIGRATE", "").lower()
     
-    if auto_migrate:
-        logger.info("🔄 AUTO_MIGRATE is enabled - running migrations on startup...")
-        logger.info("⚠️  This will run migrations automatically on every app boot")
-        logger.info("⚠️  Set AUTO_MIGRATE=false to disable and run migrations manually")
+    if auto_migrate_env in ("true", "1", "yes"):
+        auto_migrate = True
+        logger.info("🔄 AUTO_MIGRATE=true - migrations will run automatically on startup")
+    elif auto_migrate_env in ("false", "0", "no"):
+        auto_migrate = False
+        logger.info("🔍 AUTO_MIGRATE=false - migrations will NOT run automatically")
+        logger.info("💡 Run migrations manually: alembic upgrade head")
     else:
-        logger.info("🔍 AUTO_MIGRATE is disabled - only verifying database state")
-        logger.info("💡 To enable automatic migrations, set AUTO_MIGRATE=true environment variable")
-        logger.info("💡 Or run migrations manually: alembic upgrade head")
+        # Default: Smart auto-migrate - only run if schema mismatch detected
+        auto_migrate = None  # None means "smart" mode
+        logger.info("🔍 AUTO_MIGRATE not set - using smart auto-migrate mode")
+        logger.info("💡 Migrations will run automatically only if schema mismatch is detected")
+        logger.info("💡 Set AUTO_MIGRATE=true to always run, AUTO_MIGRATE=false to never run")
     
     import asyncio
     
