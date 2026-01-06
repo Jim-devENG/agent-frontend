@@ -384,28 +384,19 @@ async def startup():
                         alter_statements = []
                         for col_name, col_type in missing_columns.items():
                             if col_type == 'NUMERIC':
-                                alter_statements.append(f"ADD COLUMN {col} NUMERIC(5, 2)")
-                            elif col_type == 'JSONB':
-                                alter_statements.append(f"ADD COLUMN {col} JSONB")
-                            elif col_type == 'TIMESTAMP WITH TIME ZONE':
-                                alter_statements.append(f"ADD COLUMN {col} TIMESTAMP WITH TIME ZONE")
-                            elif col_type == 'TEXT':
-                                alter_statements.append(f"ADD COLUMN {col} TEXT")
-                            elif col_type == 'INTEGER':
-                                alter_statements.append(f"ADD COLUMN {col} INTEGER")
-                            elif col_type == 'VARCHAR':
-                                alter_statements.append(f"ADD COLUMN {col} VARCHAR")
-                            else:
-                                alter_statements.append(f"ADD COLUMN {col} {col_type}")
-                        else:
-                            if col_type == 'NUMERIC':
                                 alter_statements.append(f"ADD COLUMN {col_name} NUMERIC(5, 2)")
-                            elif col_type == 'VARCHAR':
-                                alter_statements.append(f"ADD COLUMN {col_name} VARCHAR")
+                            elif col_type == 'JSONB':
+                                alter_statements.append(f"ADD COLUMN {col_name} JSONB")
+                            elif col_type == 'TIMESTAMP WITH TIME ZONE':
+                                alter_statements.append(f"ADD COLUMN {col_name} TIMESTAMP WITH TIME ZONE")
                             elif col_type == 'TEXT':
                                 alter_statements.append(f"ADD COLUMN {col_name} TEXT")
                             elif col_type == 'INTEGER':
                                 alter_statements.append(f"ADD COLUMN {col_name} INTEGER")
+                            elif col_type == 'VARCHAR':
+                                alter_statements.append(f"ADD COLUMN {col_name} VARCHAR")
+                            else:
+                                alter_statements.append(f"ADD COLUMN {col_name} {col_type}")
                         
                         alter_sql = f"ALTER TABLE prospects {', '.join(alter_statements)}"
                         
@@ -421,13 +412,13 @@ async def startup():
                                     SELECT column_name 
                                     FROM information_schema.columns 
                                     WHERE table_name = 'prospects' 
-                                    AND column_name IN ('source_type', 'source_platform', 'profile_url', 'username', 'display_name', 'follower_count', 'engagement_rate')
+                                    AND column_name IN ('source_type', 'source_platform', 'profile_url', 'username', 'display_name', 'follower_count', 'engagement_rate', 'bio_text', 'external_links', 'scraped_at')
                                 """)
                             )
                             verified_columns = {row[0] for row in verify_result.fetchall()}
                             
-                            if len(verified_columns) == 7:
-                                logger.info("✅ All 7 social columns verified after automatic fix")
+                            if len(verified_columns) == 10:
+                                logger.info("✅ All 10 Prospect columns verified after automatic fix")
                                 # Test SELECT query
                                 try:
                                     test_result = await conn.execute(
@@ -447,7 +438,7 @@ async def startup():
                             logger.error("=" * 80)
                             await conn.rollback()
                     else:
-                        logger.info("✅ All social columns verified: source_type, source_platform, profile_url, username, display_name, follower_count, engagement_rate")
+                        logger.info("✅ All Prospect columns verified: source_type, source_platform, profile_url, username, display_name, follower_count, engagement_rate, bio_text, external_links, scraped_at")
             except Exception as social_check_err:
                 logger.error(f"❌ Error checking/fixing social columns: {social_check_err}", exc_info=True)
             
