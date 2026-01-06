@@ -335,9 +335,51 @@ async def startup():
                     import sys
                     sys.exit(1)
                 
-                # Schema validation is now handled by validate_all_tables_exist() after migrations
-                # This ensures all tables (website + social) are validated together
-                logger.info("✅ Migrations completed - schema validation will run next")
+                # CRITICAL: Hard-fail schema validation after migrations
+                logger.info("=" * 60)
+                logger.info("🔍 STARTING HARD-FAIL SCHEMA VALIDATION")
+                logger.info("=" * 60)
+                
+                try:
+                    from app.utils.schema_validator import validate_prospect_schema, validate_alembic_version_table
+                    
+                    # Use async engine for validation
+                    async with engine.begin() as conn:
+                        # Validate alembic_version table first
+                        alembic_validation = await validate_alembic_version_table(conn)
+                        if not alembic_validation["valid"]:
+                            logger.error("=" * 80)
+                            logger.error("❌ CRITICAL: Alembic version table validation FAILED")
+                            logger.error("❌ ABORTING STARTUP")
+                            logger.error("=" * 80)
+                            import sys
+                            sys.exit(1)
+                        
+                        # Validate Prospect schema
+                        schema_validation = await validate_prospect_schema(conn)
+                        if not schema_validation["valid"]:
+                            logger.error("=" * 80)
+                            logger.error("❌ CRITICAL: Prospect schema validation FAILED")
+                            logger.error(f"❌ Missing columns: {', '.join(schema_validation['missing_columns'])}")
+                            logger.error("❌ ABORTING STARTUP TO PREVENT QUERY FAILURES")
+                            logger.error("=" * 80)
+                            import sys
+                            sys.exit(1)
+                    
+                    logger.info("=" * 60)
+                    logger.info("✅ ALL SCHEMA VALIDATIONS PASSED")
+                    logger.info("✅ Database schema matches ORM models exactly")
+                    logger.info("=" * 60)
+                    
+                except SystemExit:
+                    raise  # Re-raise system exit
+                except Exception as validation_err:
+                    logger.error("=" * 80)
+                    logger.error(f"❌ CRITICAL: Schema validation failed: {validation_err}")
+                    logger.error("❌ ABORTING STARTUP - cannot guarantee schema correctness")
+                    logger.error("=" * 80)
+                    import sys
+                    sys.exit(1)
             except Exception as migration_error:
                 logger.error("=" * 80)
                 logger.error("❌ CRITICAL: Migration execution failed")
@@ -350,12 +392,11 @@ async def startup():
                 logger.error("=" * 80)
                 logger.error("❌ alembic upgrade head failed")
                 logger.error("=" * 80)
-                logger.error("⚠️  APPLICATION WILL CONTINUE TO START")
-                logger.error("⚠️  Some features may not work until migrations are fixed")
-                logger.error("⚠️  Use /health/migrate endpoint to retry migrations")
+                logger.error("❌ ABORTING STARTUP - migrations must succeed")
                 logger.error("=" * 80)
-                # Don't fail hard - allow app to start but log the error
-                # This prevents deployment failures while still alerting to the issue
+                # HARD FAIL - migrations must succeed
+                import sys
+                sys.exit(1)
         except SystemExit:
             raise  # Re-raise system exit from validation
         except Exception as e:
