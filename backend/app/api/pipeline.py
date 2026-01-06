@@ -1277,7 +1277,8 @@ async def get_websites(
             total = 0
         
         # Get paginated results
-        # Schema validation ensures columns exist - use ORM query directly
+        # CRITICAL: Handle missing columns (bio_text, external_links, scraped_at) gracefully
+        # These are added by add_realtime_scraping_fields migration which may not have run yet
         websites = []
         try:
             result = await db.execute(
@@ -1291,13 +1292,52 @@ async def get_websites(
             websites = result.scalars().all()
             logger.info(f"📊 [WEBSITES] QUERY RESULT: Found {len(websites)} websites from database query (total available: {total})")
         except Exception as query_err:
-            # CRITICAL: Do NOT return empty array - raise error instead
-            logger.error(f"❌ [WEBSITES] Query failed: {query_err}", exc_info=True)
-            await db.rollback()
-            raise HTTPException(
-                status_code=500,
-                detail=f"Database query failed: {str(query_err)}. This indicates a schema mismatch - check logs."
-            )
+            # Check if error is due to missing bio_text/external_links/scraped_at columns
+            error_str = str(query_err).lower()
+            if 'bio_text' in error_str or 'external_links' in error_str or 'scraped_at' in error_str:
+                logger.warning(f"⚠️  [WEBSITES] Missing columns detected (bio_text/external_links/scraped_at). Migration add_realtime_scraping_fields not applied. Using fallback query.")
+                # Use raw SQL query that excludes missing columns
+                fallback_query = text("""
+                    SELECT id, domain, page_url, page_title, contact_email, contact_method, da_est, score,
+                           discovery_status, scrape_status, approval_status, verification_status, draft_status, send_status,
+                           stage, outreach_status, last_sent, followups_sent, draft_subject, draft_body, final_body,
+                           thread_id, sequence_index, is_manual, discovery_query_id, discovery_category, discovery_location,
+                           discovery_keywords, scrape_payload, scrape_source_url, verification_confidence, verification_payload,
+                           dataforseo_payload, snov_payload, serp_intent, serp_confidence, serp_signals,
+                           source_type, source_platform, profile_url, username, display_name, follower_count, engagement_rate,
+                           created_at, updated_at
+                    FROM prospects
+                    WHERE discovery_status = 'DISCOVERED'
+                    ORDER BY created_at DESC
+                    LIMIT :limit OFFSET :skip
+                """)
+                fallback_result = await db.execute(fallback_query, {"limit": limit, "skip": skip})
+                rows = fallback_result.fetchall()
+                # Convert rows to Prospect-like objects
+                column_names = ['id', 'domain', 'page_url', 'page_title', 'contact_email', 'contact_method', 'da_est', 'score',
+                               'discovery_status', 'scrape_status', 'approval_status', 'verification_status', 'draft_status', 'send_status',
+                               'stage', 'outreach_status', 'last_sent', 'followups_sent', 'draft_subject', 'draft_body', 'final_body',
+                               'thread_id', 'sequence_index', 'is_manual', 'discovery_query_id', 'discovery_category', 'discovery_location',
+                               'discovery_keywords', 'scrape_payload', 'scrape_source_url', 'verification_confidence', 'verification_payload',
+                               'dataforseo_payload', 'snov_payload', 'serp_intent', 'serp_confidence', 'serp_signals',
+                               'source_type', 'source_platform', 'profile_url', 'username', 'display_name', 'follower_count', 'engagement_rate',
+                               'created_at', 'updated_at']
+                for row in rows:
+                    # Create a minimal Prospect object from row data
+                    prospect = Prospect()
+                    for i, col_name in enumerate(column_names):
+                        if i < len(row):
+                            setattr(prospect, col_name, row[i])
+                    websites.append(prospect)
+                logger.info(f"📊 [WEBSITES] FALLBACK QUERY RESULT: Found {len(websites)} websites using fallback query (total available: {total})")
+            else:
+                # Re-raise if it's a different error
+                logger.error(f"❌ [WEBSITES] Query failed: {query_err}", exc_info=True)
+                await db.rollback()
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Database query failed: {str(query_err)}. This indicates a schema mismatch - check logs."
+                )
         
         # Safely build response data with error handling
         data = []
