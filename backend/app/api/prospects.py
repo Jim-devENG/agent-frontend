@@ -735,9 +735,9 @@ async def list_leads(
         # Get total count FIRST (before any filtering that might exclude data)
         count_query = select(func.count(Prospect.id)).where(
             and_(
-                Prospect.scrape_status.in_([
-                    ScrapeStatus.SCRAPED.value,
-                    ScrapeStatus.ENRICHED.value
+            Prospect.scrape_status.in_([
+                ScrapeStatus.SCRAPED.value,
+                ScrapeStatus.ENRICHED.value
                 ]),
                 website_filter
             )
@@ -760,12 +760,56 @@ async def list_leads(
         ).order_by(Prospect.created_at.desc())
         
         # Get paginated results
+        # CRITICAL: Handle missing columns (bio_text, external_links, scraped_at) gracefully
+        # These are added by add_realtime_scraping_fields migration which may not have run yet
         try:
             result = await db.execute(query.offset(skip).limit(limit))
             prospects = result.scalars().all()
             logger.info(f"📊 [LEADS] QUERY RESULT: Found {len(prospects)} prospects from database query (total available: {total})")
         except Exception as query_err:
-            # CRITICAL: Do NOT return empty array - raise error instead
+            # Check if error is due to missing bio_text/external_links/scraped_at columns
+            error_str = str(query_err).lower()
+            if 'bio_text' in error_str or 'external_links' in error_str or 'scraped_at' in error_str:
+                logger.warning(f"⚠️  [LEADS] Missing columns detected (bio_text/external_links/scraped_at). Migration add_realtime_scraping_fields not applied. Using fallback query.")
+                # Use raw SQL query that excludes missing columns
+                from sqlalchemy import text
+                fallback_query = text("""
+                    SELECT id, domain, page_url, page_title, contact_email, contact_method, da_est, score,
+                           discovery_status, scrape_status, approval_status, verification_status, draft_status, send_status,
+                           stage, outreach_status, last_sent, followups_sent, draft_subject, draft_body, final_body,
+                           thread_id, sequence_index, is_manual, discovery_query_id, discovery_category, discovery_location,
+                           discovery_keywords, scrape_payload, scrape_source_url, verification_confidence, verification_payload,
+                           dataforseo_payload, snov_payload, serp_intent, serp_confidence, serp_signals,
+                           source_type, source_platform, profile_url, username, display_name, follower_count, engagement_rate,
+                           created_at, updated_at
+                    FROM prospects
+                    WHERE scrape_status IN ('SCRAPED', 'ENRICHED')
+                    AND (source_type = 'website' OR source_type IS NULL)
+                    ORDER BY created_at DESC
+                    LIMIT :limit OFFSET :skip
+                """)
+                fallback_result = await db.execute(fallback_query, {"limit": limit, "skip": skip})
+                rows = fallback_result.fetchall()
+                # Convert rows to Prospect-like objects
+                prospects = []
+                column_names = ['id', 'domain', 'page_url', 'page_title', 'contact_email', 'contact_method', 'da_est', 'score',
+                               'discovery_status', 'scrape_status', 'approval_status', 'verification_status', 'draft_status', 'send_status',
+                               'stage', 'outreach_status', 'last_sent', 'followups_sent', 'draft_subject', 'draft_body', 'final_body',
+                               'thread_id', 'sequence_index', 'is_manual', 'discovery_query_id', 'discovery_category', 'discovery_location',
+                               'discovery_keywords', 'scrape_payload', 'scrape_source_url', 'verification_confidence', 'verification_payload',
+                               'dataforseo_payload', 'snov_payload', 'serp_intent', 'serp_confidence', 'serp_signals',
+                               'source_type', 'source_platform', 'profile_url', 'username', 'display_name', 'follower_count', 'engagement_rate',
+                               'created_at', 'updated_at']
+                for row in rows:
+                    # Create a minimal Prospect object from row data
+                    prospect = Prospect()
+                    for i, col_name in enumerate(column_names):
+                        if i < len(row):
+                            setattr(prospect, col_name, row[i])
+                    prospects.append(prospect)
+                logger.info(f"📊 [LEADS] FALLBACK QUERY RESULT: Found {len(prospects)} prospects using fallback query (total available: {total})")
+            else:
+                # Re-raise if it's a different error
             logger.error(f"❌ [LEADS] Query failed: {query_err}", exc_info=True)
             await db.rollback()
             from fastapi import HTTPException
@@ -944,10 +988,10 @@ async def list_scraped_emails(
         # Get total count FIRST (before any filtering)
         count_query = select(func.count(Prospect.id)).where(
             and_(
-                Prospect.contact_email.isnot(None),
-                Prospect.scrape_status.in_([
-                    ScrapeStatus.SCRAPED.value,
-                    ScrapeStatus.ENRICHED.value
+            Prospect.contact_email.isnot(None),
+            Prospect.scrape_status.in_([
+                ScrapeStatus.SCRAPED.value,
+                ScrapeStatus.ENRICHED.value
                 ]),
                 website_filter
             )
@@ -970,12 +1014,56 @@ async def list_scraped_emails(
         ).order_by(Prospect.created_at.desc())
         
         # Get paginated results
-        # Schema validation ensures columns exist - use ORM query directly
+        # CRITICAL: Handle missing columns (bio_text, external_links, scraped_at) gracefully
+        # These are added by add_realtime_scraping_fields migration which may not have run yet
         try:
             result = await db.execute(query.offset(skip).limit(limit))
             prospects = result.scalars().all()
             logger.info(f"📊 [SCRAPED EMAILS] QUERY RESULT: Found {len(prospects)} prospects from database query (total available: {total})")
         except Exception as query_err:
+            # Check if error is due to missing bio_text/external_links/scraped_at columns
+            error_str = str(query_err).lower()
+            if 'bio_text' in error_str or 'external_links' in error_str or 'scraped_at' in error_str:
+                logger.warning(f"⚠️  [SCRAPED EMAILS] Missing columns detected (bio_text/external_links/scraped_at). Migration add_realtime_scraping_fields not applied. Using fallback query.")
+                # Use raw SQL query that excludes missing columns
+            from sqlalchemy import text
+                fallback_query = text("""
+                    SELECT id, domain, page_url, page_title, contact_email, contact_method, da_est, score,
+                           discovery_status, scrape_status, approval_status, verification_status, draft_status, send_status,
+                           stage, outreach_status, last_sent, followups_sent, draft_subject, draft_body, final_body,
+                           thread_id, sequence_index, is_manual, discovery_query_id, discovery_category, discovery_location,
+                           discovery_keywords, scrape_payload, scrape_source_url, verification_confidence, verification_payload,
+                           dataforseo_payload, snov_payload, serp_intent, serp_confidence, serp_signals,
+                           source_type, source_platform, profile_url, username, display_name, follower_count, engagement_rate,
+                           created_at, updated_at
+                    FROM prospects
+                    WHERE contact_email IS NOT NULL
+                      AND scrape_status IN ('SCRAPED', 'ENRICHED')
+                    AND (source_type = 'website' OR source_type IS NULL)
+                    ORDER BY created_at DESC
+                    LIMIT :limit OFFSET :skip
+                """)
+                fallback_result = await db.execute(fallback_query, {"limit": limit, "skip": skip})
+                rows = fallback_result.fetchall()
+                # Convert rows to Prospect-like objects
+                prospects = []
+                for row in rows:
+                    # Create a minimal Prospect object from row data
+                    prospect = Prospect()
+                    for i, col_name in enumerate(['id', 'domain', 'page_url', 'page_title', 'contact_email', 'contact_method', 'da_est', 'score',
+                                                   'discovery_status', 'scrape_status', 'approval_status', 'verification_status', 'draft_status', 'send_status',
+                                                   'stage', 'outreach_status', 'last_sent', 'followups_sent', 'draft_subject', 'draft_body', 'final_body',
+                                                   'thread_id', 'sequence_index', 'is_manual', 'discovery_query_id', 'discovery_category', 'discovery_location',
+                                                   'discovery_keywords', 'scrape_payload', 'scrape_source_url', 'verification_confidence', 'verification_payload',
+                                                   'dataforseo_payload', 'snov_payload', 'serp_intent', 'serp_confidence', 'serp_signals',
+                                                   'source_type', 'source_platform', 'profile_url', 'username', 'display_name', 'follower_count', 'engagement_rate',
+                                                   'created_at', 'updated_at']):
+                        setattr(prospect, col_name, row[i])
+                    prospects.append(prospect)
+                logger.info(f"📊 [SCRAPED EMAILS] FALLBACK QUERY RESULT: Found {len(prospects)} prospects using fallback query (total available: {total})")
+            else:
+                # Re-raise if it's a different error
+                raise
             # CRITICAL: Do NOT return empty array - raise error instead
             logger.error(f"❌ [SCRAPED EMAILS] Query failed: {query_err}", exc_info=True)
             await db.rollback()
@@ -2221,4 +2309,4 @@ async def gemini_chat(
                 "message": f"Unexpected error: {str(e)}",
                 "stage": stage
             }
-        )
+    )
