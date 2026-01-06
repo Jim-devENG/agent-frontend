@@ -247,7 +247,7 @@ async def startup():
                 logger.info("✅ All tables are up-to-date with latest schema")
                 logger.info("=" * 60)
                 
-                # CRITICAL: Verify Alembic state after migrations
+                # CRITICAL: Verify Alembic state after migrations - HARD FAIL if wrong
                 try:
                     from alembic.script import ScriptDirectory
                     from alembic.runtime.migration import MigrationContext
@@ -256,9 +256,48 @@ async def startup():
                     # Get current database revision
                     sync_url = database_url.replace("postgresql+asyncpg://", "postgresql://") if database_url.startswith("postgresql+asyncpg://") else database_url
                     engine = create_engine(sync_url, pool_pre_ping=True)
+                    
                     with engine.connect() as conn:
+                        # CRITICAL: Check if alembic_version table exists
+                        version_table_check = conn.execute(text("""
+                            SELECT EXISTS (
+                                SELECT FROM information_schema.tables 
+                                WHERE table_schema = 'public' 
+                                AND table_name = 'alembic_version'
+                            )
+                        """))
+                        version_table_exists = version_table_check.scalar()
+                        
+                        if not version_table_exists:
+                            logger.error("=" * 80)
+                            logger.error("❌ CRITICAL: alembic_version table is MISSING!")
+                            logger.error("❌ This will cause Alembic to re-run all migrations from base")
+                            logger.error("❌ This will cause schema corruption and data loss")
+                            logger.error("❌ ABORTING STARTUP TO PREVENT DATA LOSS")
+                            logger.error("=" * 80)
+                            engine.dispose()
+                            import sys
+                            sys.exit(1)
+                        
+                        # Get current revision from alembic_version table
+                        version_result = conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
+                        version_row = version_result.fetchone()
+                        current_rev = version_row[0] if version_row else None
+                        
+                        # Also check via MigrationContext for consistency
                         context = MigrationContext.configure(conn)
-                        current_rev = context.get_current_revision()
+                        context_rev = context.get_current_revision()
+                        
+                        if current_rev != context_rev:
+                            logger.error("=" * 80)
+                            logger.error(f"❌ CRITICAL: Alembic version mismatch!")
+                            logger.error(f"❌ alembic_version table: {current_rev}")
+                            logger.error(f"❌ MigrationContext: {context_rev}")
+                            logger.error("❌ ABORTING STARTUP TO PREVENT SCHEMA CORRUPTION")
+                            logger.error("=" * 80)
+                            engine.dispose()
+                            import sys
+                            sys.exit(1)
                     
                     # Get head revision from script
                     script = ScriptDirectory.from_config(alembic_cfg)
@@ -267,20 +306,34 @@ async def startup():
                     
                     logger.info("=" * 60)
                     logger.info("📊 ALEMBIC STATE VERIFICATION")
+                    logger.info(f"   alembic_version table: ✅ EXISTS")
                     logger.info(f"   Current DB revision: {current_rev}")
                     logger.info(f"   Head revision: {head_rev}")
+                    
                     if current_rev == head_rev:
                         logger.info("   ✅ Database is at latest migration")
                     else:
-                        logger.warning(f"   ⚠️  Database is NOT at latest migration!")
-                        logger.warning(f"   ⚠️  Expected: {head_rev}, Got: {current_rev}")
-                        logger.warning(f"   ⚠️  This may cause schema mismatches!")
-                    logger.info("=" * 60)
+                        logger.error("=" * 80)
+                        logger.error(f"❌ CRITICAL: Database is NOT at latest migration!")
+                        logger.error(f"❌ Current: {current_rev}, Expected: {head_rev}")
+                        logger.error("❌ This indicates migrations did not complete successfully")
+                        logger.error("❌ ABORTING STARTUP TO PREVENT SCHEMA MISMATCH")
+                        logger.error("=" * 80)
+                        engine.dispose()
+                        import sys
+                        sys.exit(1)
                     
+                    logger.info("=" * 60)
                     engine.dispose()
+                except SystemExit:
+                    raise  # Re-raise system exit
                 except Exception as verify_err:
-                    logger.warning(f"⚠️  Could not verify Alembic state: {verify_err}")
-                    # Don't fail startup, but log the warning
+                    logger.error("=" * 80)
+                    logger.error(f"❌ CRITICAL: Failed to verify Alembic state: {verify_err}")
+                    logger.error("❌ ABORTING STARTUP - cannot guarantee schema correctness")
+                    logger.error("=" * 80)
+                    import sys
+                    sys.exit(1)
                 
                 # Schema validation is now handled by validate_all_tables_exist() after migrations
                 # This ensures all tables (website + social) are validated together
@@ -303,15 +356,16 @@ async def startup():
                 logger.error("=" * 80)
                 # Don't fail hard - allow app to start but log the error
                 # This prevents deployment failures while still alerting to the issue
+        except SystemExit:
+            raise  # Re-raise system exit from validation
         except Exception as e:
             logger.error("=" * 80)
             logger.error(f"❌ CRITICAL: Migration setup failed: {e}", exc_info=True)
-            logger.error("❌ Application will continue to start")
-            logger.error("⚠️  Some features may not work until migrations are fixed")
-            logger.error("⚠️  Use /health/migrate endpoint to retry migrations")
+            logger.error("❌ ABORTING STARTUP - migrations must succeed")
             logger.error("=" * 80)
-            # Don't re-raise - allow app to start even if migrations fail
-            # This prevents deployment failures while still alerting to the issue
+            # HARD FAIL - migrations must succeed
+            import sys
+            sys.exit(1)
         
         # Add a small delay after migrations
         await asyncio.sleep(1)

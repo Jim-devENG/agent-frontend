@@ -181,11 +181,11 @@ class Prospect(Base):
     display_name = Column(String, nullable=True)  # Full name or display name
     follower_count = Column(Integer, nullable=True)  # Number of followers
     engagement_rate = Column(Numeric(5, 2), nullable=True)  # Engagement rate (0-100)
-    # NOTE: These columns are added by add_realtime_scraping_fields migration
-    # They may not exist in older databases - code must handle this gracefully
-    bio_text = Column(Text, nullable=True)  # Bio text from profile (added by migration)
-    external_links = Column(JSON, nullable=True)  # Link-in-bio URLs (array) (added by migration)
-    scraped_at = Column(DateTime(timezone=True), nullable=True)  # When profile was last scraped (added by migration)
+    # Realtime scraping fields - REQUIRED (added by migrations)
+    # Schema validation ensures these exist at startup
+    bio_text = Column(Text, nullable=True)  # Bio text from profile
+    external_links = Column(JSON, nullable=True)  # Link-in-bio URLs (array)
+    scraped_at = Column(DateTime(timezone=True), nullable=True)  # When profile was last scraped
     
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -1,268 +1,190 @@
 """
-Schema validation utilities for ensuring database schema matches ORM models.
+Schema validation utilities - HARD FAIL on schema mismatches
 
-FEATURE-SCOPED VALIDATION:
-- Startup validation logs errors but doesn't exit (allows app to start)
-- Request-time validation is feature-scoped (only checks relevant tables)
-- Social endpoints check only social tables
-- Website endpoints check only website tables
-- Health endpoint provides full diagnostic validation
+This module provides functions to validate that the database schema
+matches the ORM models exactly. Any mismatch causes a hard failure.
 """
-from sqlalchemy import inspect, text
-from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy.orm import DeclarativeMeta
 import logging
-from typing import Tuple, List, Set, Dict, Any
+from typing import Dict, List, Set
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 
-class SchemaValidationError(Exception):
-    """Raised when schema validation fails - application must not start"""
-    pass
+# Required columns from Prospect model - ALL must exist
+REQUIRED_PROSPECT_COLUMNS = {
+    # Core fields
+    'id', 'domain', 'page_url', 'page_title', 'contact_email', 'contact_method',
+    'da_est', 'score', 'outreach_status', 'last_sent', 'followups_sent',
+    'draft_subject', 'draft_body', 'final_body', 'thread_id', 'sequence_index',
+    'is_manual', 'created_at', 'updated_at',
+    
+    # Pipeline status fields
+    'discovery_status', 'scrape_status', 'approval_status', 'verification_status',
+    'draft_status', 'send_status', 'stage',
+    
+    # Discovery metadata
+    'discovery_query_id', 'discovery_category', 'discovery_location', 'discovery_keywords',
+    
+    # Scraping metadata
+    'scrape_payload', 'scrape_source_url',
+    
+    # Verification metadata
+    'verification_confidence', 'verification_payload',
+    
+    # API responses
+    'dataforseo_payload', 'snov_payload',
+    
+    # SERP intent
+    'serp_intent', 'serp_confidence', 'serp_signals',
+    
+    # Social outreach fields
+    'source_type', 'source_platform', 'profile_url', 'username', 'display_name',
+    'follower_count', 'engagement_rate',
+    
+    # Realtime scraping fields
+    'bio_text', 'external_links', 'scraped_at',
+}
 
 
-async def validate_social_tables_exist(engine: AsyncEngine) -> Tuple[bool, List[str]]:
+async def validate_prospect_schema(db: AsyncSession) -> Dict:
     """
-    Validate that all required social outreach tables exist.
+    Validate that prospects table has ALL required columns from Prospect model.
     
     Returns:
-        (is_valid, missing_tables)
-        - is_valid: True if all tables exist
-        - missing_tables: List of missing table names
-    """
-    required_tables = {
-        'social_profiles',
-        'social_discovery_jobs',
-        'social_drafts',
-        'social_messages'
-    }
+        Dict with validation results:
+        - valid: bool
+        - missing_columns: List[str]
+        - existing_columns: List[str]
+        - error: str (if validation failed)
     
+    Raises:
+        Exception: If any required column is missing (HARD FAIL)
+    """
     try:
-        async with engine.begin() as conn:
-            # Use parameterized query with tuple unpacking for safety
-            # Table names are from our code, but still use proper parameterization
-            tables_tuple = tuple(required_tables)
-            result = await conn.execute(
-                text("""
-                    SELECT table_name 
-                    FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = ANY(:tables)
-                """),
-                {"tables": tables_tuple}
+        # Get all columns from prospects table
+        result = await db.execute(text("""
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns 
+            WHERE table_name = 'prospects' 
+            AND table_schema = 'public'
+            ORDER BY column_name
+        """))
+        db_columns = {row[0]: {'type': row[1], 'nullable': row[2]} for row in result.fetchall()}
+        
+        # Check for missing required columns
+        missing_columns = REQUIRED_PROSPECT_COLUMNS - set(db_columns.keys())
+        
+        if missing_columns:
+            error_msg = f"CRITICAL: prospects table is missing {len(missing_columns)} required columns: {', '.join(sorted(missing_columns))}"
+            logger.error("=" * 80)
+            logger.error(f"❌ {error_msg}")
+            logger.error("=" * 80)
+            logger.error("❌ This indicates a schema mismatch that will cause query failures")
+            logger.error("❌ ABORTING STARTUP TO PREVENT DATA CORRUPTION")
+            logger.error("=" * 80)
+            
+            return {
+                "valid": False,
+                "missing_columns": sorted(missing_columns),
+                "existing_columns": sorted(db_columns.keys()),
+                "error": error_msg
+            }
+        
+        logger.info("=" * 60)
+        logger.info("✅ PROSPECT SCHEMA VALIDATION PASSED")
+        logger.info(f"   All {len(REQUIRED_PROSPECT_COLUMNS)} required columns exist")
+        logger.info("=" * 60)
+        
+        return {
+            "valid": True,
+            "missing_columns": [],
+            "existing_columns": sorted(db_columns.keys()),
+            "error": None
+        }
+        
+    except Exception as e:
+        error_msg = f"Schema validation failed: {str(e)}"
+        logger.error("=" * 80)
+        logger.error(f"❌ {error_msg}")
+        logger.error("=" * 80)
+        raise Exception(error_msg) from e
+
+
+async def validate_alembic_version_table(db: AsyncSession) -> Dict:
+    """
+    Validate that alembic_version table exists and has correct structure.
+    
+    Returns:
+        Dict with validation results
+    
+    Raises:
+        Exception: If alembic_version table is missing or corrupted
+    """
+    try:
+        # Check if table exists
+        table_check = await db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'alembic_version'
             )
-            
-            existing_tables = {row[0] for row in result.fetchall()}
-            missing_tables = required_tables - existing_tables
-            
-            logger.info(f"📊 Social tables check: Found {len(existing_tables)}/{len(required_tables)} tables")
-            if missing_tables:
-                logger.warning(f"⚠️  Missing social tables: {', '.join(missing_tables)}")
-            
-            return (len(missing_tables) == 0, list(missing_tables))
-    except Exception as e:
-        logger.error(f"❌ Failed to validate social tables: {e}", exc_info=True)
-        logger.error(f"❌ Error type: {type(e).__name__}")
-        import traceback
-        logger.error(traceback.format_exc())
-        # If we can't check, assume invalid (fail safe)
-        return (False, list(required_tables))
-
-
-async def validate_website_tables_exist(engine: AsyncEngine) -> Tuple[bool, List[str]]:
-    """
-    Validate that all required website outreach tables exist.
-    
-    Returns:
-        (is_valid, missing_tables)
-    """
-    required_tables = {
-        'prospects',
-        'jobs',
-        'email_logs',
-        'settings',
-        'discovery_queries',
-        'scraper_history'
-    }
-    
-    try:
-        async with engine.begin() as conn:
-            # Use parameterized query with tuple unpacking for safety
-            tables_tuple = tuple(required_tables)
-            result = await conn.execute(
-                text("""
-                    SELECT table_name 
-                    FROM information_schema.tables 
-                    WHERE table_schema = 'public' 
-                    AND table_name = ANY(:tables)
-                """),
-                {"tables": tables_tuple}
-            )
-            
-            existing_tables = {row[0] for row in result.fetchall()}
-            missing_tables = required_tables - existing_tables
-            
-            logger.info(f"📊 Website tables check: Found {len(existing_tables)}/{len(required_tables)} tables")
-            if missing_tables:
-                logger.warning(f"⚠️  Missing website tables: {', '.join(missing_tables)}")
-            
-            return (len(missing_tables) == 0, list(missing_tables))
-    except Exception as e:
-        logger.error(f"❌ Failed to validate website tables: {e}", exc_info=True)
-        logger.error(f"❌ Error type: {type(e).__name__}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return (False, list(required_tables))
-
-
-async def check_social_schema_ready(engine: AsyncEngine) -> Dict[str, Any]:
-    """
-    Feature-scoped schema check for social endpoints.
-    
-    Returns a dictionary with status information.
-    Does NOT raise exceptions - returns structured metadata.
-    
-    Returns:
-        {
-            "ready": bool,
-            "status": str,  # "active" | "inactive"
-            "reason": str,   # Explanation if inactive
-            "missing_tables": List[str],
-            "tables_found": List[str]
-        }
-    """
-    is_valid, missing_tables = await validate_social_tables_exist(engine)
-    
-    if is_valid:
-        return {
-            "ready": True,
-            "status": "active",
-            "reason": None,
-            "missing_tables": [],
-            "tables_found": ['social_profiles', 'social_discovery_jobs', 'social_drafts', 'social_messages']
-        }
-    else:
-        return {
-            "ready": False,
-            "status": "inactive",
-            "reason": "social schema not initialized",
-            "missing_tables": missing_tables,
-            "tables_found": []
-        }
-
-
-async def validate_all_tables_exist(engine: AsyncEngine) -> None:
-    """
-    Validate that ALL required tables exist (website + social).
-    
-    Raises SchemaValidationError if any tables are missing.
-    This function FAILS HARD - application will not start if validation fails.
-    
-    NOTE: This is only called at startup. Request handlers use feature-scoped checks.
-    """
-    logger.info("=" * 80)
-    logger.info("🔍 CRITICAL: Validating database schema completeness...")
-    logger.info("=" * 80)
-    
-    # Validate website tables
-    website_valid, website_missing = await validate_website_tables_exist(engine)
-    if not website_valid:
-        logger.error("=" * 80)
-        logger.error("❌ CRITICAL: Website outreach tables are missing!")
-        logger.error(f"❌ Missing tables: {', '.join(website_missing)}")
-        logger.error("=" * 80)
-        logger.error("❌ APPLICATION WILL NOT START")
-        logger.error("❌ Run migrations: alembic upgrade head")
-        logger.error("=" * 80)
-        raise SchemaValidationError(
-            f"Website outreach tables missing: {', '.join(website_missing)}. "
-            "Run migrations: alembic upgrade head"
-        )
-    logger.info("✅ Website outreach tables: All present")
-    
-    # Validate social tables
-    social_valid, social_missing = await validate_social_tables_exist(engine)
-    if not social_valid:
-        logger.error("=" * 80)
-        logger.error("❌ CRITICAL: Social outreach tables are missing!")
-        logger.error(f"❌ Missing tables: {', '.join(social_missing)}")
-        logger.error("=" * 80)
-        logger.error("❌ APPLICATION WILL NOT START")
-        logger.error("❌ Run migrations: alembic upgrade head")
-        logger.error("=" * 80)
-        raise SchemaValidationError(
-            f"Social outreach tables missing: {', '.join(social_missing)}. "
-            "Run migrations: alembic upgrade head"
-        )
-    logger.info("✅ Social outreach tables: All present")
-    
-    logger.info("=" * 80)
-    logger.info("✅ Database schema validation PASSED - All required tables exist")
-    logger.info("=" * 80)
-
-
-async def get_full_schema_diagnostics(engine: AsyncEngine) -> Dict[str, Any]:
-    """
-    Get comprehensive schema diagnostics for health endpoint.
-    
-    Returns detailed information about all tables, migrations, etc.
-    This is safe to call from request handlers - returns structured data.
-    """
-    try:
-        # Check website tables
-        website_valid, website_missing = await validate_website_tables_exist(engine)
+        """))
+        table_exists = table_check.scalar()
         
-        # Check social tables
-        social_valid, social_missing = await validate_social_tables_exist(engine)
+        if not table_exists:
+            error_msg = "CRITICAL: alembic_version table does not exist - Alembic will re-run all migrations from base"
+            logger.error("=" * 80)
+            logger.error(f"❌ {error_msg}")
+            logger.error("=" * 80)
+            logger.error("❌ This will cause schema corruption and data loss")
+            logger.error("❌ ABORTING STARTUP")
+            logger.error("=" * 80)
+            
+            return {
+                "valid": False,
+                "table_exists": False,
+                "error": error_msg
+            }
         
-        # Check Alembic version
-        alembic_version = None
-        try:
-            async with engine.begin() as conn:
-                result = await conn.execute(text("""
-                    SELECT version_num 
-                    FROM alembic_version 
-                    LIMIT 1
-                """))
-                row = result.fetchone()
-                if row:
-                    alembic_version = row[0]
-        except Exception as e:
-            logger.warning(f"Could not read Alembic version: {e}")
+        # Check table structure
+        column_check = await db.execute(text("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'alembic_version' 
+            AND table_schema = 'public'
+        """))
+        columns = {row[0]: row[1] for row in column_check.fetchall()}
+        
+        if 'version_num' not in columns:
+            error_msg = "CRITICAL: alembic_version table exists but missing version_num column - table structure is corrupted"
+            logger.error("=" * 80)
+            logger.error(f"❌ {error_msg}")
+            logger.error("=" * 80)
+            raise Exception(error_msg)
+        
+        # Get current version
+        version_result = await db.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
+        version_row = version_result.fetchone()
+        current_version = version_row[0] if version_row else None
+        
+        logger.info("=" * 60)
+        logger.info("✅ ALEMBIC_VERSION TABLE VALIDATION PASSED")
+        logger.info(f"   Table exists: ✅")
+        logger.info(f"   Current version: {current_version}")
+        logger.info("=" * 60)
         
         return {
-            "status": "ok" if (website_valid and social_valid) else "incomplete",
-            "website_tables": {
-                "valid": website_valid,
-                "missing": website_missing
-            },
-            "social_tables": {
-                "valid": social_valid,
-                "missing": social_missing
-            },
-            "alembic_version": alembic_version,
-            "all_tables_valid": website_valid and social_valid,
-            "message": "All tables exist" if (website_valid and social_valid) else f"Missing tables: website={website_missing}, social={social_missing}"
+            "valid": True,
+            "table_exists": True,
+            "current_version": current_version,
+            "error": None
         }
+        
     except Exception as e:
-        logger.error(f"Schema diagnostics failed: {e}", exc_info=True)
-        return {
-            "status": "error",
-            "error": str(e),
-            "message": "Could not check schema"
-        }
-
-
-# Keep existing functions for backward compatibility
-async def validate_prospect_schema(engine: AsyncEngine, base: DeclarativeMeta) -> Tuple[bool, List[str]]:
-    """Validate prospect table schema (existing function)"""
-    # Implementation kept for backward compatibility
-    # This is now secondary to table existence validation
-    return (True, [])
-
-
-async def ensure_prospect_schema(engine: AsyncEngine) -> bool:
-    """Ensure prospect schema (existing function)"""
-    # Implementation kept for backward compatibility
-    return True
+        error_msg = f"Alembic version table validation failed: {str(e)}"
+        logger.error("=" * 80)
+        logger.error(f"❌ {error_msg}")
+        logger.error("=" * 80)
+        raise Exception(error_msg) from e

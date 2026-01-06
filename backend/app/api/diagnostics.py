@@ -497,6 +497,135 @@ async def get_database_identity(
         raise HTTPException(status_code=500, detail=f"Diagnostic query failed: {str(e)}")
 
 
+@router.get("/schema")
+async def debug_schema(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[str] = Depends(get_current_user_optional)
+):
+    """
+    Debug endpoint to check schema state.
+    
+    Returns:
+    - alembic current revision
+    - alembic head revision
+    - list of prospects columns
+    - database name + host
+    """
+    try:
+        from sqlalchemy import text, create_engine
+        from alembic.script import ScriptDirectory
+        from alembic.runtime.migration import MigrationContext
+        from alembic.config import Config
+        import os
+        
+        results = {
+            "database_info": {},
+            "alembic_state": {},
+            "prospects_columns": [],
+            "schema_validation": {}
+        }
+        
+        # Get database info
+        db_info_result = await db.execute(text("SELECT current_database(), inet_server_addr()"))
+        db_info = db_info_result.fetchone()
+        if db_info:
+            results["database_info"] = {
+                "name": db_info[0],
+                "host": db_info[1] or "localhost (local connection)"
+            }
+        
+        # Get Alembic state
+        try:
+            database_url = os.getenv("DATABASE_URL", "")
+            sync_url = database_url.replace("postgresql+asyncpg://", "postgresql://") if database_url.startswith("postgresql+asyncpg://") else database_url
+            
+            # Get current revision from alembic_version table
+            version_result = await db.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))
+            version_row = version_result.fetchone()
+            current_rev = version_row[0] if version_row else None
+            
+            # Get current revision via MigrationContext
+            engine = create_engine(sync_url, pool_pre_ping=True)
+            with engine.connect() as conn:
+                context = MigrationContext.configure(conn)
+                context_rev = context.get_current_revision()
+            
+            # Get head revision
+            import glob
+            alembic_ini_path = None
+            possible_paths = [
+                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "alembic.ini"),
+                "alembic.ini",
+                "/app/alembic.ini",
+            ]
+            for path in possible_paths:
+                if os.path.exists(path):
+                    alembic_ini_path = path
+                    break
+            
+            if alembic_ini_path:
+                alembic_cfg = Config(alembic_ini_path)
+                if database_url:
+                    if database_url.startswith("postgresql+asyncpg://"):
+                        sync_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
+                        alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
+                script = ScriptDirectory.from_config(alembic_cfg)
+                heads = script.get_revision("heads")
+                head_rev = heads.revision if heads else None
+            else:
+                head_rev = None
+            
+            results["alembic_state"] = {
+                "alembic_version_table": current_rev,
+                "migration_context": context_rev,
+                "head_revision": head_rev,
+                "is_at_head": current_rev == head_rev if current_rev and head_rev else False
+            }
+            
+            engine.dispose()
+        except Exception as alembic_err:
+            results["alembic_state"] = {
+                "error": str(alembic_err)
+            }
+        
+        # Get prospects columns
+        columns_result = await db.execute(text("""
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns 
+            WHERE table_name = 'prospects' 
+            AND table_schema = 'public'
+            ORDER BY column_name
+        """))
+        results["prospects_columns"] = [
+            {
+                "name": row[0],
+                "type": row[1],
+                "nullable": row[2]
+            }
+            for row in columns_result.fetchall()
+        ]
+        
+        # Run schema validation
+        try:
+            from app.utils.schema_validator import validate_prospect_schema, validate_alembic_version_table
+            schema_validation = await validate_prospect_schema(db)
+            alembic_validation = await validate_alembic_version_table(db)
+            results["schema_validation"] = {
+                "prospect_schema": schema_validation,
+                "alembic_version": alembic_validation
+            }
+        except Exception as validation_err:
+            results["schema_validation"] = {
+                "error": str(validation_err)
+            }
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"❌ [DEBUG SCHEMA] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Debug schema check failed: {str(e)}")
+
+
 @router.get("/full-forensics")
 async def get_full_forensics(
     db: AsyncSession = Depends(get_db),
