@@ -25,6 +25,62 @@ async def health():
     return {"status": "healthy", "service": "art-outreach-api"}
 
 
+@router.get("/health/connection-string")
+async def check_connection_string():
+    """
+    Diagnostic endpoint to check DATABASE_URL format (without exposing password).
+    Helps diagnose connection issues.
+    """
+    import os
+    from urllib.parse import urlparse
+    
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        return {
+            "error": "DATABASE_URL not set",
+            "status": "error"
+        }
+    
+    try:
+        # Parse URL to extract components (safely)
+        # Handle both postgresql:// and postgresql+asyncpg://
+        url_to_parse = database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+        parsed = urlparse(url_to_parse)
+        
+        # Extract hostname and port
+        hostname = parsed.hostname or "unknown"
+        port = parsed.port or 5432
+        database = parsed.path.lstrip("/") if parsed.path else "unknown"
+        username = parsed.username or "unknown"
+        
+        # Check if it's a Supabase URL
+        is_supabase = ".supabase.co" in hostname or "pooler.supabase.com" in hostname
+        
+        # Verify hostname format
+        hostname_parts = hostname.split(".")
+        is_valid_format = len(hostname_parts) >= 3
+        
+        return {
+            "status": "ok",
+            "hostname": hostname,
+            "port": port,
+            "database": database,
+            "username": username,
+            "is_supabase": is_supabase,
+            "hostname_parts_count": len(hostname_parts),
+            "hostname_valid": is_valid_format,
+            "hostname_parts": hostname_parts,
+            "scheme": parsed.scheme,
+            "warning": "Hostname appears truncated" if is_supabase and not is_valid_format else None
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "raw_url_length": len(database_url) if database_url else 0
+        }
+
+
 @router.get("/health/ready")
 async def readiness():
     """Readiness check - verifies database connectivity"""
