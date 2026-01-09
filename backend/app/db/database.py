@@ -52,6 +52,7 @@ def encode_password_in_url(url: str) -> str:
         # Find the scheme (postgresql://, postgresql+asyncpg://, etc.)
         scheme_end = url.find("://")
         if scheme_end == -1:
+            logger.warning("Invalid URL format: no :// found")
             return url  # Not a valid URL format
         
         scheme = url[:scheme_end + 3]
@@ -60,6 +61,7 @@ def encode_password_in_url(url: str) -> str:
         # Find the @ symbol which separates credentials from host
         at_pos = rest.find("@")
         if at_pos == -1:
+            logger.debug("No credentials found in URL (no @ symbol)")
             return url  # No credentials, return as-is
         
         credentials = rest[:at_pos]
@@ -68,19 +70,34 @@ def encode_password_in_url(url: str) -> str:
         # Split username and password
         colon_pos = credentials.find(":")
         if colon_pos == -1:
+            logger.debug("No password found in URL (no : in credentials)")
             return url  # No password, return as-is
         
         username = credentials[:colon_pos]
         password = credentials[colon_pos + 1:]
         
+        # Log (without exposing password) for debugging
+        logger.debug(f"Encoding password for user: {username}, host: {host_and_path.split('/')[0]}")
+        
         # URL-encode the password (use quote, not quote_plus, for passwords)
+        # quote() properly handles special characters like !, @, #, etc.
         encoded_password = quote(password, safe="")
         
         # Reconstruct the URL
         encoded_url = f"{scheme}{username}:{encoded_password}@{host_and_path}"
+        
+        # Verify the hostname is preserved
+        if "@" in encoded_url:
+            encoded_host = encoded_url.split("@")[1].split("/")[0].split(":")[0]
+            original_host = host_and_path.split("/")[0].split(":")[0]
+            if encoded_host != original_host:
+                logger.error(f"Hostname mismatch after encoding! Original: {original_host}, Encoded: {encoded_host}")
+            else:
+                logger.debug(f"Password encoded successfully, hostname preserved: {encoded_host}")
+        
         return encoded_url
     except Exception as e:
-        logger.warning(f"Could not encode password in URL, using as-is: {e}")
+        logger.error(f"Could not encode password in URL: {e}", exc_info=True)
         return url
 
 # Convert scheme first
