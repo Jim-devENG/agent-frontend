@@ -68,7 +68,7 @@ async def validate_prospect_schema(db: AsyncSession) -> Dict:
         result = await db.execute(text("""
             SELECT column_name, data_type, is_nullable
             FROM information_schema.columns 
-            WHERE table_name = 'prospects' 
+            WHERE table_name = 'prospects'
             AND table_schema = 'public'
             ORDER BY column_name
         """))
@@ -243,11 +243,11 @@ async def get_full_schema_diagnostics(engine: AsyncEngine) -> Dict:
             try:
                 columns_result = await conn.execute(text("""
                     SELECT column_name, data_type, is_nullable
-                    FROM information_schema.columns 
-                    WHERE table_name = 'prospects' 
+            FROM information_schema.columns 
+            WHERE table_name = 'prospects'
                     AND table_schema = 'public'
                     ORDER BY column_name
-                """))
+        """))
                 db_columns = [row[0] for row in columns_result.fetchall()]
                 diagnostics["db_columns"] = db_columns
             except Exception as e:

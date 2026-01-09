@@ -158,6 +158,37 @@ if DATABASE_URL != temp_url:
 else:
     logger.info("ℹ️  No password encoding applied (password may already be encoded or not present)")
 
+# CRITICAL: Check if SSL is required before removing query params
+# We need to know if sslmode=require was present to configure SSL via connect_args
+requires_ssl = False
+if "?" in DATABASE_URL:
+    query_string = DATABASE_URL.split("?", 1)[1]
+    if "sslmode=require" in query_string or "sslmode=REQUIRE" in query_string:
+        requires_ssl = True
+        logger.info("ℹ️  Detected sslmode=require in connection string")
+
+# CRITICAL: Remove sslmode query parameter from URL
+# asyncpg doesn't accept sslmode as a parameter - SSL is configured via connect_args
+if "?" in DATABASE_URL:
+    url_parts = DATABASE_URL.split("?", 1)
+    base_url = url_parts[0]
+    query_string = url_parts[1] if len(url_parts) > 1 else ""
+    
+    # Remove sslmode parameter from query string
+    if query_string:
+        query_params = []
+        for param in query_string.split("&"):
+            if not param.startswith("sslmode="):
+                query_params.append(param)
+        
+        if query_params:
+            DATABASE_URL = f"{base_url}?{'&'.join(query_params)}"
+        else:
+            DATABASE_URL = base_url
+        
+        if "sslmode=" in query_string:
+            logger.info("ℹ️  Removed sslmode query parameter (SSL configured via connect_args instead)")
+
 # Log the hostname to verify it's correct (without exposing password)
 try:
     if "@" in DATABASE_URL:
@@ -204,6 +235,10 @@ if "@" in DATABASE_URL:
 _engine_instance = None
 _engine_lock = None
 
+def get_engine():
+    """Get the single async engine instance (public API)"""
+    return _get_engine()
+
 def _get_engine():
     """Get or create the async engine - lazy initialization"""
     global _engine_instance, _engine_lock
@@ -213,16 +248,20 @@ def _get_engine():
             _engine_lock = threading.Lock()
         with _engine_lock:
             if _engine_instance is None:
-                # Supabase requires SSL connections - configure for asyncpg
+                # Configure SSL for asyncpg (required for Supabase or when sslmode=require)
                 connect_args = {}
-                if ".supabase.co" in DATABASE_URL:
+                is_supabase = ".supabase.co" in DATABASE_URL
+                
+                if is_supabase or requires_ssl:
                     # asyncpg uses ssl context for SSL connections
-                    # For Supabase, we need to require SSL
                     import ssl
                     connect_args = {
                         "ssl": ssl.create_default_context()
                     }
-                    logger.info("✅ Configured SSL for Supabase connection")
+                    if is_supabase:
+                        logger.info("✅ Configured SSL for Supabase connection")
+                    elif requires_ssl:
+                        logger.info("✅ Configured SSL (sslmode=require was in connection string)")
                 
                 # Log the final URL being used (without password) for debugging
                 try:
@@ -335,4 +374,28 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
                     logger.error(f"Attempted to connect to: {host_port}")
             except Exception:
                 pass
+        raise
+
+
+async def test_connection() -> bool:
+    """
+    Test database connection by running SELECT 1.
+    Returns True if successful, raises exception if failed.
+    This is called at startup to fail fast if DB is unreachable.
+    """
+    try:
+        from sqlalchemy import text
+        engine = _get_engine()
+        async with engine.begin() as conn:
+            result = await conn.execute(text("SELECT 1"))
+            result.scalar()
+        logger.info("✅ Database connection test passed")
+        return True
+    except Exception as e:
+        logger.error("=" * 80)
+        logger.error("❌ CRITICAL: Database connection test FAILED")
+        logger.error(f"❌ Error: {e}")
+        logger.error("=" * 80)
+        logger.error("❌ Application will not start until database is reachable")
+        logger.error("=" * 80)
         raise
