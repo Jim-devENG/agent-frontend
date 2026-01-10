@@ -880,9 +880,14 @@ async def startup():
     # Run migrations if AUTO_MIGRATE is enabled (explicitly or via smart mode)
     migration_success = False
     if auto_migrate:
+        logger.info("=" * 80)
+        logger.info("🔄 AUTO_MIGRATE enabled - starting migration execution...")
+        logger.info("=" * 80)
         try:
             await run_migrations_safely()
-            logger.info("✅ Database migrations completed")
+            logger.info("=" * 80)
+            logger.info("✅ Database migrations completed successfully")
+            logger.info("=" * 80)
             migration_success = True
         except Exception as migration_err:
             logger.error("=" * 80)
