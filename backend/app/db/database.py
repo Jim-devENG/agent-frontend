@@ -167,18 +167,24 @@ if "?" in DATABASE_URL:
         requires_ssl = True
         logger.info("ℹ️  Detected sslmode=require in connection string")
 
-# CRITICAL: Remove sslmode query parameter from URL
-# asyncpg doesn't accept sslmode as a parameter - SSL is configured via connect_args
+# CRITICAL: Remove unsupported query parameters from URL
+# asyncpg doesn't accept sslmode or pgbouncer as connection parameters
+# pgbouncer=true is only used to detect pooler mode, then removed before connection
 if "?" in DATABASE_URL:
     url_parts = DATABASE_URL.split("?", 1)
     base_url = url_parts[0]
     query_string = url_parts[1] if len(url_parts) > 1 else ""
     
-    # Remove sslmode parameter from query string
+    # Track if we're using pooler (for detection) before removing the parameter
+    is_pooler_detected = "pgbouncer=true" in query_string.lower() or "pgbouncer=1" in query_string.lower()
+    
+    # Remove sslmode and pgbouncer parameters from query string
     if query_string:
         query_params = []
         for param in query_string.split("&"):
-            if not param.startswith("sslmode="):
+            param_lower = param.lower()
+            # Keep all params except sslmode and pgbouncer
+            if not param_lower.startswith("sslmode=") and not param_lower.startswith("pgbouncer="):
                 query_params.append(param)
         
         if query_params:
@@ -186,8 +192,20 @@ if "?" in DATABASE_URL:
         else:
             DATABASE_URL = base_url
         
-        if "sslmode=" in query_string:
-            logger.info("ℹ️  Removed sslmode query parameter (SSL configured via connect_args instead)")
+        removed_params = []
+        if "sslmode=" in query_string.lower():
+            removed_params.append("sslmode")
+        if "pgbouncer=" in query_string.lower():
+            removed_params.append("pgbouncer")
+        
+        if removed_params:
+            logger.info(f"ℹ️  Removed unsupported query parameters: {', '.join(removed_params)}")
+            if "sslmode" in removed_params:
+                logger.info("   (SSL configured via connect_args instead)")
+            if "pgbouncer" in removed_params:
+                logger.info("   (pgbouncer parameter used only for pooler detection)")
+    
+    # Note: is_pooler_detected is tracked but not used here - it's checked via URL pattern matching later
 
 # Store original DATABASE_URL for IPv4 resolution at runtime
 # We'll resolve IPv4 when the engine is actually created, not at import time
