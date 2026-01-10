@@ -26,6 +26,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
+# Docker build context should be set to 'backend/' in Render settings
+# If context is root, this will fail - ensure Docker Build Context Directory is set to 'backend'
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
