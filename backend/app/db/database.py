@@ -189,56 +189,10 @@ if "?" in DATABASE_URL:
         if "sslmode=" in query_string:
             logger.info("ℹ️  Removed sslmode query parameter (SSL configured via connect_args instead)")
 
-# CRITICAL: Resolve Supabase hostname to IPv4 address
-# Render cannot reach IPv6 addresses, so we must use IPv4
-# Resolve hostname before engine creation to force IPv4 connection
-if "@" in DATABASE_URL and ".supabase.co" in DATABASE_URL:
-    try:
-        import socket
-        # Extract hostname and port from URL
-        # Format: postgresql+asyncpg://user:pass@host:port/db?query
-        scheme_part = DATABASE_URL.split("://")[0] + "://"
-        rest_after_scheme = DATABASE_URL.split("://")[1]
-        
-        # Split credentials from host/path
-        if "@" not in rest_after_scheme:
-            raise ValueError("Invalid URL format: no @ found")
-        
-        creds_part = rest_after_scheme.split("@")[0]
-        host_path_part = rest_after_scheme.split("@")[1]
-        
-        # Extract hostname and port from host_path_part
-        # host_path_part could be: "host:port/db" or "host:port/db?query" or "host:port"
-        if "/" in host_path_part:
-            host_port_part = host_path_part.split("/")[0]
-            path_part = "/" + "/".join(host_path_part.split("/")[1:])  # Keep /db?query or /db
-        else:
-            host_port_part = host_path_part
-            path_part = ""
-        
-        if ":" in host_port_part:
-            hostname, port_str = host_port_part.rsplit(":", 1)
-            port = int(port_str)
-        else:
-            hostname = host_port_part
-            port = 5432
-        
-        # Resolve to IPv4 address
-        logger.info(f"🔍 Resolving {hostname} to IPv4 address...")
-        addr_info = socket.getaddrinfo(hostname, port, socket.AF_INET, socket.SOCK_STREAM)
-        if addr_info:
-            ipv4_address = addr_info[0][4][0]
-            logger.info(f"✅ Resolved {hostname} to IPv4: {ipv4_address}")
-            
-            # Reconstruct URL with IPv4 address
-            DATABASE_URL = f"{scheme_part}{creds_part}@{ipv4_address}:{port}{path_part}"
-            logger.info(f"✅ Modified DATABASE_URL to use IPv4 address: {ipv4_address}:{port}")
-        else:
-            logger.warning(f"⚠️  Could not resolve hostname to IPv4 address")
-    except Exception as resolve_err:
-        logger.error(f"❌ Failed to resolve Supabase hostname to IPv4: {resolve_err}")
-        logger.error("⚠️  Connection may fail if IPv6 is not available on Render")
-        # Continue with original URL - might work if DNS returns IPv4
+# Store original DATABASE_URL for IPv4 resolution at runtime
+# We'll resolve IPv4 when the engine is actually created, not at import time
+# This avoids DNS resolution failures during module import
+_original_database_url = DATABASE_URL
 
 # Log the hostname to verify it's correct (without exposing password)
 try:
@@ -290,18 +244,119 @@ def get_engine():
     """Get the single async engine instance (public API)"""
     return _get_engine()
 
+def _resolve_to_ipv4_sync(url: str) -> str:
+    """
+    Resolve Supabase hostname to IPv4 address synchronously.
+    Returns URL with IPv4 address, or original URL if resolution fails.
+    Uses multiple DNS resolution strategies for robustness.
+    """
+    if "@" not in url or ".supabase.co" not in url:
+        return url
+    
+    try:
+        import socket
+        import time
+        
+        # Extract hostname and port from URL
+        scheme_part = url.split("://")[0] + "://"
+        rest_after_scheme = url.split("://")[1]
+        
+        if "@" not in rest_after_scheme:
+            return url
+        
+        creds_part = rest_after_scheme.split("@")[0]
+        host_path_part = rest_after_scheme.split("@")[1]
+        
+        # Extract hostname and port
+        if "/" in host_path_part:
+            host_port_part = host_path_part.split("/")[0]
+            path_part = "/" + "/".join(host_path_part.split("/")[1:])
+        else:
+            host_port_part = host_path_part
+            path_part = ""
+        
+        if ":" in host_port_part:
+            hostname, port_str = host_port_part.rsplit(":", 1)
+            port = int(port_str)
+        else:
+            hostname = host_port_part
+            port = 5432
+        
+        # Try multiple resolution strategies
+        logger.info(f"🔍 Resolving {hostname} to IPv4 address...")
+        max_retries = 5
+        wait_base = 1
+        
+        for attempt in range(max_retries):
+            try:
+                # Strategy 1: Use getaddrinfo with AF_INET (IPv4 only)
+                addr_info = socket.getaddrinfo(hostname, port, socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+                if addr_info:
+                    ipv4_address = addr_info[0][4][0]
+                    logger.info(f"✅ Resolved {hostname} to IPv4: {ipv4_address} (attempt {attempt + 1})")
+                    
+                    # Reconstruct URL with IPv4 address
+                    resolved_url = f"{scheme_part}{creds_part}@{ipv4_address}:{port}{path_part}"
+                    logger.info(f"✅ Using IPv4 address for connection: {ipv4_address}:{port}")
+                    return resolved_url
+                    
+            except socket.gaierror as gai_err:
+                # DNS error - retry with exponential backoff
+                if attempt < max_retries - 1:
+                    wait_time = wait_base * (2 ** attempt)  # 1s, 2s, 4s, 8s, 16s
+                    logger.warning(f"⚠️  DNS resolution failed (attempt {attempt + 1}/{max_retries}): {gai_err}")
+                    logger.info(f"⏳ Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"❌ Failed to resolve {hostname} to IPv4 after {max_retries} attempts: {gai_err}")
+                    
+                    # Last resort: Try gethostbyname (deprecated but sometimes works)
+                    try:
+                        logger.info("🔄 Trying fallback DNS resolution method...")
+                        ipv4_address = socket.gethostbyname(hostname)
+                        logger.info(f"✅ Fallback resolution succeeded: {hostname} -> {ipv4_address}")
+                        resolved_url = f"{scheme_part}{creds_part}@{ipv4_address}:{port}{path_part}"
+                        logger.info(f"✅ Using IPv4 address from fallback: {ipv4_address}:{port}")
+                        return resolved_url
+                    except Exception as fallback_err:
+                        logger.error(f"❌ Fallback DNS resolution also failed: {fallback_err}")
+                        logger.error("⚠️  Will attempt connection with hostname (connection may fail if IPv6 unavailable)")
+                        
+            except Exception as resolve_err:
+                if attempt < max_retries - 1:
+                    wait_time = wait_base * (2 ** attempt)
+                    logger.warning(f"⚠️  Unexpected error during resolution (attempt {attempt + 1}/{max_retries}): {resolve_err}")
+                    logger.info(f"⏳ Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"❌ Failed to resolve {hostname} to IPv4: {resolve_err}")
+                    logger.error("⚠️  Will attempt connection with hostname (connection may fail if IPv6 unavailable)")
+        
+        return url  # Return original URL if all resolution attempts fail
+    except Exception as resolve_err:
+        logger.error(f"❌ Unexpected error during IPv4 resolution: {resolve_err}")
+        return url  # Return original URL on any error
+
+
 def _get_engine():
     """Get or create the async engine - lazy initialization"""
-    global _engine_instance, _engine_lock
+    global _engine_instance, _engine_lock, DATABASE_URL
     if _engine_instance is None:
         import threading
         if _engine_lock is None:
             _engine_lock = threading.Lock()
         with _engine_lock:
             if _engine_instance is None:
+                # CRITICAL: Resolve to IPv4 at runtime (not import time)
+                # This ensures DNS is available when we actually need it
+                resolved_url = _resolve_to_ipv4_sync(_original_database_url)
+                if resolved_url != _original_database_url:
+                    DATABASE_URL = resolved_url
+                    logger.info("✅ DATABASE_URL updated with IPv4 address")
+                
                 # Configure SSL for asyncpg (required for Supabase or when sslmode=require)
                 connect_args = {}
-                is_supabase = ".supabase.co" in DATABASE_URL
+                is_supabase = ".supabase.co" in DATABASE_URL or ".supabase.co" in _original_database_url
                 
                 if is_supabase or requires_ssl:
                     # asyncpg uses ssl context for SSL connections
@@ -310,7 +365,7 @@ def _get_engine():
                         "ssl": ssl.create_default_context()
                     }
                     if is_supabase:
-                        logger.info("✅ Configured SSL for Supabase connection (IPv4 address resolved)")
+                        logger.info("✅ Configured SSL for Supabase connection")
                     elif requires_ssl:
                         logger.info("✅ Configured SSL (sslmode=require was in connection string)")
                 
@@ -318,16 +373,24 @@ def _get_engine():
                 try:
                     if "@" in DATABASE_URL:
                         final_host = DATABASE_URL.split("@")[1].split("/")[0].split(":")[0]
-                        logger.info(f"🔗 Creating engine with hostname: {final_host}")
-                        if ".supabase.co" in final_host and len(final_host.split(".")) < 4:
-                            logger.error(f"❌ CRITICAL: Hostname is truncated in final DATABASE_URL: {final_host}")
-                            logger.error(f"❌ This will cause connection failures!")
+                        logger.info(f"🔗 Creating engine with connection target: {final_host}")
+                        # Check if it's an IPv4 address
+                        import ipaddress
+                        try:
+                            ipaddress.IPv4Address(final_host)
+                            logger.info(f"✅ Using IPv4 address: {final_host}")
+                        except ValueError:
+                            # Not an IPv4 address - might be hostname or IPv6
+                            if "." in final_host:
+                                logger.warning(f"⚠️  Using hostname (not IPv4): {final_host}")
+                            else:
+                                logger.warning(f"⚠️  Using hostname/IPv6: {final_host}")
                 except Exception as e:
-                    logger.warning(f"Could not log final hostname: {e}")
+                    logger.warning(f"Could not log final connection target: {e}")
                 
                 _engine_instance = create_async_engine(
                     DATABASE_URL,
-                    echo=False,  # Set to False in production (was True for debugging)
+                    echo=False,
                     future=True,
                     pool_pre_ping=True,
                     pool_size=10,
