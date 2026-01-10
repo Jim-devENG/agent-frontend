@@ -257,8 +257,8 @@ def _resolve_to_ipv4_sync(url: str) -> str:
         return url
     
     # Skip IPv4 resolution for connection pooler - it handles IPv4 internally
-    if ":6543" in url or "pgbouncer=true" in url.lower():
-        logger.info("ℹ️  Using connection pooler (port 6543) - skipping IPv4 resolution (pooler handles IPv4)")
+    if ":6543" in url or "pgbouncer=true" in url.lower() or ".pooler.supabase.com" in url:
+        logger.info("ℹ️  Using connection pooler (port 6543 or pooler hostname) - skipping IPv4 resolution (pooler handles IPv4)")
         return url
     
     try:
@@ -457,6 +457,26 @@ def _get_engine():
                 except Exception as e:
                     logger.warning(f"Could not log final connection target: {e}")
                 
+                # Configure connection timeout for asyncpg (default is 60s)
+                # asyncpg accepts timeout in connect_args
+                if "timeout" not in connect_args:
+                    # Pooler connections may need more time, but not too much
+                    if ":6543" in DATABASE_URL or "pgbouncer=true" in DATABASE_URL.lower():
+                        connect_args["timeout"] = 30  # 30 seconds for pooler
+                        logger.info("⏱️  Connection timeout set to 30s for pooler connection")
+                    else:
+                        connect_args["timeout"] = 20  # 20 seconds for direct connection
+                        logger.info("⏱️  Connection timeout set to 20s for direct connection")
+                
+                # Log connection details for debugging
+                if "@" in DATABASE_URL:
+                    connection_target = DATABASE_URL.split("@")[1].split("/")[0]
+                    logger.info(f"🔗 Attempting to connect to: {connection_target}")
+                    if ":6543" in connection_target:
+                        logger.info("✅ Using connection pooler (port 6543)")
+                    elif ":5432" in connection_target:
+                        logger.warning("⚠️  Using direct connection (port 5432) - may fail if IPv6 unavailable")
+                
                 _engine_instance = create_async_engine(
                     DATABASE_URL,
                     echo=False,
@@ -464,6 +484,7 @@ def _get_engine():
                     pool_pre_ping=True,
                     pool_size=10,
                     max_overflow=20,
+                    pool_timeout=30,  # Wait up to 30s for connection from pool
                     connect_args=connect_args
                 )
                 logger.info("✅ Async engine created successfully")
