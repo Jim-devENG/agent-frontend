@@ -159,6 +159,28 @@ def upgrade():
         columns_existed.append('scraped_at')
     
     # ============================================
+    # DISCOVERY METADATA COLUMNS
+    # ============================================
+    
+    # discovery_query_id: Foreign key to discovery_queries table
+    if 'discovery_query_id' not in existing_columns:
+        op.add_column('prospects',
+            sa.Column('discovery_query_id', postgresql.UUID(as_uuid=True), nullable=True)
+        )
+        op.create_index('ix_prospects_discovery_query_id', 'prospects', ['discovery_query_id'], if_not_exists=True)
+        columns_added.append('discovery_query_id')
+    else:
+        columns_existed.append('discovery_query_id')
+        # Ensure index exists even if column exists
+        try:
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_prospects_discovery_query_id 
+                ON prospects (discovery_query_id)
+            """))
+        except Exception:
+            pass  # Index might already exist
+    
+    # ============================================
     # LOG RESULTS
     # ============================================
     
