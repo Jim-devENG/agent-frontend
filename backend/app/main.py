@@ -902,6 +902,29 @@ async def startup():
             migration_success = False
             # Continue to start app even if migrations fail - DO NOT EXIT
     
+    # Auto-fix discovery_query_id column if missing (non-blocking)
+    try:
+        from sqlalchemy import text
+        async with engine.begin() as conn:
+            # Check if column exists
+            result = await conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'prospects' 
+                AND column_name = 'discovery_query_id'
+                AND table_schema = 'public'
+            """))
+            if not result.fetchone():
+                logger.info("⚠️  discovery_query_id column missing - adding it automatically...")
+                await conn.execute(text("ALTER TABLE prospects ADD COLUMN discovery_query_id UUID"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_prospects_discovery_query_id ON prospects(discovery_query_id)"))
+                logger.info("✅ Successfully added discovery_query_id column and index")
+            else:
+                logger.debug("✅ discovery_query_id column exists")
+    except Exception as fix_error:
+        logger.warning(f"⚠️  Could not auto-fix discovery_query_id column: {fix_error}")
+        # Non-blocking - continue startup
+    
     # Validate schema after migrations
     # Use the schema validator to check if all required columns exist
     schema_valid = False
