@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ExternalLink, RefreshCw, Loader2, Globe, CheckCircle2, X, Trash2 } from 'lucide-react'
-import { listWebsites, pipelineApprove, type Prospect } from '@/lib/api'
+import { ExternalLink, RefreshCw, Loader2, Globe, CheckCircle2, X, Trash2, Users, Download } from 'lucide-react'
+import { listWebsites, pipelineApprove, updateProspectCategory, autoCategorizeAll, exportProspectsCSV, type Prospect } from '@/lib/api'
 
 interface Website {
   id: string
@@ -26,6 +26,19 @@ export default function WebsitesTable() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [showCategoryUpdate, setShowCategoryUpdate] = useState(false)
+  const [updateCategory, setUpdateCategory] = useState<string>('')
+  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false)
+  const [isAutoCategorizing, setIsAutoCategorizing] = useState(false)
+
+  // Available categories
+  const availableCategories = [
+    'Art', 'Interior Design', 'Dogs', 'Dog Lovers', 'Childhood Development', 
+    'Cat Lovers', 'Cats', 'Holidays', 'Famous Quotes', 'Home Decor', 
+    'Audio Visual', 'Interior Decor', 'Holiday Decor', 'Home Tech', 
+    'Parenting', 'NFTs', 'Museum'
+  ]
 
   const loadWebsites = async () => {
     try {
@@ -38,18 +51,68 @@ export default function WebsitesTable() {
         hasData: !!response?.data,
         isArray: Array.isArray(response?.data)
       })
+      // CRITICAL: Log raw response before any filtering
+      console.log('📊 [WEBSITES] RAW API RESPONSE:', {
+        dataLength: response?.data?.length,
+        total: response?.total,
+        hasData: !!response?.data,
+        isArray: Array.isArray(response?.data),
+        firstItem: response?.data?.[0]
+      })
+      
+      // CRITICAL: If backend says there's data but we got empty array, this is an error
+      if (response?.total > 0 && (!response?.data || response.data.length === 0)) {
+        const errorMsg = `Backend reports ${response.total} websites but returned empty data array. This indicates a data visibility issue.`
+        console.error(`❌ [WEBSITES] ${errorMsg}`)
+        setError(errorMsg)
+        setWebsites([])
+        setTotal(response.total)
+        return
+      }
+      
       if (response?.data && Array.isArray(response.data)) {
-      setWebsites(response.data)
-        setTotal(response.total ?? response.data.length)
-        console.log('✅ [WEBSITES] Set websites:', response.data.length)
+        let websitesData = response.data
+        
+        // Filter by category if selected
+        if (selectedCategory !== 'all') {
+          websitesData = websitesData.filter((w: Website) => 
+            w.category === selectedCategory || w.category?.toLowerCase() === selectedCategory.toLowerCase()
+          )
+        }
+        
+        // Sort by category in ascending order
+        websitesData.sort((a: Website, b: Website) => {
+          const catA = a.category || ''
+          const catB = b.category || ''
+          return catA.localeCompare(catB)
+        })
+        
+        setWebsites(websitesData)
+        setTotal(selectedCategory === 'all' ? (response.total ?? websitesData.length) : websitesData.length)
+        console.log('✅ [WEBSITES] Set websites:', websitesData.length, 'total:', response.total)
       } else {
         console.warn('⚠️ [WEBSITES] Invalid response structure:', response)
         setWebsites([])
         setTotal(0)
       }
     } catch (error: any) {
+      // CRITICAL: Do not suppress errors - log them clearly
       console.error('❌ [WEBSITES] Failed to load websites:', error)
-      setError(error?.message || 'Failed to load websites. Check if backend is running.')
+      console.error('❌ [WEBSITES] Error details:', {
+        message: error?.message,
+        stack: error?.stack,
+        response: error?.response,
+        status: error?.status
+      })
+      
+      let errorMessage = error?.message || 'Failed to load websites. Check if backend is running.'
+      
+      // In development, show full error
+      if (process.env.NODE_ENV === 'development') {
+        errorMessage = `${errorMessage} (Full error: ${error?.message || 'Unknown error'})`
+      }
+      
+      setError(errorMessage)
       setWebsites([])
       setTotal(0)
     } finally {
@@ -61,7 +124,7 @@ export default function WebsitesTable() {
     loadWebsites()
     const interval = setInterval(loadWebsites, 10000) // Refresh every 10 seconds
     return () => clearInterval(interval)
-  }, [skip])
+  }, [skip, selectedCategory])
 
   const handleApprove = async () => {
     if (selected.size === 0) {
@@ -137,6 +200,55 @@ export default function WebsitesTable() {
     }
   }
 
+  const handleUpdateCategory = async () => {
+    if (selected.size === 0) {
+      setError('Please select at least one website to update')
+      return
+    }
+    
+    if (!updateCategory || !updateCategory.trim()) {
+      setError('Please select a category')
+      return
+    }
+
+    try {
+      setIsUpdatingCategory(true)
+      setError(null)
+      const result = await updateProspectCategory({
+        prospect_ids: Array.from(selected),
+        category: updateCategory.trim()
+      })
+      setError(`✅ ${result.message}`)
+      setSelected(new Set())
+      setShowCategoryUpdate(false)
+      setUpdateCategory('')
+      setTimeout(() => {
+        loadWebsites().catch(err => console.error('Error reloading websites:', err))
+      }, 500)
+    } catch (err: any) {
+      setError(err.message || 'Failed to update category')
+    } finally {
+      setIsUpdatingCategory(false)
+    }
+  }
+
+  const handleAutoCategorize = async () => {
+    setIsAutoCategorizing(true)
+    setError(null)
+    try {
+      const result = await autoCategorizeAll()
+      setTimeout(() => {
+        loadWebsites().catch(err => console.error('Error reloading websites:', err))
+      }, 500)
+      setError(`✅ ${result.message}`)
+      setTimeout(() => setError(null), 5000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to auto-categorize')
+    } finally {
+      setIsAutoCategorizing(false)
+    }
+  }
+
   if (loading && websites.length === 0) {
     return (
       <div className="glass rounded-3xl shadow-xl p-8 animate-fade-in">
@@ -152,19 +264,94 @@ export default function WebsitesTable() {
   }
 
   return (
-    <div className="glass rounded-3xl shadow-xl border border-white/20 p-6 animate-fade-in">
+    <div className="glass rounded-xl shadow-lg border border-white/20 p-3 animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold liquid-gradient-text mb-1">Discovered Websites</h2>
+          <h2 className="text-sm font-bold text-olive-700 mb-1">Discovered Websites</h2>
           <p className="text-sm text-gray-600">
             Websites found during discovery. Approve them to proceed with scraping.
           </p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
+          <select
+            value={selectedCategory}
+            onChange={(e) => {
+              // Only filter - never update categories
+              setSelectedCategory(e.target.value)
+            }}
+            className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
+            title="Filter by category (does not update categories)"
+          >
+            <option value="all">All Categories (Filter)</option>
+            {availableCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat} (Filter)</option>
+            ))}
+          </select>
+          {selected.size > 0 && (
+            <button
+              onClick={() => setShowCategoryUpdate(true)}
+              className="px-2 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Update Category ({selected.size})
+            </button>
+          )}
+          {websites.filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A').length > 0 && (
+            <button
+              onClick={() => {
+                // Select all uncategorized websites
+                const uncategorized = websites
+                  .filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A')
+                  .map(w => w.id)
+                setSelected(new Set(uncategorized))
+                setShowCategoryUpdate(true)
+              }}
+              className="px-2 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+            >
+              Categorize All ({websites.filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A').length})
+            </button>
+          )}
+          <button
+            onClick={handleAutoCategorize}
+            disabled={isAutoCategorizing}
+            className="px-2 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+          >
+            {isAutoCategorizing ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Auto-Categorizing...
+              </>
+            ) : (
+              <>
+                <Users className="w-3 h-3" />
+                Auto-Categorize All
+              </>
+            )}
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const blob = await exportProspectsCSV(undefined, 'website')
+                const url = window.URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `websites_${new Date().toISOString().split('T')[0]}.csv`
+                document.body.appendChild(a)
+                a.click()
+                window.URL.revokeObjectURL(url)
+                document.body.removeChild(a)
+              } catch (error: any) {
+                alert(`Failed to export CSV: ${error.message}`)
+              }
+            }}
+            className="px-2 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-1 transition-all duration-200 font-medium"
+          >
+            <Download className="w-3 h-3" />
+            <span>Download CSV</span>
+          </button>
           <button
             onClick={loadWebsites}
             disabled={loading}
-            className="px-4 py-2 glass hover:bg-white/80 text-gray-700 rounded-xl flex items-center space-x-2 disabled:opacity-50 transition-all duration-200 font-medium hover:shadow-md"
+            className="px-2 py-1 text-xs glass hover:bg-white/80 text-gray-700 rounded-lg flex items-center space-x-1 disabled:opacity-50 transition-all duration-200 font-medium hover:shadow-md"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
@@ -192,27 +379,50 @@ export default function WebsitesTable() {
       ) : (
         <>
           {selected.size > 0 && (
-            <div className="mb-4 p-4 bg-gradient-to-r from-liquid-50 to-purple-50 border-2 border-liquid-200 rounded-xl flex items-center justify-between shadow-md animate-slide-up">
+            <div className="mb-2 p-2 bg-gradient-to-r from-olive-50 to-olive-50 border border-olive-200 rounded-lg flex items-center justify-between shadow-sm animate-slide-up">
               <p className="text-sm font-semibold text-gray-700">
                 {selected.size} website{selected.size !== 1 ? 's' : ''} selected
               </p>
-              <button
-                onClick={handleApprove}
-                disabled={actionLoading}
-                className="px-4 py-2 liquid-gradient text-white rounded-xl hover:shadow-xl hover:scale-105 transition-all duration-200 disabled:opacity-50 flex items-center space-x-2 font-semibold shadow-lg"
-              >
-                {actionLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Approving...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Approve Selected</span>
-                  </>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowCategoryUpdate(true)}
+                  className="px-2 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Update Category ({selected.size})
+                </button>
+                {websites.filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A').length > 0 && (
+                  <button
+                    onClick={() => {
+                      // Select all uncategorized websites
+                      const uncategorized = websites
+                        .filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A')
+                        .map(w => w.id)
+                      setSelected(new Set(uncategorized))
+                      setShowCategoryUpdate(true)
+                    }}
+                    className="px-2 py-1 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+                  >
+                    Categorize All ({websites.filter(w => !w.category || w.category === 'Unknown' || w.category === 'N/A').length})
+                  </button>
                 )}
-              </button>
+                <button
+                  onClick={handleApprove}
+                  disabled={actionLoading}
+                  className="px-2 py-1 text-xs bg-olive-600 text-white rounded-lg hover:bg-olive-700 hover:shadow-md transition-all duration-200 disabled:opacity-50 flex items-center space-x-1 font-semibold shadow-sm"
+                >
+                  {actionLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Approving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Approve Selected</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
 
@@ -234,18 +444,18 @@ export default function WebsitesTable() {
                       className="w-4 h-4 text-olive-600"
                     />
                   </th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Domain</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Title</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Category</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Location</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                  <th className="text-left py-4 px-6 text-sm font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Domain</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Title</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Category</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Location</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {websites.map(website => (
                   <tr key={website.id} className="border-b border-gray-100 hover:bg-gradient-to-r hover:from-liquid-50/30 hover:to-purple-50/30 transition-all duration-200">
-                    <td className="py-3 px-4">
+                    <td className="py-2 px-3 text-xs">
                       <input
                         type="checkbox"
                         checked={selected.has(website.id)}
@@ -267,16 +477,16 @@ export default function WebsitesTable() {
                           href={website.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="liquid-gradient-text hover:underline font-semibold flex items-center space-x-1 transition-all duration-200"
+                          className="text-olive-700 hover:underline text-xs font-semibold flex items-center space-x-1 transition-all duration-200"
                         >
                           <span>{website.domain}</span>
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>
                     </td>
-                    <td className="py-4 px-6 text-sm text-gray-700 font-medium">{website.title}</td>
-                    <td className="py-4 px-6 text-sm text-gray-600">{website.category}</td>
-                    <td className="py-4 px-6 text-sm text-gray-600">{website.location}</td>
+                    <td className="py-2 px-3 text-xs text-gray-700 font-medium">{website.title}</td>
+                    <td className="py-2 px-3 text-xs text-gray-600">{website.category}</td>
+                    <td className="py-2 px-3 text-xs text-gray-600">{website.location}</td>
                     <td className="py-4 px-6">
                       <div className="flex flex-col space-y-1">
                         <span className={`px-3 py-1 rounded-lg text-xs font-semibold shadow-sm ${
@@ -357,6 +567,91 @@ export default function WebsitesTable() {
             </div>
           )}
         </>
+      )}
+
+      {/* Category Update Modal */}
+      {showCategoryUpdate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="glass rounded-xl shadow-2xl w-full max-w-md p-4 border border-white/20 animate-scale-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-gray-900">Update Category</h3>
+              <button
+                onClick={() => {
+                  setShowCategoryUpdate(false)
+                  setUpdateCategory('')
+                }}
+                className="p-1 rounded-lg hover:bg-white/80 text-gray-500"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs text-gray-600">
+                Update category for {selected.size} selected website(s)
+              </p>
+              <div className="text-xs text-gray-500 mb-2">
+                {selected.size > 0 && (
+                  <div>
+                    Current categories: {Array.from(new Set(
+                      websites
+                        .filter(w => selected.has(w.id))
+                        .map(w => w.category || 'N/A')
+                    )).join(', ')}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Select Category to Assign:
+                </label>
+                <div className="grid grid-cols-2 gap-1.5 mb-2 max-h-32 overflow-y-auto p-2 bg-gray-50 rounded-lg">
+                  {availableCategories.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setUpdateCategory(cat)}
+                      className={`px-2 py-1.5 rounded text-xs font-medium transition-all ${
+                        updateCategory === cat
+                          ? 'bg-olive-600 text-white shadow-md'
+                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  value={updateCategory}
+                  onChange={(e) => setUpdateCategory(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-olive-500 focus:border-olive-500 bg-white"
+                >
+                  <option value="">-- Or choose from dropdown --</option>
+                  {availableCategories.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    setShowCategoryUpdate(false)
+                    setUpdateCategory('')
+                  }}
+                  className="flex-1 px-3 py-2 text-xs font-medium text-gray-700 glass hover:bg-white/80 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateCategory}
+                  disabled={isUpdatingCategory || !updateCategory}
+                  className="flex-1 px-3 py-2 text-xs font-medium bg-olive-600 text-white rounded-lg hover:bg-olive-700 disabled:opacity-50"
+                >
+                  {isUpdatingCategory ? 'Updating...' : 'Update'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

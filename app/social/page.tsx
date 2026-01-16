@@ -6,6 +6,10 @@ import SocialProfilesTable from '@/components/SocialProfilesTable'
 import SocialDiscovery from '@/components/SocialDiscovery'
 import SocialPipeline from '@/components/SocialPipeline'
 import SocialOverview from '@/components/SocialOverview'
+import SocialDraftsTable from '@/components/SocialDraftsTable'
+import SocialSentTable from '@/components/SocialSentTable'
+import SocialDiscoveredProfilesTable from '@/components/SocialDiscoveredProfilesTable'
+import SocialLeadsTable from '@/components/SocialLeadsTable'
 import Sidebar from '@/components/Sidebar'
 import SystemStatus from '@/components/SystemStatus'
 import { 
@@ -17,6 +21,7 @@ import {
   Users,
   FileText,
   Mail,
+  Eye,
   LogOut as LogOutIcon
 } from 'lucide-react'
 import { listJobs } from '@/lib/api'
@@ -25,7 +30,7 @@ import type { Job } from '@/lib/api'
 export default function SocialPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'pipeline' | 'discover' | 'profiles' | 'drafts' | 'sent'
+    'overview' | 'pipeline' | 'discover' | 'discovered' | 'leads' | 'profiles' | 'drafts' | 'sent'
   >('overview')
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
@@ -66,7 +71,21 @@ export default function SocialPage() {
   useEffect(() => {
     loadData()
     const interval = setInterval(loadData, 30000) // Refresh every 30 seconds
-    return () => clearInterval(interval)
+    
+    // Listen for tab change events from SocialPipeline component
+    const handleTabChange = (e: CustomEvent) => {
+      const tabId = e.detail as string
+      if (tabId && ['overview', 'pipeline', 'discover', 'discovered', 'leads', 'profiles', 'drafts', 'sent'].includes(tabId)) {
+        setActiveTab(tabId as any)
+      }
+    }
+    
+    window.addEventListener('change-tab', handleTabChange as EventListener)
+    
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('change-tab', handleTabChange as EventListener)
+    }
   }, [])
 
   const refreshData = () => {
@@ -80,7 +99,8 @@ export default function SocialPage() {
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'pipeline', label: 'Pipeline', icon: LayoutDashboard },
     { id: 'discover', label: 'Discover', icon: Search },
-    { id: 'profiles', label: 'Profiles', icon: Users },
+    { id: 'discovered', label: 'Discovered', icon: Eye },
+    { id: 'leads', label: 'Social Leads', icon: Users },
     { id: 'drafts', label: 'Drafts', icon: FileText },
     { id: 'sent', label: 'Sent', icon: Mail },
   ]
@@ -105,7 +125,7 @@ export default function SocialPage() {
 
   // Wrapper function to handle type compatibility with Sidebar component
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab as 'overview' | 'pipeline' | 'discover' | 'profiles' | 'drafts' | 'sent')
+    setActiveTab(tab as 'overview' | 'pipeline' | 'discover' | 'discovered' | 'leads' | 'profiles' | 'drafts' | 'sent')
   }
 
   return (
@@ -176,17 +196,11 @@ export default function SocialPage() {
             {activeTab === 'overview' && <SocialOverview />}
             {activeTab === 'pipeline' && <SocialPipeline />}
             {activeTab === 'discover' && <SocialDiscovery />}
+            {activeTab === 'discovered' && <SocialDiscoveredProfilesTable />}
+            {activeTab === 'leads' && <SocialLeadsTable />}
             {activeTab === 'profiles' && <SocialProfilesTable />}
-            {activeTab === 'drafts' && (
-              <div className="glass rounded-xl shadow-lg p-6 border border-olive-200">
-                <p className="text-sm text-gray-600">Drafts view coming soon</p>
-              </div>
-            )}
-            {activeTab === 'sent' && (
-              <div className="glass rounded-xl shadow-lg p-6 border border-olive-200">
-                <p className="text-sm text-gray-600">Sent messages view coming soon</p>
-              </div>
-            )}
+            {activeTab === 'drafts' && <SocialDraftsTable />}
+            {activeTab === 'sent' && <SocialSentTable />}
           </div>
         </main>
       </div>

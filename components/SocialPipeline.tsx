@@ -10,7 +10,9 @@ import {
   sendSocialProfiles,
   createSocialFollowupsPipeline,
   isMasterSwitchEnabled,
-  type SocialPipelineStatus
+  listJobs,
+  type SocialPipelineStatus,
+  type Job
 } from '@/lib/api'
 
 interface StepCard {
@@ -22,6 +24,8 @@ interface StepCard {
   count: number
   ctaText: string
   ctaAction: () => void
+  viewText?: string  // Optional "View" button text (e.g., "View Profiles", "View Drafts", "View Sent")
+  viewAction?: () => void  // Optional "View" button action (navigates to tab)
 }
 
 type Platform = 'all' | 'linkedin' | 'instagram' | 'facebook' | 'tiktok'
@@ -32,6 +36,9 @@ export default function SocialPipeline() {
   const [loading, setLoading] = useState(true)
   const [discoveryLoading, setDiscoveryLoading] = useState(false)
   const [masterSwitchEnabled, setMasterSwitchEnabled] = useState(false)
+  const [latestDiscoveryJobId, setLatestDiscoveryJobId] = useState<string | null>(null)
+  // Track the last social discovery job ID that we've already processed/reset for
+  const [lastProcessedDiscoveryJobId, setLastProcessedDiscoveryJobId] = useState<string | null>(null)
 
   // Check master switch status
   useEffect(() => {
@@ -77,48 +84,91 @@ export default function SocialPipeline() {
     }
   }
 
-  useEffect(() => {
-    let abortController = new AbortController()
-    let debounceTimeout: NodeJS.Timeout | null = null
-    
-    const loadStatusDebounced = () => {
-      abortController.abort()
-      abortController = new AbortController()
+  const loadSocialDiscoveryJobs = async (checkForNewJob: boolean = true) => {
+    try {
+      const jobs = await listJobs(0, 50)
+      const socialDiscoveryJobs = jobs.filter((j: Job) => 
+        j.job_type === 'social_discover' && 
+        j.status === 'completed'  // Only consider completed jobs
+      )
       
-      if (debounceTimeout) {
-        clearTimeout(debounceTimeout)
+      // Only check for new jobs if explicitly requested (not on network refreshes)
+      if (!checkForNewJob) {
+        return
       }
       
-      debounceTimeout = setTimeout(() => {
-        loadStatus()
-      }, 300)
+      // Track latest social discovery job to detect new discovery runs
+      if (socialDiscoveryJobs.length > 0) {
+        const latestJob = socialDiscoveryJobs.sort((a: Job, b: Job) => {
+          const dateA = new Date(a.created_at || 0).getTime()
+          const dateB = new Date(b.created_at || 0).getTime()
+          return dateB - dateA
+        })[0]
+        
+        // Only reset if this is a truly NEW job that we haven't processed yet
+        // Compare against lastProcessedDiscoveryJobId, not latestDiscoveryJobId
+        if (latestJob.id && latestJob.id !== lastProcessedDiscoveryJobId) {
+          // Update both tracking states immediately to prevent repeated resets
+          setLatestDiscoveryJobId(latestJob.id)
+          setLastProcessedDiscoveryJobId(latestJob.id)
+          // Reset pipeline state by reloading status
+          // This ensures buttons are re-enabled based on current data
+          console.log('🔄 [SOCIAL PIPELINE] New discovery job detected, resetting pipeline state', latestJob.id)
+          await loadStatus()
+          
+          // Dispatch event to notify other components
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('socialPipelineReset', { 
+              detail: { jobId: latestJob.id } 
+            }))
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load social discovery jobs:', err)
     }
+  }
+
+  useEffect(() => {
+    let abortController = new AbortController()
     
-    // Initial load
-    loadStatusDebounced()
-    
-    // Refresh every 10 seconds
-    const interval = setInterval(() => {
-      loadStatusDebounced()
-    }, 10000)
+    // Initial load only - no polling
+    loadStatus()
+    // On initial load, check for new jobs
+    loadSocialDiscoveryJobs(true)
     
     // Listen for manual refresh requests
+    // Do NOT check for new jobs on refresh - only refresh status
     const handleRefresh = () => {
-      loadStatusDebounced()
+      loadStatus()
+      // Load jobs list but don't check for new jobs (prevents false resets)
+      loadSocialDiscoveryJobs(false)
+    }
+    
+    // Listen for discovery completion to reset pipeline state
+    // Only reset if we have a confirmed new job ID
+    const handleDiscoveryCompleted = () => {
+      console.log('🔄 Social discovery completed event received...')
+      // Load discovery jobs to check for new job ID
+      // Pass true to check for new jobs
+      loadSocialDiscoveryJobs(true).then(() => {
+        // Status will be reloaded by loadSocialDiscoveryJobs if new job detected
+      }).catch(err => {
+        console.error('Failed to load social discovery jobs after discovery completed:', err)
+        // Don't reset state on error - treat as false positive
+      })
     }
     
     if (typeof window !== 'undefined') {
       window.addEventListener('refreshSocialPipelineStatus', handleRefresh)
+      window.addEventListener('socialDiscoveryCompleted', handleDiscoveryCompleted)
     }
     
     return () => {
       abortController.abort()
-      if (debounceTimeout) {
-        clearTimeout(debounceTimeout)
-      }
-      clearInterval(interval)
       if (typeof window !== 'undefined') {
         window.removeEventListener('refreshSocialPipelineStatus', handleRefresh)
+        window.removeEventListener('socialDiscoveryCompleted', handleDiscoveryCompleted)
       }
     }
   }, [selectedPlatform]) // Reload when platform changes
@@ -139,10 +189,16 @@ export default function SocialPipeline() {
       return
     }
     try {
-      // Get qualified profiles - this would come from the profiles table
-      // For now, this is a placeholder
-      alert('Drafting is handled from the Profiles tab. Select qualified profiles and click "Draft".')
-      await loadStatus()
+      // Auto-query all qualified profiles (profile_ids = undefined)
+      const result = await draftSocialProfiles(undefined, false)
+      alert(result.message || `Drafting job started for qualified profiles`)
+      // Refresh status after a short delay to allow job to start
+      setTimeout(() => {
+        loadStatus()
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('refreshSocialPipelineStatus'))
+        }
+      }, 1000)
     } catch (err: any) {
       alert(err.message || 'Failed to create drafts')
     }
@@ -154,10 +210,16 @@ export default function SocialPipeline() {
       return
     }
     try {
-      // Get drafted profiles - this would come from the profiles table
-      // For now, this is a placeholder
-      alert('Sending is handled from the Profiles tab. Select drafted profiles and click "Send".')
-      await loadStatus()
+      // Auto-query all send-ready profiles (profile_ids = undefined)
+      const result = await sendSocialProfiles(undefined)
+      alert(result.message || `Sending job started for drafted profiles`)
+      // Refresh status after a short delay to allow job to start
+      setTimeout(() => {
+        loadStatus()
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('refreshSocialPipelineStatus'))
+        }
+      }, 1000)
     } catch (err: any) {
       alert(err.message || 'Failed to send messages')
     }
@@ -169,10 +231,16 @@ export default function SocialPipeline() {
       return
     }
     try {
-      // Get sent profiles - this would come from the profiles table
-      // For now, this is a placeholder
-      alert('Follow-ups are handled from the Profiles tab. Select sent profiles and click "Create Follow-up".')
-      await loadStatus()
+      // Auto-query all follow-up-ready profiles (profile_ids = undefined)
+      const result = await createSocialFollowupsPipeline(undefined)
+      alert(result.message || `Follow-up drafting job started for sent profiles`)
+      // Refresh status after a short delay to allow job to start
+      setTimeout(() => {
+        loadStatus()
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('refreshSocialPipelineStatus'))
+        }
+      }, 1000)
     } catch (err: any) {
       alert(err.message || 'Failed to create follow-ups')
     }
@@ -262,8 +330,7 @@ export default function SocialPipeline() {
       status: status.discovered === 0 ? 'locked' :
               status.reviewed > 0 ? 'completed' : 'active',
       count: status.reviewed,
-      ctaText: status.discovered === 0 ? 'Discover Profiles First' :
-               status.reviewed > 0 ? 'View Reviewed' : 'Review Profiles',
+      ctaText: status.discovered === 0 ? 'Discover Profiles First' : 'Review Profiles',
       ctaAction: () => {
         if (status.discovered === 0) {
           const event = new CustomEvent('change-tab', { detail: 'discover' })
@@ -272,25 +339,35 @@ export default function SocialPipeline() {
         }
         const event = new CustomEvent('change-tab', { detail: 'profiles' })
         window.dispatchEvent(event)
-      }
+      },
+      viewText: status.reviewed > 0 ? 'View Reviewed' : undefined,
+      viewAction: status.reviewed > 0 ? () => {
+        const event = new CustomEvent('change-tab', { detail: 'profiles' })
+        window.dispatchEvent(event)
+      } : undefined
     },
     {
       id: 3,
       name: 'Drafting',
       description: 'Create outreach messages',
       icon: FileText,
-      status: status.qualified === 0 ? 'locked' :
+      status: (status.qualified === 0 && status.drafted === 0) ? 'locked' :
               status.drafted > 0 ? 'completed' : 'active',
       count: status.drafted,
-      ctaText: status.qualified === 0 ? 'Review Profiles First' :
-               status.drafted > 0 ? 'View Drafts' : 'Start Drafting',
+      ctaText: (status.qualified === 0 && status.drafted === 0) ? 'Review Profiles First' : 
+               status.drafted > 0 ? 'Create More Drafts' : 'Start Drafting',
       ctaAction: () => {
-        if (status.qualified === 0) {
+        if (status.qualified === 0 && status.drafted === 0) {
           alert('Please review and qualify profiles first')
           return
         }
         handleDraft()
-      }
+      },
+      viewText: status.drafted > 0 ? 'View Drafts' : undefined,
+      viewAction: status.drafted > 0 ? () => {
+        const event = new CustomEvent('change-tab', { detail: 'drafts' })
+        window.dispatchEvent(event)
+      } : undefined
     },
     {
       id: 4,
@@ -300,15 +377,19 @@ export default function SocialPipeline() {
       status: status.drafted === 0 ? 'locked' :
               status.sent > 0 ? 'completed' : 'active',
       count: status.sent,
-      ctaText: status.drafted === 0 ? 'Create Drafts First' :
-               status.sent > 0 ? 'View Sent' : 'Start Sending',
+      ctaText: status.drafted === 0 ? 'Create Drafts First' : 'Start Sending',
       ctaAction: () => {
         if (status.drafted === 0) {
           alert('Please create drafts first')
           return
         }
         handleSend()
-      }
+      },
+      viewText: status.sent > 0 ? 'View Sent' : undefined,
+      viewAction: status.sent > 0 ? () => {
+        const event = new CustomEvent('change-tab', { detail: 'sent' })
+        window.dispatchEvent(event)
+      } : undefined
     },
     {
       id: 5,
@@ -445,20 +526,32 @@ export default function SocialPipeline() {
                 </div>
               </div>
 
-              <button
-                onClick={step.ctaAction}
-                disabled={isLocked}
-                className={`w-full px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-all duration-200 ${
-                  isLocked
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                    : isCompleted
-                    ? 'bg-olive-600 text-white hover:bg-olive-700 hover:shadow-md hover:scale-102'
-                    : 'bg-olive-600 text-white hover:bg-olive-700 hover:shadow-md hover:scale-102'
-                }`}
-              >
-                <span>{step.ctaText}</span>
-                {!isLocked && <ArrowRight className="w-3 h-3" />}
-              </button>
+              <div className={`flex gap-2 ${step.viewText && step.viewAction ? 'flex-col' : ''}`}>
+                {step.viewText && step.viewAction && (
+                  <button
+                    onClick={step.viewAction}
+                    className="w-full px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-all duration-200 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md"
+                  >
+                    <span>{step.viewText}</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                )}
+                <button
+                  onClick={step.ctaAction}
+                  disabled={isLocked || !masterSwitchEnabled}
+                  className={`w-full px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition-all duration-200 ${
+                    isLocked || !masterSwitchEnabled
+                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      : isCompleted
+                      ? 'bg-olive-600 text-white hover:bg-olive-700 hover:shadow-md hover:scale-102'
+                      : 'bg-olive-600 text-white hover:bg-olive-700 hover:shadow-md hover:scale-102'
+                  }`}
+                  title={!masterSwitchEnabled ? 'Master switch must be enabled' : undefined}
+                >
+                  <span>{step.ctaText}</span>
+                  {!isLocked && masterSwitchEnabled && <ArrowRight className="w-3 h-3" />}
+                </button>
+              </div>
             </div>
           )
         })}

@@ -61,7 +61,14 @@ async function authenticatedFetch(url: string, options: RequestInit = {}): Promi
       try {
         const errorData = await response.clone().json().catch(() => null)
         if (errorData) {
-          errorDetail = errorData.error || errorData.detail || errorData.message || errorDetail
+          // Handle structured error response: {error, message, stage} or simple {detail}
+          if (typeof errorData.detail === 'object' && errorData.detail?.message) {
+            errorDetail = errorData.detail.message
+          } else if (typeof errorData.detail === 'string') {
+            errorDetail = errorData.detail
+          } else {
+            errorDetail = errorData.error || errorData.message || errorDetail
+          }
         }
       } catch {
         // If JSON parsing fails, use status text
@@ -81,7 +88,33 @@ async function authenticatedFetch(url: string, options: RequestInit = {}): Promi
     return response
   } catch (error: any) {
     const fetchTime = Date.now() - startTime
-    const errorMessage = error?.message || String(error)
+    
+    // Extract error message properly - handle Error objects, strings, and plain objects
+    let errorMessage = 'Unknown error'
+    if (error instanceof Error) {
+      errorMessage = error.message
+    } else if (typeof error === 'string') {
+      errorMessage = error
+    } else if (error?.message) {
+      errorMessage = error.message
+    } else if (error?.detail) {
+      // Handle structured error: {detail: {message: "..."}} or {detail: "..."}
+      if (typeof error.detail === 'object' && error.detail?.message) {
+        errorMessage = error.detail.message
+      } else if (typeof error.detail === 'string') {
+        errorMessage = error.detail
+      } else {
+        errorMessage = JSON.stringify(error.detail)
+      }
+    } else if (error && typeof error === 'object') {
+      // Last resort: try to stringify the error object meaningfully
+      try {
+        errorMessage = JSON.stringify(error)
+      } catch {
+        errorMessage = 'Network or connection error'
+      }
+    }
+    
     const errorStack = error?.stack || new Error().stack
     
     // Create meaningful error with full context
@@ -724,6 +757,18 @@ export async function composeEmail(prospectId: string): Promise<{
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to compose email' }))
     throw new Error(error.detail || 'Failed to compose email')
+  }
+  return res.json()
+}
+
+export async function updateProspectDraft(prospectId: string, draft: { subject?: string; body?: string }): Promise<{ success: boolean; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/prospects/${prospectId}/draft`, {
+    method: 'PUT',
+    body: JSON.stringify(draft),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to update draft' }))
+    throw new Error(error.detail || 'Failed to update draft')
   }
   return res.json()
 }
@@ -1490,6 +1535,11 @@ export interface SocialProfile {
   discovery_status: string
   outreach_status: string
   created_at: string
+  draft_subject?: string
+  draft_body?: string
+  last_sent?: string
+  followups_sent?: number
+  updated_at?: string
 }
 
 export interface SocialProfileListResponse {
@@ -1515,11 +1565,11 @@ export async function listSocialProfiles(
   skip: number = 0,
   limit: number = 50,
   platform?: string,
-  qualification_status?: string
+  discovery_status?: string
 ): Promise<SocialProfileListResponse> {
   const params = new URLSearchParams({ skip: skip.toString(), limit: limit.toString() })
   if (platform) params.append('platform', platform)
-  if (qualification_status) params.append('qualification_status', qualification_status)
+  if (discovery_status) params.append('discovery_status', discovery_status)
   
   const res = await authenticatedFetch(`${API_BASE}/social/profiles?${params.toString()}`)
   if (!res.ok) {
@@ -1661,10 +1711,22 @@ export async function reviewSocialProfiles(profile_ids: string[], action: 'quali
   return res.json()
 }
 
-export async function draftSocialProfiles(profile_ids: string[], is_followup: boolean = false): Promise<{ success: boolean; drafts_created: number; message: string }> {
+export async function scrapeSocialProfiles(profile_ids?: string[]): Promise<{ success: boolean; job_id: string; message: string; profiles_count: number }> {
+  const res = await authenticatedFetch(`${API_BASE}/social/pipeline/scrape`, {
+    method: 'POST',
+    body: JSON.stringify({ profile_ids: profile_ids || null }),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to scrape profiles' }))
+    throw new Error(error.detail || 'Failed to scrape profiles')
+  }
+  return res.json()
+}
+
+export async function draftSocialProfiles(profile_ids?: string[], is_followup: boolean = false): Promise<{ success: boolean; drafts_created: number; message: string; job_id?: string }> {
   const res = await authenticatedFetch(`${API_BASE}/social/pipeline/draft`, {
     method: 'POST',
-    body: JSON.stringify({ profile_ids, is_followup }),
+    body: JSON.stringify({ profile_ids: profile_ids || null, is_followup }),
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to create drafts' }))
@@ -1673,10 +1735,10 @@ export async function draftSocialProfiles(profile_ids: string[], is_followup: bo
   return res.json()
 }
 
-export async function sendSocialProfiles(profile_ids: string[]): Promise<{ success: boolean; messages_sent: number; message: string }> {
+export async function sendSocialProfiles(profile_ids?: string[]): Promise<{ success: boolean; messages_sent: number; message: string; job_id?: string }> {
   const res = await authenticatedFetch(`${API_BASE}/social/pipeline/send`, {
     method: 'POST',
-    body: JSON.stringify({ profile_ids }),
+    body: JSON.stringify({ profile_ids: profile_ids || null }),
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to send messages' }))
@@ -1685,14 +1747,197 @@ export async function sendSocialProfiles(profile_ids: string[]): Promise<{ succe
   return res.json()
 }
 
-export async function createSocialFollowupsPipeline(profile_ids: string[]): Promise<{ success: boolean; drafts_created: number; message: string }> {
+export async function createSocialFollowupsPipeline(profile_ids?: string[]): Promise<{ success: boolean; drafts_created: number; message: string; job_id?: string }> {
   const res = await authenticatedFetch(`${API_BASE}/social/pipeline/followup`, {
     method: 'POST',
-    body: JSON.stringify({ profile_ids }),
+    body: JSON.stringify({ profile_ids: profile_ids || null }),
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: 'Failed to create followups' }))
     throw new Error(error.detail || 'Failed to create followups')
   }
   return res.json()
+}
+
+export async function updateSocialProfileDraft(profileId: string, draft: { subject?: string; body?: string }): Promise<{ success: boolean; message: string }> {
+  const res = await authenticatedFetch(`${API_BASE}/social/profiles/${profileId}/draft`, {
+    method: 'PUT',
+    body: JSON.stringify(draft),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to update draft' }))
+    throw new Error(error.detail || 'Failed to update draft')
+  }
+  return res.json()
+}
+
+// List drafted social profiles
+export async function listSocialDrafts(
+  skip: number = 0,
+  limit: number = 50,
+  platform?: string
+): Promise<SocialProfileListResponse> {
+  const params = new URLSearchParams({ skip: skip.toString(), limit: limit.toString() })
+  if (platform) params.append('platform', platform)
+  
+  const res = await authenticatedFetch(`${API_BASE}/social/drafts?${params.toString()}`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to list social drafts' }))
+    throw new Error(error.detail || 'Failed to list social drafts')
+  }
+  return await res.json()
+}
+
+// List sent social profiles
+export async function listSocialSent(
+  skip: number = 0,
+  limit: number = 50,
+  platform?: string
+): Promise<SocialProfileListResponse> {
+  const params = new URLSearchParams({ skip: skip.toString(), limit: limit.toString() })
+  if (platform) params.append('platform', platform)
+  
+  const res = await authenticatedFetch(`${API_BASE}/social/sent?${params.toString()}`)
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to list sent social messages' }))
+    throw new Error(error.detail || 'Failed to list sent social messages')
+  }
+  return await res.json()
+}
+
+// CSV Export functions
+export async function exportProspectsCSV(status?: string, sourceType?: string): Promise<Blob> {
+  const params = new URLSearchParams()
+  if (status) params.append('status', status)
+  if (sourceType) params.append('source_type', sourceType)
+  
+  const token = getAuthToken()
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${token}`,
+  }
+  
+  const res = await fetch(`${API_BASE}/prospects/export/csv?${params.toString()}`, { headers })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to export CSV' }))
+    throw new Error(error.detail || 'Failed to export CSV')
+  }
+  return await res.blob()
+}
+
+export async function exportLeadsCSV(): Promise<Blob> {
+  const token = getAuthToken()
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${token}`,
+  }
+  
+  const res = await fetch(`${API_BASE}/prospects/leads/export/csv`, { headers })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to export leads CSV' }))
+    throw new Error(error.detail || 'Failed to export leads CSV')
+  }
+  return await res.blob()
+}
+
+export async function exportScrapedEmailsCSV(): Promise<Blob> {
+  const token = getAuthToken()
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${token}`,
+  }
+  
+  const res = await fetch(`${API_BASE}/prospects/scraped-emails/export/csv`, { headers })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to export scraped emails CSV' }))
+    throw new Error(error.detail || 'Failed to export scraped emails CSV')
+  }
+  return await res.blob()
+}
+
+export async function exportSocialProfilesCSV(platform?: string): Promise<Blob> {
+  const params = new URLSearchParams()
+  if (platform) params.append('platform', platform)
+  
+  const token = getAuthToken()
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${token}`,
+  }
+  
+  const res = await fetch(`${API_BASE}/social/profiles/export/csv?${params.toString()}`, { headers })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to export social profiles CSV' }))
+    throw new Error(error.detail || 'Failed to export social profiles CSV')
+  }
+  return await res.blob()
+}
+
+export async function exportSocialDraftsCSV(platform?: string): Promise<Blob> {
+  const params = new URLSearchParams()
+  if (platform) params.append('platform', platform)
+  
+  const token = getAuthToken()
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${token}`,
+  }
+  
+  const res = await fetch(`${API_BASE}/social/drafts/export/csv?${params.toString()}`, { headers })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to export social drafts CSV' }))
+    throw new Error(error.detail || 'Failed to export social drafts CSV')
+  }
+  return await res.blob()
+}
+
+export async function exportSocialSentCSV(platform?: string): Promise<Blob> {
+  const params = new URLSearchParams()
+  if (platform) params.append('platform', platform)
+  
+  const token = getAuthToken()
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${token}`,
+  }
+  
+  const res = await fetch(`${API_BASE}/social/sent/export/csv?${params.toString()}`, { headers })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to export sent social messages CSV' }))
+    throw new Error(error.detail || 'Failed to export sent social messages CSV')
+  }
+  return await res.blob()
+}
+
+// Gemini Chat API
+export interface GeminiChatRequest {
+  prospect_id: string
+  message: string
+  current_subject?: string
+  current_body?: string
+}
+
+export interface GeminiChatResponse {
+  success: boolean
+  response: string
+  candidate_draft?: {
+    subject: string
+    body: string
+  }
+}
+
+export async function geminiChat(request: GeminiChatRequest): Promise<GeminiChatResponse> {
+  const res = await authenticatedFetch(`${API_BASE}/prospects/${request.prospect_id}/chat`, {
+    method: 'POST',
+    body: JSON.stringify({
+      message: request.message,
+      current_subject: request.current_subject,
+      current_body: request.current_body
+    }),
+  })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to chat with Gemini' }))
+    // Handle structured error response: {error, message, stage} or simple {detail}
+    const errorMessage = typeof error.detail === 'object' && error.detail?.message
+      ? error.detail.message
+      : typeof error.detail === 'string'
+      ? error.detail
+      : error.message || 'Failed to chat with Gemini'
+    throw new Error(errorMessage)
+  }
+  return await res.json()
 }
