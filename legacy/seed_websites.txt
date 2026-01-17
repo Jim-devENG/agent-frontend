@@ -1,0 +1,19 @@
+# Seed list of art-related websites
+# One URL per line
+# Lines starting with # are comments
+
+# Art Galleries
+https://www.saatchiart.com
+https://www.artsy.net
+https://www.artnet.com
+
+# Interior Design
+https://www.houzz.com
+https://www.decorilla.com
+
+# Tech Blogs
+https://www.theverge.com
+https://techcrunch.com
+
+# Add more URLs below...
+

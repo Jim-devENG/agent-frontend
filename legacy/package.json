@@ -1,0 +1,14 @@
+{
+  "name": "autonomous-art-outreach-scraper",
+  "version": "1.0.0",
+  "description": "Production-grade web scraper for art-related websites and automated outreach",
+  "scripts": {
+    "start": "uvicorn main:app --host 0.0.0.0 --port 8000",
+    "dev": "uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+    "test": "pytest"
+  },
+  "keywords": ["scraper", "art", "outreach", "automation"],
+  "author": "",
+  "license": "MIT"
+}
+

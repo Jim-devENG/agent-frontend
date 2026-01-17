@@ -1,0 +1,38 @@
+# fly.toml app configuration file
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+
+app = "art-outreach-backend"
+primary_region = "iad"  # Change to your preferred region (iad = Washington DC, ord = Chicago, etc.)
+
+[build]
+  builder = "paketobuildpacks/builder:base"
+
+[env]
+  PORT = "8080"
+  PYTHON_VERSION = "3.11"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  force_https = true
+  auto_stop_machines = false  # Keep machines running (no spin-down)
+  auto_start_machines = true
+  min_machines_running = 1  # Always keep 1 machine running
+  processes = ["app"]
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/health"
+
+[processes]
+  app = "uvicorn main:app --host 0.0.0.0 --port 8080"
+
+# Optional: Persistent storage for SQLite database
+# Uncomment and adjust if you need persistent storage
+# [[mounts]]
+#   source = "data"
+#   destination = "/app/data"
+

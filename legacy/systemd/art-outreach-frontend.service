@@ -1,0 +1,27 @@
+[Unit]
+Description=Autonomous Art Outreach Scraper - Frontend
+After=network.target art-outreach-backend.service
+Requires=art-outreach-backend.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/agent.liquidcanvas.art/frontend
+Environment="NODE_ENV=production"
+Environment="NEXT_PUBLIC_API_BASE_URL=https://agent.liquidcanvas.art/api/v1"
+Environment="PORT=3000"
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=art-outreach-frontend
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+

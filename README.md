@@ -93,4 +93,3 @@ npm start
 - **TypeScript** - Type safety
 - **Tailwind CSS** - Styling
 - **Lucide React** - Icons
-
